@@ -33,6 +33,9 @@
 
     <!-- App Identifier -->
     <ApplicationId>com.companyname.fulltime.app</ApplicationId>
+    <!-- iOS bundle ID overridden: "com.companyname.*" is the unmodified MAUI template default,
+         and Apple's explicit App IDs are globally unique, so it risks colliding with someone else's sample app. -->
+    <ApplicationId Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">com.jtmtechnology.fulltime.app</ApplicationId>
 
     <!-- Versions -->
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
