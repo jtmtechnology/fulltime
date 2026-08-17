@@ -1,0 +1,50 @@
+@implements IDisposable
+@inject AuthState AuthState
+@inject ActiveContextState ContextState
+
+@if (AuthState.IsLoggedIn)
+{
+    <button type="button" class="balance-chip" @onclick="() => ContextState.ToggleSheetOpen()">
+        @ContextState.Current.Name@(ContextState.Balance is not null ? $" £{ContextState.Balance:0.00}" : "")
+    </button>
+}
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        AuthState.Changed += OnAuthChanged;
+        ContextState.Changed += OnContextChanged;
+        await RefreshAsync();
+    }
+
+    // Mirrors the re-init pattern in Routes.razor: on the Web host AuthState isn't populated
+    // until after prerendering, so refresh again once the circuit is interactive.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await RefreshAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnAuthChanged() => InvokeAsync(async () =>
+    {
+        await RefreshAsync();
+        StateHasChanged();
+    });
+
+    private void OnContextChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task RefreshAsync()
+    {
+        if (!AuthState.IsLoggedIn) return;
+        await ContextState.InitializeAsync();
+    }
+
+    public void Dispose()
+    {
+        AuthState.Changed -= OnAuthChanged;
+        ContextState.Changed -= OnContextChanged;
+    }
+}

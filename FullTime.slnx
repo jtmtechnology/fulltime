@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="FullTime.Api/FullTime.Api.csproj" />
+  <Project Path="FullTime.App/FullTime.App/FullTime.App.csproj" />
+  <Project Path="FullTime.App/FullTime.App.Web/FullTime.App.Web.csproj" />
+  <Project Path="FullTime.App/FullTime.App.Shared/FullTime.App.Shared.csproj" />
+</Solution>

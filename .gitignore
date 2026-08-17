@@ -1,0 +1,19 @@
+## .NET / Visual Studio
+bin/
+obj/
+publish/
+*.user
+.vs/
+
+## MAUI / mobile signing artifacts — never commit these
+*.pfx
+*.p12
+*.mobileprovision
+*.jks
+*.keystore
+
+## Misc
+run.log
+*.dump
+*.zip
+.claude/

@@ -1,0 +1,19 @@
+@if (!string.IsNullOrEmpty(LogoUrl) && !_hasError)
+{
+    <img src="@LogoUrl" alt="@Name" title="@Name" class="bookmaker-logo" loading="lazy" @onerror="() => _hasError = true" />
+}
+else if (!string.IsNullOrEmpty(Name))
+{
+    @Name
+}
+else
+{
+    <span>—</span>
+}
+
+@code {
+    [Parameter] public string? Name { get; set; }
+    [Parameter] public string? LogoUrl { get; set; }
+
+    private bool _hasError;
+}

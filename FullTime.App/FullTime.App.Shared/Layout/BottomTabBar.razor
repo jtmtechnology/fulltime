@@ -1,0 +1,58 @@
+@implements IDisposable
+@inject AuthState AuthState
+@inject BetSlipState Slip
+
+<nav class="tab-bar">
+    <NavLink class="tab-item" href="" Match="NavLinkMatch.All">
+        <svg viewBox="0 0 24 24"><path d="M12 2 2 9h3v12h6v-7h2v7h6V9h3z"/></svg>
+        <span>Matches</span>
+    </NavLink>
+
+    <button type="button" class="tab-item @(Slip.IsOpen ? "active" : "")" @onclick="() => Slip.ToggleOpen()">
+        <svg viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"/></svg>
+        <span>Slip</span>
+        @if (Slip.Selections.Count > 0)
+        {
+            <span class="badge">@Slip.Selections.Count</span>
+        }
+    </button>
+
+    <NavLink class="tab-item" href="mybets">
+        <svg viewBox="0 0 24 24"><path d="M5 3h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm2 5h10M7 12h10M7 16h6"/></svg>
+        <span>My Bets</span>
+    </NavLink>
+
+    <NavLink class="tab-item" href="leaderboard">
+        <svg viewBox="0 0 24 24"><path d="M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3M8 21h8M12 17v4"/></svg>
+        <span>Leaderboard</span>
+    </NavLink>
+
+    @if (AuthState.IsLoggedIn)
+    {
+        <NavLink class="tab-item" href="profile">
+            <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0"/></svg>
+            <span>Profile</span>
+        </NavLink>
+    }
+    else
+    {
+        <NavLink class="tab-item" href="login">
+            <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0"/></svg>
+            <span>Login</span>
+        </NavLink>
+    }
+</nav>
+
+@code {
+    protected override void OnInitialized()
+    {
+        AuthState.Changed += StateHasChanged;
+        Slip.Changed += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        AuthState.Changed -= StateHasChanged;
+        Slip.Changed -= StateHasChanged;
+    }
+}

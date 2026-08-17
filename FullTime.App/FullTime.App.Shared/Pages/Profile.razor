@@ -1,0 +1,127 @@
+@page "/profile"
+@using System.Net
+@inject ApiClient Api
+@inject AuthState AuthState
+@inject NavigationManager Nav
+
+<PageTitle>FullTime — Profile</PageTitle>
+
+<h1>Profile</h1>
+
+<div class="status @(_error ? "error" : "")">@_status</div>
+
+@if (_me is not null)
+{
+    <div class="page-card">
+        <div class="stat-list">
+            <div class="stat-row"><span class="label">Email</span><span>@_me.Email</span></div>
+            <div class="stat-row"><span class="label">Verified</span><span class="@(_me.EmailVerified ? "live" : "error")">@(_me.EmailVerified ? "Yes" : "No")</span></div>
+            <div class="stat-row"><span class="label">Balance</span><span>£@_me.Balance.ToString("0.00")</span></div>
+            <div class="stat-row"><span class="label">Joined</span><span>@_me.CreatedAt.ToLocalTime().ToString("d MMM yyyy")</span></div>
+            <div class="stat-row"><span class="label">Leagues</span><span>@LeagueSummary()</span></div>
+        </div>
+
+        <h2>Edit name</h2>
+        <EditForm Model="this" OnValidSubmit="SaveNameAsync">
+            <div class="field">
+                <label for="name">Name</label>
+                <InputText id="name" @bind-Value="_name" />
+            </div>
+            <button type="submit">Save name</button>
+        </EditForm>
+        <div class="status @(_nameError ? "error" : "")">@_nameStatus</div>
+
+        <h2>Change password</h2>
+        <EditForm Model="this" OnValidSubmit="ChangePasswordAsync">
+            <div class="field">
+                <label for="current-password">Current password</label>
+                <InputText id="current-password" type="password" @bind-Value="_currentPassword" />
+            </div>
+            <div class="field">
+                <label for="new-password">New password</label>
+                <InputText id="new-password" type="password" @bind-Value="_newPassword" />
+            </div>
+            <button type="submit">Change password</button>
+        </EditForm>
+        <div class="status @(_passwordError ? "error" : "")">@_passwordStatus</div>
+    </div>
+}
+
+@code {
+    private MeDto? _me;
+    private string _name = "";
+    private string _nameStatus = "";
+    private bool _nameError;
+    private string _currentPassword = "";
+    private string _newPassword = "";
+    private string _passwordStatus = "";
+    private bool _passwordError;
+    private string _status = "";
+    private bool _error;
+    private List<LeagueSummaryDto>? _myLeagues;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthState.IsLoggedIn)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        try
+        {
+            _me = await Api.GetMeAsync();
+            _name = _me.Name;
+            _myLeagues = await Api.GetMyLeaguesAsync();
+        }
+        catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await AuthState.LogoutAsync();
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            _status = $"Error: {ex.Message}";
+            _error = true;
+        }
+    }
+
+    private string LeagueSummary() =>
+        _myLeagues is { Count: > 0 } ? string.Join(", ", _myLeagues.Select(l => l.Name)) : "None yet";
+
+    private async Task SaveNameAsync()
+    {
+        _nameStatus = "Saving…";
+        _nameError = false;
+
+        try
+        {
+            _me = await Api.UpdateProfileAsync(_name);
+            _nameStatus = "Saved.";
+        }
+        catch (Exception ex)
+        {
+            _nameStatus = $"Error: {ex.Message}";
+            _nameError = true;
+        }
+    }
+
+    private async Task ChangePasswordAsync()
+    {
+        _passwordStatus = "Saving…";
+        _passwordError = false;
+
+        try
+        {
+            await Api.ChangePasswordAsync(_currentPassword, _newPassword);
+            _currentPassword = "";
+            _newPassword = "";
+            _passwordStatus = "Password changed.";
+        }
+        catch (Exception ex)
+        {
+            _passwordStatus = $"Error: {ex.Message}";
+            _passwordError = true;
+        }
+    }
+}

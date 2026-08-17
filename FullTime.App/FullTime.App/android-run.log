@@ -1,0 +1,12 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  FullTime.App.Shared -> C:\AB\Friends\FullTime.App\FullTime.App.Shared\bin\Debug\net10.0\FullTime.App.Shared.dll
+  XAML source generation is enabled (MauiXamlInflator=SourceGen). This generates C# code from XAML at compile time for better performance. To disable, remove the MauiXamlInflator line from your .csproj file (reverts to configuration-based defaults: Runtime in Debug, XamlC in Release).
+  FullTime.App -> C:\AB\Friends\FullTime.App\FullTime.App\bin\Debug\net10.0-android\FullTime.App.dll
+  FullTime.App.Shared -> C:\AB\Friends\FullTime.App\FullTime.App.Shared\bin\Debug\net10.0\FullTime.App.Shared.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:09.77

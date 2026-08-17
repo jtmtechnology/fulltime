@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FullTime — Leaderboard</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 700px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; }
+  #auth-nav { text-align: right; margin-bottom: 1.5rem; font-size: 0.9rem; }
+  table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; }
+  th { background: #f5f5f5; }
+  .status { margin-top: 1rem; font-size: 0.9rem; color: #555; }
+  .error { color: #b00020; }
+  .live { color: #0a7d2c; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div id="auth-nav"></div>
+  <h1>Leaderboard</h1>
+  <div id="status" class="status">Loading…</div>
+  <table id="leaderboard-table" style="display:none">
+    <thead>
+      <tr><th>#</th><th>Name</th><th>Balance</th><th>Profit</th></tr>
+    </thead>
+    <tbody id="leaderboard-body"></tbody>
+  </table>
+
+<script src="auth.js"></script>
+<script>
+requireAuth();
+
+const statusEl = document.getElementById('status');
+const tableEl = document.getElementById('leaderboard-table');
+const bodyEl = document.getElementById('leaderboard-body');
+
+function render(entries) {
+  bodyEl.innerHTML = '';
+
+  if (entries.length === 0) {
+    statusEl.textContent = 'No players yet.';
+    return;
+  }
+
+  statusEl.textContent = '';
+  tableEl.style.display = '';
+
+  entries.forEach((entry, i) => {
+    const tr = document.createElement('tr');
+    const profitText = `${entry.profit >= 0 ? '+' : ''}${entry.profit.toFixed(2)}`;
+    tr.innerHTML = `<td>${i + 1}</td><td>${entry.name}</td><td>${entry.balance.toFixed(2)}</td>`
+      + `<td class="${entry.profit >= 0 ? 'live' : 'error'}">${profitText}</td>`;
+    bodyEl.appendChild(tr);
+  });
+}
+
+async function loadLeaderboard() {
+  try {
+    const res = await authFetch('/api/leaderboard');
+    if (!res.ok) {
+      throw new Error(`Request failed: ${res.status}`);
+    }
+    render(await res.json());
+  } catch (err) {
+    statusEl.textContent = `Error: ${err.message}`;
+    statusEl.className = 'status error';
+  }
+}
+
+loadLeaderboard();
+</script>
+</body>
+</html>

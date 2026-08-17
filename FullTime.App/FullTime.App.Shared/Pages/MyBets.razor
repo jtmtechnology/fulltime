@@ -1,0 +1,76 @@
+@page "/mybets"
+@inject ApiClient Api
+@inject AuthState AuthState
+@inject NavigationManager Nav
+
+<PageTitle>FullTime — My Bets</PageTitle>
+
+<h1>My Bets</h1>
+
+<div class="status @(_error ? "error" : "")">@_status</div>
+
+@if (_bets is not null)
+{
+    @foreach (var bet in _bets)
+    {
+        <div class="bet-card">
+            <div>
+                <span class="context-badge">@(bet.LeagueName ?? "Worldwide")</span>
+                <strong>@bet.PlacedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong> —
+                Stake £@bet.Stake.ToString("0.00") ·
+                Combined odds @bet.CombinedOdds.ToString("0.00") ·
+                Potential return £@bet.PotentialReturn.ToString("0.00") ·
+                <span class="@StatusClass(bet.Status)">@bet.Status</span>
+            </div>
+            <ul>
+                @foreach (var sel in bet.Selections)
+                {
+                    <li class="@StatusClass(sel.Outcome)">
+                        <span class="muted">@sel.KickoffTime.ToLocalTime().ToString("ddd d MMM HH:mm")</span> —
+                        <LogoImg Src="@sel.HomeLogoUrl" CssClass="team-logo" Alt="@sel.HomeTeam" />@sel.HomeTeam v
+                        <LogoImg Src="@sel.AwayLogoUrl" CssClass="team-logo" Alt="@sel.AwayTeam" />@sel.AwayTeam
+                        — @sel.Pick (@sel.Outcome)
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+}
+
+@code {
+    private List<BetDto>? _bets;
+    private string _status = "Loading…";
+    private bool _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthState.IsLoggedIn)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        try
+        {
+            _bets = await Api.GetMyBetsAsync();
+            _status = _bets.Count == 0 ? "No bets placed yet." : "";
+        }
+        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await AuthState.LogoutAsync();
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            _status = $"Error: {ex.Message}";
+            _error = true;
+        }
+    }
+
+    private static string StatusClass(string status) => status switch
+    {
+        "Won" or "Correct" => "live",
+        "Lost" or "Incorrect" => "error",
+        _ => "muted",
+    };
+}

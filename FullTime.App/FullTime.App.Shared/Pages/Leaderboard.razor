@@ -1,0 +1,257 @@
+@page "/leaderboard"
+@using System.Net
+@inject ApiClient Api
+@inject AuthState AuthState
+@inject NavigationManager Nav
+
+<PageTitle>FullTime — Leaderboard</PageTitle>
+
+<h1>Leaderboard</h1>
+
+<div class="league-chips">
+    <button type="button" class="league-chip @(_view == View.MyLeagues ? "selected" : "")" @onclick="() => _view = View.MyLeagues">My Leagues</button>
+    <button type="button" class="league-chip @(_view == View.Worldwide ? "selected" : "")" @onclick="() => _view = View.Worldwide">Worldwide Top 50</button>
+</div>
+
+<div class="status @(_error ? "error" : "")">@_status</div>
+
+@if (_view == View.Worldwide)
+{
+    @if (_worldwide is { Count: > 0 })
+    {
+        <table class="simple-table">
+            <thead>
+                <tr><th>#</th><th>Name</th><th>Balance</th><th>Profit</th></tr>
+            </thead>
+            <tbody>
+                @for (var i = 0; i < _worldwide.Count; i++)
+                {
+                    var entry = _worldwide[i];
+                    <tr>
+                        <td>@(i + 1)</td>
+                        <td>@entry.Name</td>
+                        <td>£@entry.Balance.ToString("0.00")</td>
+                        <td class="@(entry.Profit >= 0 ? "live" : "error")">@(entry.Profit >= 0 ? "+£" : "-£")@Math.Abs(entry.Profit).ToString("0.00")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+else
+{
+    <p class="muted">Private groups of friends — not the football leagues on the Matches page.</p>
+
+    @if (_myLeagues is { Count: > 0 })
+    {
+        @foreach (var league in _myLeagues)
+        {
+            <div class="page-card">
+                <div class="stat-list">
+                    <div class="stat-row"><span class="label">League</span><span>@league.Name</span></div>
+                    <div class="stat-row"><span class="label">Members</span><span>@league.MemberCount</span></div>
+                    <div class="stat-row"><span class="label">Invite code</span><span class="invite-code">@league.InviteCode</span></div>
+                </div>
+
+                @if (_leagueEntries.TryGetValue(league.Id, out var entries) && entries.Count > 0)
+                {
+                    <table class="simple-table">
+                        <thead><tr><th>#</th><th>Name</th><th>Balance</th><th>Profit</th></tr></thead>
+                        <tbody>
+                            @for (var i = 0; i < entries.Count; i++)
+                            {
+                                var entry = entries[i];
+                                <tr>
+                                    <td>@(i + 1)</td>
+                                    <td>@entry.Name</td>
+                                    <td>£@entry.Balance.ToString("0.00")</td>
+                                    <td class="@(entry.Profit >= 0 ? "live" : "error")">@(entry.Profit >= 0 ? "+£" : "-£")@Math.Abs(entry.Profit).ToString("0.00")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+
+                <button type="button" @onclick="() => LeaveLeagueAsync(league.Id)">Leave league</button>
+            </div>
+        }
+    }
+    else if (!_loadingLeagues)
+    {
+        <p class="muted">You're not in any leagues yet — create one or join with a friend's invite code.</p>
+    }
+
+    <div class="page-card">
+        <h2>Create a league</h2>
+        <EditForm Model="this" OnValidSubmit="CreateLeagueAsync">
+            <div class="field">
+                <label for="league-name">League name</label>
+                <InputText id="league-name" @bind-Value="_newLeagueName" />
+            </div>
+            <button type="submit" disabled="@_creating">Create</button>
+        </EditForm>
+        <div class="status @(_createError ? "error" : "")">@_createStatus</div>
+
+        <h2>Join a league</h2>
+        <EditForm Model="this" OnValidSubmit="JoinLeagueAsync">
+            <div class="field">
+                <label for="invite-code">Invite code</label>
+                <InputText id="invite-code" @bind-Value="_joinCode" />
+            </div>
+            <button type="submit" disabled="@_joining">Join</button>
+        </EditForm>
+        <div class="status @(_joinError ? "error" : "")">@_joinStatus</div>
+    </div>
+}
+
+@code {
+    private enum View { MyLeagues, Worldwide }
+    private View _view = View.MyLeagues;
+
+    private List<LeaderboardEntryDto>? _worldwide;
+    private List<LeagueSummaryDto>? _myLeagues;
+    private Dictionary<Guid, List<LeaderboardEntryDto>> _leagueEntries = [];
+    private bool _loadingLeagues = true;
+
+    private string _status = "Loading…";
+    private bool _error;
+
+    private string _newLeagueName = "";
+    private string _createStatus = "";
+    private bool _createError;
+    private bool _creating;
+
+    private string _joinCode = "";
+    private string _joinStatus = "";
+    private bool _joinError;
+    private bool _joining;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthState.IsLoggedIn)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        try
+        {
+            _worldwide = await Api.GetLeaderboardAsync();
+            await LoadMyLeaguesAsync();
+            _status = "";
+        }
+        catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await AuthState.LogoutAsync();
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            _status = $"Error: {ex.Message}";
+            _error = true;
+        }
+    }
+
+    private async Task LoadMyLeaguesAsync()
+    {
+        _loadingLeagues = true;
+        _myLeagues = await Api.GetMyLeaguesAsync();
+
+        var loaded = await Task.WhenAll(_myLeagues.Select(async l =>
+            (Id: l.Id, Entries: await Api.GetLeagueLeaderboardAsync(l.Id))));
+        _leagueEntries = loaded.ToDictionary(e => e.Id, e => e.Entries);
+
+        _loadingLeagues = false;
+    }
+
+    private async Task CreateLeagueAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newLeagueName))
+        {
+            _createStatus = "Enter a league name.";
+            _createError = true;
+            return;
+        }
+
+        _creating = true;
+        _createStatus = "Creating…";
+        _createError = false;
+
+        try
+        {
+            await Api.CreateLeagueAsync(_newLeagueName.Trim());
+            _newLeagueName = "";
+            _createStatus = "League created!";
+            await LoadMyLeaguesAsync();
+        }
+        catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await AuthState.LogoutAsync();
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            _createStatus = $"Error: {ex.Message}";
+            _createError = true;
+        }
+        finally
+        {
+            _creating = false;
+        }
+    }
+
+    private async Task JoinLeagueAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_joinCode))
+        {
+            _joinStatus = "Enter an invite code.";
+            _joinError = true;
+            return;
+        }
+
+        _joining = true;
+        _joinStatus = "Joining…";
+        _joinError = false;
+
+        try
+        {
+            await Api.JoinLeagueAsync(_joinCode.Trim());
+            _joinCode = "";
+            _joinStatus = "Joined!";
+            await LoadMyLeaguesAsync();
+        }
+        catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await AuthState.LogoutAsync();
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            _joinStatus = $"Error: {ex.Message}";
+            _joinError = true;
+        }
+        finally
+        {
+            _joining = false;
+        }
+    }
+
+    private async Task LeaveLeagueAsync(Guid leagueId)
+    {
+        try
+        {
+            await Api.LeaveLeagueAsync(leagueId);
+            await LoadMyLeaguesAsync();
+        }
+        catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await AuthState.LogoutAsync();
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            _status = $"Error: {ex.Message}";
+            _error = true;
+        }
+    }
+}

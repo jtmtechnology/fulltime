@@ -1,0 +1,12 @@
+@if (!_hasError && !string.IsNullOrEmpty(Src))
+{
+    <img src="@Src" alt="@Alt" class="@CssClass" loading="lazy" @onerror="() => _hasError = true" />
+}
+
+@code {
+    [Parameter] public string? Src { get; set; }
+    [Parameter] public string Alt { get; set; } = "";
+    [Parameter] public string CssClass { get; set; } = "";
+
+    private bool _hasError;
+}

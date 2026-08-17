@@ -1,0 +1,35 @@
+@inject AuthState AuthState
+
+@if (_ready)
+{
+    <Router AppAssembly="typeof(Layout.MainLayout).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+        <Found Context="routeData">
+            <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+            <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        </Found>
+    </Router>
+}
+
+@code {
+    // Gate rendering until the token is loaded, so NavMenu and every page see the correct
+    // logged-in state on first render instead of a flash of "logged out".
+    private bool _ready;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await AuthState.InitializeAsync();
+        _ready = true;
+    }
+
+    // On the Web host this first pass runs during static prerendering, where JS interop (and so
+    // WebJwtStore) isn't available yet — re-run once the circuit is truly interactive to pick up
+    // the real logged-in state. A no-op on MAUI, where SecureStorage works immediately.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await AuthState.InitializeAsync();
+            StateHasChanged();
+        }
+    }
+}

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FullTime — Profile</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 480px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; margin: 1.75rem 0 0.25rem; border-bottom: 2px solid #ddd; padding-bottom: 0.25rem; }
+  #auth-nav { margin-bottom: 1.5rem; font-size: 0.9rem; }
+  label { display: block; margin-top: 1rem; font-size: 0.9rem; }
+  input { width: 100%; padding: 0.5rem; margin-top: 0.25rem; box-sizing: border-box; }
+  button { padding: 0.5rem 1rem; margin-top: 1.5rem; cursor: pointer; }
+  .status { margin-top: 1rem; font-size: 0.9rem; color: #555; }
+  .error { color: #b00020; }
+  .muted { color: #888; }
+  .live { color: #0a7d2c; font-weight: 600; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 1rem; }
+  dt { color: #555; }
+</style>
+</head>
+<body>
+  <div id="auth-nav"></div>
+  <h1>Profile</h1>
+
+  <dl id="profile-details"></dl>
+
+  <h2>Edit name</h2>
+  <form id="name-form">
+    <label for="name">Name</label>
+    <input type="text" id="name" required>
+    <button type="submit">Save name</button>
+  </form>
+  <div id="name-status" class="status"></div>
+
+  <h2>Change password</h2>
+  <form id="password-form">
+    <label for="current-password">Current password</label>
+    <input type="password" id="current-password" required>
+
+    <label for="new-password">New password</label>
+    <input type="password" id="new-password" minlength="8" required>
+
+    <button type="submit">Change password</button>
+  </form>
+  <div id="password-status" class="status"></div>
+
+<script src="auth.js"></script>
+<script>
+requireAuth();
+
+const detailsEl = document.getElementById('profile-details');
+const nameForm = document.getElementById('name-form');
+const nameInput = document.getElementById('name');
+const nameStatusEl = document.getElementById('name-status');
+const passwordForm = document.getElementById('password-form');
+const passwordStatusEl = document.getElementById('password-status');
+
+function renderDetails(me) {
+  detailsEl.innerHTML = `
+    <dt>Email</dt><dd>${me.email}</dd>
+    <dt>Verified</dt><dd class="${me.emailVerified ? 'live' : 'error'}">${me.emailVerified ? 'Yes' : 'No'}</dd>
+    <dt>Balance</dt><dd>${me.balance.toFixed(2)}</dd>
+    <dt>Joined</dt><dd>${new Date(me.createdAt).toLocaleDateString()}</dd>
+  `;
+  nameInput.value = me.name;
+}
+
+async function loadProfile() {
+  const res = await authFetch('/api/users/me');
+  if (!res.ok) return;
+  renderDetails(await res.json());
+}
+
+nameForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  nameStatusEl.textContent = 'Saving…';
+  nameStatusEl.className = 'status';
+
+  try {
+    const res = await authFetch('/api/users/me', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: nameInput.value.trim() }),
+    });
+    const body = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(body.error || `Request failed: ${res.status}`);
+    }
+
+    renderDetails(body);
+    nameStatusEl.textContent = 'Saved.';
+    nameStatusEl.className = 'status';
+  } catch (err) {
+    nameStatusEl.textContent = `Error: ${err.message}`;
+    nameStatusEl.className = 'status error';
+  }
+});
+
+passwordForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  passwordStatusEl.textContent = 'Saving…';
+  passwordStatusEl.className = 'status';
+
+  const currentPassword = document.getElementById('current-password').value;
+  const newPassword = document.getElementById('new-password').value;
+
+  try {
+    const res = await authFetch('/api/users/me/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    const body = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(body.error || `Request failed: ${res.status}`);
+    }
+
+    passwordForm.reset();
+    passwordStatusEl.textContent = 'Password changed.';
+    passwordStatusEl.className = 'status';
+  } catch (err) {
+    passwordStatusEl.textContent = `Error: ${err.message}`;
+    passwordStatusEl.className = 'status error';
+  }
+});
+
+loadProfile();
+</script>
+</body>
+</html>

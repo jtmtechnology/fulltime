@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FullTime — Test Console</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; margin: 1.75rem 0 0.25rem; border-bottom: 2px solid #ddd; padding-bottom: 0.25rem; }
+  section:first-of-type h2 { margin-top: 1rem; }
+  table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; }
+  th { background: #f5f5f5; }
+  .odds { font-variant-numeric: tabular-nums; }
+  .odds.clickable { cursor: pointer; text-decoration: underline dotted; }
+  .odds.clickable:hover { background: #f0f4ff; }
+  .odds.selected { background: #dbe8ff; font-weight: 600; text-decoration: none; }
+  .odds.disabled { color: #bbb; }
+  .slip { position: sticky; top: 0; z-index: 10; background: #fff; border: 1px solid #ddd; border-radius: 6px;
+    padding: 0.75rem 1rem; margin-top: 1rem; }
+  .slip h2 { margin: 0 0 0.5rem; border: none; padding: 0; }
+  .slip ul { list-style: none; margin: 0; padding: 0; }
+  .slip li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.25rem 0; border-bottom: 1px solid #eee; }
+  .slip .remove-btn { background: none; border: none; color: #b00020; cursor: pointer; font-size: 1rem; padding: 0 0.25rem; }
+  .slip input[type="number"] { width: 6rem; padding: 0.3rem; }
+  .slip button#slip-place-btn { padding: 0.4rem 1rem; cursor: pointer; margin-top: 0.5rem; }
+  .status { margin-top: 1rem; font-size: 0.9rem; color: #555; }
+  .error { color: #b00020; }
+  .muted { color: #888; }
+  .live { color: #0a7d2c; font-weight: 600; }
+  #auth-nav { text-align: right; font-size: 0.9rem; }
+  .team-logo { width: 18px; height: 18px; vertical-align: middle; margin-right: 0.4rem; object-fit: contain; }
+  .league-logo { width: 22px; height: 22px; vertical-align: middle; margin-right: 0.5rem; object-fit: contain; }
+  .bookmaker-logo { max-width: 90px; max-height: 20px; vertical-align: middle; object-fit: contain; }
+</style>
+</head>
+<body>
+  <div id="auth-nav"></div>
+  <h1>FullTime — Test Console</h1>
+  <p>A background job on the server keeps odds/scores fresh on its own timer; this page auto-refreshes from the database to show it. Picking a specific date triggers an on-demand sync for that date only.</p>
+  <div>
+    <label for="date-picker">Date:</label>
+    <input type="date" id="date-picker">
+  </div>
+
+  <div class="slip">
+    <h2>Bet slip</h2>
+    <div id="slip-empty" class="muted">No selections yet — click an odds cell below to add one.</div>
+    <ul id="slip-list"></ul>
+    <div id="slip-summary" style="display:none">
+      <div>Combined odds: <strong id="slip-combined"></strong></div>
+      <div>
+        <label for="slip-stake">Stake:</label>
+        <input type="number" id="slip-stake" min="0.01" step="0.01" value="10">
+      </div>
+      <div>Potential return: <strong id="slip-return"></strong></div>
+      <div id="slip-balance" class="muted"></div>
+      <div id="slip-login-prompt" class="muted" style="display:none">
+        <a href="login.html">Log in</a> to place this bet.
+      </div>
+      <button id="slip-place-btn" type="button">Place bet</button>
+    </div>
+    <div id="slip-status" class="status"></div>
+  </div>
+
+  <div id="status" class="status"></div>
+  <div id="auto-status" class="status muted"></div>
+  <div id="results-container"></div>
+
+<script src="auth.js"></script>
+<script>
+const datePicker = document.getElementById('date-picker');
+const statusEl = document.getElementById('status');
+const autoStatusEl = document.getElementById('auto-status');
+const resultsContainer = document.getElementById('results-container');
+
+const slipEmptyEl = document.getElementById('slip-empty');
+const slipListEl = document.getElementById('slip-list');
+const slipSummaryEl = document.getElementById('slip-summary');
+const slipCombinedEl = document.getElementById('slip-combined');
+const slipStakeEl = document.getElementById('slip-stake');
+const slipReturnEl = document.getElementById('slip-return');
+const slipBalanceEl = document.getElementById('slip-balance');
+const slipLoginPromptEl = document.getElementById('slip-login-prompt');
+const slipPlaceBtn = document.getElementById('slip-place-btn');
+const slipStatusEl = document.getElementById('slip-status');
+
+let lastMatches = [];
+
+// Known league/cup IDs this season. Some divisions are tagged under a provider-assigned
+// temporary ID until it links them to the canonical one — both are listed where that applies.
+const LEAGUE_NAMES = {
+  47: 'Premier League',
+  48: 'Championship',
+  938218: 'Championship',
+  108: 'League One',
+  938219: 'League One',
+  109: 'League Two',
+  938220: 'League Two',
+  132: 'FA Cup',
+  133: 'EFL Cup',
+  938221: 'EFL Cup',
+  247: 'Community Shield',
+};
+const LEAGUE_ORDER = [47, 48, 938218, 108, 938219, 109, 938220, 132, 133, 938221, 247];
+
+// The provider's temporary per-season league IDs (see LEAGUE_NAMES above) have no logo asset of
+// their own yet — fall back to the canonical ID's logo, which does.
+const LEAGUE_LOGO_ID = {
+  938218: 48,
+  938219: 108,
+  938220: 109,
+  938221: 133,
+};
+
+const SLIP_KEY = 'fulltime_slip';
+
+function loadSlip() {
+  try {
+    return new Map(Object.entries(JSON.parse(localStorage.getItem(SLIP_KEY) || '{}')));
+  } catch {
+    return new Map();
+  }
+}
+
+function saveSlip() {
+  localStorage.setItem(SLIP_KEY, JSON.stringify(Object.fromEntries(slip)));
+}
+
+const slip = loadSlip();
+
+function toggleSelection(match, pick, decimalOdds) {
+  const existing = slip.get(match.id);
+  if (existing && existing.pick === pick) {
+    slip.delete(match.id);
+  } else {
+    slip.set(match.id, {
+      pick,
+      odds: decimalOdds,
+      homeTeam: match.homeTeam,
+      awayTeam: match.awayTeam,
+      kickoffTime: match.kickoffTime,
+    });
+  }
+  saveSlip();
+  renderSlip();
+  render(lastMatches);
+}
+
+function pickLabel(pick) {
+  return pick === 'Home' ? 'Home win' : pick === 'Away' ? 'Away win' : 'Draw';
+}
+
+function renderSlip() {
+  slipListEl.innerHTML = '';
+
+  if (slip.size === 0) {
+    slipEmptyEl.style.display = '';
+    slipSummaryEl.style.display = 'none';
+    return;
+  }
+
+  slipEmptyEl.style.display = 'none';
+  slipSummaryEl.style.display = '';
+
+  let combinedOdds = 1;
+  for (const [matchId, sel] of slip) {
+    combinedOdds *= sel.odds;
+
+    const li = document.createElement('li');
+    const label = document.createElement('span');
+    label.textContent = `${sel.homeTeam} v ${sel.awayTeam} — ${pickLabel(sel.pick)} (${formatOdds(sel.odds)})`;
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'remove-btn';
+    removeBtn.textContent = '×';
+    removeBtn.title = 'Remove';
+    removeBtn.addEventListener('click', () => {
+      slip.delete(matchId);
+      saveSlip();
+      renderSlip();
+      render(lastMatches);
+    });
+
+    li.appendChild(label);
+    li.appendChild(removeBtn);
+    slipListEl.appendChild(li);
+  }
+
+  slipCombinedEl.textContent = combinedOdds.toFixed(2);
+  updatePotentialReturn(combinedOdds);
+
+  const loggedIn = isLoggedIn();
+  slipLoginPromptEl.style.display = loggedIn ? 'none' : '';
+  slipPlaceBtn.style.display = loggedIn ? '' : 'none';
+}
+
+function updatePotentialReturn(combinedOdds) {
+  const stake = parseFloat(slipStakeEl.value) || 0;
+  slipReturnEl.textContent = (stake * combinedOdds).toFixed(2);
+}
+
+slipStakeEl.addEventListener('input', () => {
+  let combinedOdds = 1;
+  for (const sel of slip.values()) combinedOdds *= sel.odds;
+  updatePotentialReturn(combinedOdds);
+});
+
+async function refreshBalance() {
+  if (!isLoggedIn()) {
+    slipBalanceEl.textContent = '';
+    return;
+  }
+  try {
+    const res = await authFetch('/api/users/me');
+    if (res.ok) {
+      const me = await res.json();
+      slipBalanceEl.textContent = `Balance: ${me.balance.toFixed(2)}`;
+    }
+  } catch {
+    // balance display is a nice-to-have, not worth surfacing a network error for
+  }
+}
+
+slipPlaceBtn.addEventListener('click', async () => {
+  const stake = parseFloat(slipStakeEl.value);
+  if (!stake || stake <= 0) {
+    slipStatusEl.textContent = 'Enter a stake greater than zero.';
+    slipStatusEl.className = 'status error';
+    return;
+  }
+
+  slipStatusEl.textContent = 'Placing bet…';
+  slipStatusEl.className = 'status';
+  slipPlaceBtn.disabled = true;
+
+  try {
+    const res = await authFetch('/api/bets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stake,
+        selections: [...slip.entries()].map(([matchId, sel]) => ({ matchId, pick: sel.pick })),
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(body.error || `Request failed: ${res.status}`);
+    }
+
+    slip.clear();
+    saveSlip();
+    renderSlip();
+    render(lastMatches);
+    slipStatusEl.textContent = 'Bet placed! See My Bets for details.';
+    slipStatusEl.className = 'status';
+    await refreshBalance();
+  } catch (err) {
+    slipStatusEl.textContent = `Error: ${err.message}`;
+    slipStatusEl.className = 'status error';
+  } finally {
+    slipPlaceBtn.disabled = false;
+  }
+});
+
+datePicker.addEventListener('change', () => loadMatches({ quiet: false }));
+
+let hasQueried = false;
+
+async function loadMatches({ quiet }) {
+  hasQueried = true;
+
+  if (!quiet) {
+    statusEl.textContent = 'Loading…';
+    statusEl.className = 'status';
+    resultsContainer.innerHTML = '';
+  }
+
+  const date = datePicker.value;
+  const url = date ? `/api/matches/upcoming?date=${date}` : '/api/matches/upcoming';
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Request failed: ${res.status} ${res.statusText}`);
+    }
+    const matches = await res.json();
+    lastMatches = matches;
+    render(matches);
+    autoStatusEl.textContent = `Last updated ${new Date().toLocaleTimeString()}`;
+  } catch (err) {
+    statusEl.textContent = `Error: ${err.message}`;
+    statusEl.className = 'status error';
+  }
+}
+
+async function scheduleNextAutoRefresh() {
+  let intervalSeconds = 600;
+  try {
+    const res = await fetch('/api/config');
+    if (res.ok) {
+      ({ refreshIntervalSeconds: intervalSeconds } = await res.json());
+    }
+  } catch {
+    // fall back to the default above if /api/config isn't reachable
+  }
+
+  autoStatusEl.textContent = `Auto-refreshing every ${intervalSeconds}s`;
+  setTimeout(async () => {
+    if (hasQueried) await loadMatches({ quiet: true });
+    scheduleNextAutoRefresh();
+  }, intervalSeconds * 1000);
+}
+
+function gcd(a, b) {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
+function formatOdds(decimalOdds) {
+  if (decimalOdds == null) return '—';
+  // Odds are stored to 2 decimal places, so scale by 100 before reducing to avoid float noise.
+  let numerator = Math.round((decimalOdds - 1) * 100);
+  let denominator = 100;
+  const divisor = gcd(numerator, denominator) || 1;
+  numerator /= divisor;
+  denominator /= divisor;
+  return `${numerator}/${denominator}`;
+}
+
+function cell(text, cls) {
+  const td = document.createElement('td');
+  td.textContent = text;
+  if (cls) td.className = cls;
+  return td;
+}
+
+function teamCell(name, logoUrl) {
+  const td = document.createElement('td');
+  if (logoUrl) {
+    const img = document.createElement('img');
+    img.src = logoUrl;
+    img.alt = '';
+    img.className = 'team-logo';
+    img.loading = 'lazy';
+    img.onerror = () => { img.style.display = 'none'; };
+    td.appendChild(img);
+  }
+  td.appendChild(document.createTextNode(name));
+  return td;
+}
+
+function oddsCell(match, pick, decimalOdds) {
+  const td = document.createElement('td');
+  td.textContent = formatOdds(decimalOdds);
+  td.className = 'odds';
+
+  if (decimalOdds == null || match.status !== 'Upcoming') {
+    td.classList.add('disabled');
+    return td;
+  }
+
+  td.classList.add('clickable');
+  const selected = slip.get(match.id);
+  if (selected && selected.pick === pick) {
+    td.classList.add('selected');
+  }
+
+  td.addEventListener('click', () => toggleSelection(match, pick, decimalOdds));
+  return td;
+}
+
+function bookmakerCell(name, logoUrl) {
+  const td = document.createElement('td');
+  td.className = 'muted';
+
+  if (!name) {
+    td.textContent = '—';
+    return td;
+  }
+
+  if (logoUrl) {
+    const img = document.createElement('img');
+    img.src = logoUrl;
+    img.alt = name;
+    img.title = name;
+    img.className = 'bookmaker-logo';
+    img.loading = 'lazy';
+    img.onerror = () => { img.remove(); td.appendChild(document.createTextNode(name)); };
+    td.appendChild(img);
+  } else {
+    td.textContent = name;
+  }
+
+  return td;
+}
+
+function buildLeagueTable(matches) {
+  const table = document.createElement('table');
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Kickoff (local)</th>
+        <th>Home</th>
+        <th>Away</th>
+        <th>Score</th>
+        <th>Home</th>
+        <th>Draw</th>
+        <th>Away</th>
+        <th>Bookmaker</th>
+      </tr>
+    </thead>`;
+  const tbody = document.createElement('tbody');
+
+  for (const m of matches) {
+    const tr = document.createElement('tr');
+    const kickoff = new Date(m.kickoffTime).toLocaleString(undefined, {
+      weekday: 'short', day: 'numeric', month: 'short',
+      hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+    });
+    const score = m.status === 'InProgress' ? `${m.homeScore} - ${m.awayScore} (live)`
+      : m.status === 'Finished' ? `${m.homeScore} - ${m.awayScore} (FT)`
+      : '—';
+
+    tr.appendChild(cell(kickoff));
+    tr.appendChild(teamCell(m.homeTeam, m.homeLogoUrl));
+    tr.appendChild(teamCell(m.awayTeam, m.awayLogoUrl));
+    tr.appendChild(cell(score, m.status === 'InProgress' ? 'live' : 'muted'));
+    tr.appendChild(oddsCell(m, 'Home', m.homeOdds));
+    tr.appendChild(oddsCell(m, 'Draw', m.drawOdds));
+    tr.appendChild(oddsCell(m, 'Away', m.awayOdds));
+    tr.appendChild(bookmakerCell(m.bookmaker, m.bookmakerLogoUrl));
+    tbody.appendChild(tr);
+  }
+
+  table.appendChild(tbody);
+  return table;
+}
+
+function render(matches) {
+  resultsContainer.innerHTML = '';
+
+  if (matches.length === 0) {
+    statusEl.textContent = 'No matches found (empty result — could mean no fixtures for this selection, or the odds provider is rate-limited right now).';
+    return;
+  }
+
+  statusEl.textContent = `${matches.length} match(es).`;
+
+  const byLeague = new Map();
+  for (const m of matches) {
+    if (!byLeague.has(m.leagueId)) byLeague.set(m.leagueId, []);
+    byLeague.get(m.leagueId).push(m);
+  }
+
+  const orderedLeagueIds = [
+    ...LEAGUE_ORDER.filter(id => byLeague.has(id)),
+    ...[...byLeague.keys()].filter(id => !LEAGUE_ORDER.includes(id)).sort((a, b) => a - b),
+  ];
+
+  for (const leagueId of orderedLeagueIds) {
+    const leagueMatches = byLeague.get(leagueId);
+    const section = document.createElement('section');
+
+    const heading = document.createElement('h2');
+    const logo = document.createElement('img');
+    logo.src = `https://images.fotmob.com/image_resources/logo/leaguelogo/${LEAGUE_LOGO_ID[leagueId] ?? leagueId}.png`;
+    logo.alt = '';
+    logo.className = 'league-logo';
+    logo.loading = 'lazy';
+    logo.onerror = () => { logo.style.display = 'none'; };
+    heading.appendChild(logo);
+    heading.appendChild(document.createTextNode(
+      `${LEAGUE_NAMES[leagueId] ?? `League ${leagueId}`} (${leagueMatches.length})`));
+    section.appendChild(heading);
+
+    section.appendChild(buildLeagueTable(leagueMatches));
+    resultsContainer.appendChild(section);
+  }
+}
+
+statusEl.textContent = 'Pick a date to see fixtures.';
+scheduleNextAutoRefresh();
+renderSlip();
+refreshBalance();
+</script>
+</body>
+</html>

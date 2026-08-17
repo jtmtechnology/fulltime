@@ -1,0 +1,67 @@
+@page "/verify-email"
+@inject ApiClient Api
+
+<PageTitle>FullTime — Verify Email</PageTitle>
+
+<h1>Verify email</h1>
+
+<div class="page-card">
+    <div class="status @(_error ? "error" : "")">
+        @_status
+        @if (_verified)
+        {
+            <text> </text><a href="login">Log in</a>
+        }
+    </div>
+
+    @if (_showResend)
+    {
+        <div class="field">
+            <label for="resend-email">Email</label>
+            <input type="email" id="resend-email" @bind="_resendEmail" />
+        </div>
+        <button type="button" @onclick="ResendAsync">Resend verification email</button>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? Token { get; set; }
+
+    private string _status = "Verifying…";
+    private bool _error;
+    private bool _showResend;
+    private bool _verified;
+    private string _resendEmail = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(Token))
+        {
+            _status = "No verification token in the link.";
+            _error = true;
+            _showResend = true;
+            return;
+        }
+
+        try
+        {
+            _status = await Api.VerifyEmailAsync(Token);
+            _verified = true;
+        }
+        catch (Exception ex)
+        {
+            _status = $"Error: {ex.Message}";
+            _error = true;
+            _showResend = true;
+        }
+    }
+
+    private async Task ResendAsync()
+    {
+        if (string.IsNullOrEmpty(_resendEmail)) return;
+
+        _status = await Api.ResendVerificationAsync(_resendEmail);
+        _error = false;
+    }
+}

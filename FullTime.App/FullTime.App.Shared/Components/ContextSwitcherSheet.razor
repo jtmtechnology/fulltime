@@ -1,0 +1,50 @@
+@implements IDisposable
+@inject ActiveContextState ContextState
+
+@if (ContextState.IsSheetOpen)
+{
+    <button type="button" class="slip-overlay" @onclick="() => ContextState.SetSheetOpen(false)" aria-label="Close context switcher"></button>
+    <div class="slip-sheet">
+        <div class="sheet-handle"></div>
+        <h2>Betting as</h2>
+
+        @if (ContextState.MyLeagues.Count == 0)
+        {
+            <button type="button" class="context-option selected">Worldwide</button>
+        }
+        else
+        {
+            <ul class="context-list">
+                @foreach (var league in ContextState.MyLeagues)
+                {
+                    <li>
+                        <button type="button" class="context-option @(ContextState.Current.LeagueId == league.Id ? "selected" : "")"
+                                @onclick="() => SelectAsync(new BettingContext(league.Id, league.Name))">
+                            @league.Name
+                        </button>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        ContextState.Changed += OnChanged;
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task SelectAsync(BettingContext context)
+    {
+        await ContextState.SetContextAsync(context);
+        ContextState.SetSheetOpen(false);
+    }
+
+    public void Dispose()
+    {
+        ContextState.Changed -= OnChanged;
+    }
+}

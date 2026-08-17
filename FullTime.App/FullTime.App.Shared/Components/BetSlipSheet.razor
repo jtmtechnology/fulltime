@@ -1,0 +1,173 @@
+@implements IDisposable
+@using System.Net
+@inject BetSlipState Slip
+@inject AuthState AuthState
+@inject ActiveContextState ContextState
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+@if (Slip.Selections.Count > 0 || Slip.IsOpen)
+{
+    @if (!Slip.IsOpen)
+    {
+        <button type="button" class="slip-fab" @onclick="() => Slip.SetOpen(true)">
+            <span>@Slip.Selections.Count selection@(Slip.Selections.Count == 1 ? "" : "s")</span>
+            <span>@Slip.CombinedOdds.ToString("0.00")</span>
+        </button>
+    }
+    else
+    {
+        <button type="button" class="slip-overlay" @onclick="() => Slip.SetOpen(false)" aria-label="Close bet slip"></button>
+        <div class="slip-sheet">
+            <div class="sheet-handle"></div>
+            <h2>Bet slip</h2>
+
+            @if (Slip.Selections.Count == 0)
+            {
+                <div class="muted">No selections yet — tap an odds pill to add one.</div>
+            }
+            else
+            {
+                <ul>
+                    @foreach (var entry in Slip.Selections)
+                    {
+                        var matchId = entry.Key;
+                        var sel = entry.Value;
+                        <li>
+                            <span>@sel.HomeTeam v @sel.AwayTeam — @PickLabel(sel.Pick) (@OddsCell.FormatOdds(sel.Odds))</span>
+                            <button type="button" class="remove-btn" title="Remove" @onclick="() => RemoveSelectionAsync(matchId)">×</button>
+                        </li>
+                    }
+                </ul>
+                <div>Combined odds: <strong>@Slip.CombinedOdds.ToString("0.00")</strong></div>
+                <div class="field">
+                    <label for="slip-stake">Stake (£)</label>
+                    <input type="number" id="slip-stake" min="0.01" step="0.01" @bind="_stake" />
+                </div>
+                <div>Potential return: <strong>£@((_stake * Slip.CombinedOdds).ToString("0.00"))</strong></div>
+
+                @if (AuthState.IsLoggedIn)
+                {
+                    <div class="muted">
+                        Betting in: <strong>@ContextState.Current.Name</strong>
+                        @if (ContextState.Balance is not null)
+                        {
+                            <text> — Balance: £@ContextState.Balance.Value.ToString("0.00")</text>
+                        }
+                    </div>
+                    <button type="button" class="place-bet-btn" @onclick="PlaceBetAsync" disabled="@_placing">Place bet</button>
+                }
+                else
+                {
+                    <div class="muted"><a href="login">Log in</a> to place this bet.</div>
+                }
+            }
+
+            @if (!string.IsNullOrEmpty(_slipStatus))
+            {
+                <div class="status @(_slipError ? "error" : "")">@_slipStatus</div>
+            }
+        </div>
+    }
+}
+
+@code {
+    private decimal _stake = 10;
+    private bool _placing;
+    private string _slipStatus = "";
+    private bool _slipError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Slip.InitializeAsync();
+        Slip.Changed += OnSlipChanged;
+        AuthState.Changed += OnAuthChanged;
+        ContextState.Changed += OnContextChanged;
+
+        if (AuthState.IsLoggedIn)
+        {
+            await ContextState.InitializeAsync();
+        }
+    }
+
+    // On the Web host this first pass runs during static prerendering, before JS interop
+    // (Slip's storage) is available — re-run once interactive, same pattern as Routes.razor.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Slip.InitializeAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnSlipChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnContextChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnAuthChanged() => InvokeAsync(async () =>
+    {
+        if (AuthState.IsLoggedIn)
+        {
+            await ContextState.InitializeAsync();
+        }
+        StateHasChanged();
+    });
+
+    private async Task RemoveSelectionAsync(Guid matchId) => await Slip.RemoveAsync(matchId);
+
+    private static string PickLabel(string pick) => pick switch
+    {
+        "Home" => "Home win",
+        "Away" => "Away win",
+        _ => "Draw",
+    };
+
+    private async Task PlaceBetAsync()
+    {
+        if (_stake <= 0)
+        {
+            _slipStatus = "Enter a stake greater than zero.";
+            _slipError = true;
+            return;
+        }
+
+        _slipStatus = "Placing bet…";
+        _slipError = false;
+        _placing = true;
+
+        try
+        {
+            var selections = Slip.Selections.Select(kv => new SelectionRequest(kv.Key, kv.Value.Pick)).ToList();
+            await Api.PlaceBetAsync(_stake, selections, ContextState.Current.LeagueId);
+
+            await Slip.ClearAsync();
+            Slip.SetOpen(false);
+            _slipStatus = "Bet placed! See My Bets for details.";
+            _slipError = false;
+            await ContextState.RefreshBalanceAsync();
+        }
+        catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await AuthState.LogoutAsync();
+            Slip.SetOpen(false);
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            _slipStatus = $"Error: {ex.Message}";
+            _slipError = true;
+        }
+        finally
+        {
+            _placing = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        Slip.Changed -= OnSlipChanged;
+        AuthState.Changed -= OnAuthChanged;
+        ContextState.Changed -= OnContextChanged;
+    }
+}

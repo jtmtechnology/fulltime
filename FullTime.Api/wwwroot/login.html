@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FullTime — Login</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 480px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; }
+  #auth-nav { margin-bottom: 1.5rem; font-size: 0.9rem; }
+  label { display: block; margin-top: 1rem; font-size: 0.9rem; }
+  input { width: 100%; padding: 0.5rem; margin-top: 0.25rem; box-sizing: border-box; }
+  button { padding: 0.5rem 1rem; margin-top: 1.5rem; cursor: pointer; }
+  .status { margin-top: 1rem; font-size: 0.9rem; color: #555; }
+  .error { color: #b00020; }
+  .muted { color: #888; }
+  .links { margin-top: 1rem; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+  <div id="auth-nav"></div>
+  <h1>Log in</h1>
+  <form id="login-form">
+    <label for="email">Email</label>
+    <input type="email" id="email" required>
+
+    <label for="password">Password</label>
+    <input type="password" id="password" required>
+
+    <button type="submit">Log in</button>
+  </form>
+  <div id="status" class="status"></div>
+  <div id="resend-container" class="links" style="display:none">
+    <button id="resend-btn" type="button">Resend verification email</button>
+  </div>
+  <div class="links"><a href="forgot-password.html">Forgot password?</a> · <a href="register.html">Register</a></div>
+
+<script src="auth.js"></script>
+<script>
+const form = document.getElementById('login-form');
+const statusEl = document.getElementById('status');
+const resendContainer = document.getElementById('resend-container');
+const resendBtn = document.getElementById('resend-btn');
+
+let lastEmail = '';
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  lastEmail = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+
+  statusEl.textContent = 'Logging in…';
+  statusEl.className = 'status';
+  resendContainer.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: lastEmail, password }),
+    });
+    const body = await res.json().catch(() => ({}));
+
+    if (res.status === 403 && body.reason === 'EmailNotVerified') {
+      statusEl.textContent = 'Please verify your email before logging in.';
+      statusEl.className = 'status error';
+      resendContainer.style.display = '';
+      return;
+    }
+
+    if (!res.ok) {
+      throw new Error(body.error || `Request failed: ${res.status}`);
+    }
+
+    setToken(body.token);
+    window.location.href = 'index.html';
+  } catch (err) {
+    statusEl.textContent = `Error: ${err.message}`;
+    statusEl.className = 'status error';
+  }
+});
+
+resendBtn.addEventListener('click', async () => {
+  if (!lastEmail) return;
+  resendBtn.disabled = true;
+  try {
+    const res = await fetch('/api/auth/resend-verification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: lastEmail }),
+    });
+    const body = await res.json().catch(() => ({}));
+    statusEl.textContent = body.message || 'If that account exists and isn’t verified yet, a new email has been sent.';
+    statusEl.className = 'status muted';
+  } finally {
+    resendBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

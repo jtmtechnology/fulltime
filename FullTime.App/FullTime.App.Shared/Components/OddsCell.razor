@@ -1,0 +1,60 @@
+@implements IDisposable
+@inject BetSlipState Slip
+
+<span class="@CssClass" @onclick="OnClickAsync">@Text</span>
+
+@code {
+    [Parameter] public Guid MatchId { get; set; }
+    [Parameter] public string MatchStatus { get; set; } = "";
+    [Parameter] public string Pick { get; set; } = "";
+    [Parameter] public decimal? Odds { get; set; }
+    [Parameter] public string HomeTeam { get; set; } = "";
+    [Parameter] public string AwayTeam { get; set; } = "";
+    [Parameter] public DateTime KickoffTime { get; set; }
+
+    private bool Clickable => Odds is not null && MatchStatus == "Upcoming";
+    private string Text => Odds is null ? "—" : FormatOdds(Odds.Value);
+
+    private string CssClass
+    {
+        get
+        {
+            if (!Clickable) return "odds disabled";
+            var cls = "odds clickable";
+            if (Slip.GetPick(MatchId) == Pick) cls += " selected";
+            return cls;
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        Slip.Changed += StateHasChanged;
+    }
+
+    private async Task OnClickAsync()
+    {
+        if (!Clickable) return;
+        await Slip.ToggleAsync(MatchId, Pick, Odds!.Value, HomeTeam, AwayTeam, KickoffTime);
+    }
+
+    public static string FormatOdds(decimal decimalOdds)
+    {
+        // Odds are stored to 2 decimal places, so scale by 100 before reducing to avoid float noise.
+        var numerator = (long)Math.Round((decimalOdds - 1) * 100);
+        var denominator = 100L;
+        var divisor = Gcd(numerator, denominator);
+        if (divisor != 0)
+        {
+            numerator /= divisor;
+            denominator /= divisor;
+        }
+        return $"{numerator}/{denominator}";
+    }
+
+    private static long Gcd(long a, long b) => b == 0 ? a : Gcd(b, a % b);
+
+    public void Dispose()
+    {
+        Slip.Changed -= StateHasChanged;
+    }
+}

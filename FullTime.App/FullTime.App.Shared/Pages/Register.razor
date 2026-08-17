@@ -1,0 +1,68 @@
+@page "/register"
+@inject ApiClient Api
+
+<PageTitle>FullTime — Register</PageTitle>
+
+<h1>Register</h1>
+
+<div class="page-card">
+    @if (!_registered)
+    {
+        <EditForm Model="this" OnValidSubmit="SubmitAsync">
+            <div class="field">
+                <label for="name">Name</label>
+                <InputText id="name" @bind-Value="_name" />
+            </div>
+            <div class="field">
+                <label for="email">Email</label>
+                <InputText id="email" type="email" @bind-Value="_email" />
+            </div>
+            <div class="field">
+                <label for="password">Password</label>
+                <InputText id="password" type="password" @bind-Value="_password" />
+            </div>
+            <div class="field">
+                <label for="confirm-password">Confirm password</label>
+                <InputText id="confirm-password" type="password" @bind-Value="_confirmPassword" />
+            </div>
+            <button type="submit">Register</button>
+        </EditForm>
+    }
+
+    <div class="status @(_error ? "error" : "")">@_status</div>
+</div>
+
+@code {
+    private string _name = "";
+    private string _email = "";
+    private string _password = "";
+    private string _confirmPassword = "";
+    private string _status = "";
+    private bool _error;
+    private bool _registered;
+
+    private async Task SubmitAsync()
+    {
+        if (_password != _confirmPassword)
+        {
+            _status = "Passwords do not match.";
+            _error = true;
+            return;
+        }
+
+        _status = "Registering…";
+        _error = false;
+
+        try
+        {
+            await Api.RegisterAsync(_name, _email, _password);
+            _registered = true;
+            _status = "Registered! Check the server log for a verification link (email sending isn't wired up to a real inbox yet), then visit it to verify your account before logging in.";
+        }
+        catch (Exception ex)
+        {
+            _status = $"Error: {ex.Message}";
+            _error = true;
+        }
+    }
+}

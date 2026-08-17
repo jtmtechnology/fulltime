@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FullTime — Verify Email</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 480px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; }
+  #auth-nav { margin-bottom: 1.5rem; font-size: 0.9rem; }
+  button { padding: 0.5rem 1rem; margin-top: 1rem; cursor: pointer; }
+  .status { margin-top: 1rem; font-size: 0.9rem; color: #555; }
+  .error { color: #b00020; }
+  .muted { color: #888; }
+</style>
+</head>
+<body>
+  <div id="auth-nav"></div>
+  <h1>Verify email</h1>
+  <div id="status" class="status">Verifying…</div>
+  <div id="resend-container" style="display:none">
+    <label for="resend-email">Email</label><br>
+    <input type="email" id="resend-email">
+    <button id="resend-btn" type="button">Resend verification email</button>
+  </div>
+
+<script src="auth.js"></script>
+<script>
+const statusEl = document.getElementById('status');
+const resendContainer = document.getElementById('resend-container');
+const resendBtn = document.getElementById('resend-btn');
+
+const token = new URLSearchParams(window.location.search).get('token');
+
+async function verify() {
+  if (!token) {
+    statusEl.textContent = 'No verification token in the link.';
+    statusEl.className = 'status error';
+    resendContainer.style.display = '';
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/verify-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    const body = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(body.error || `Request failed: ${res.status}`);
+    }
+
+    statusEl.textContent = 'Email verified! You can log in now.';
+    statusEl.className = 'status';
+    statusEl.innerHTML += ' <a href="login.html">Log in</a>';
+  } catch (err) {
+    statusEl.textContent = `Error: ${err.message}`;
+    statusEl.className = 'status error';
+    resendContainer.style.display = '';
+  }
+}
+
+resendBtn.addEventListener('click', async () => {
+  const email = document.getElementById('resend-email').value.trim();
+  if (!email) return;
+
+  resendBtn.disabled = true;
+  try {
+    const res = await fetch('/api/auth/resend-verification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const body = await res.json().catch(() => ({}));
+    statusEl.textContent = body.message || 'If that account exists and isn’t verified yet, a new email has been sent.';
+    statusEl.className = 'status muted';
+  } finally {
+    resendBtn.disabled = false;
+  }
+});
+
+verify();
+</script>
+</body>
+</html>

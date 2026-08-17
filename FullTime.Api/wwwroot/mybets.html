@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FullTime — My Bets</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 700px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; }
+  #auth-nav { text-align: right; margin-bottom: 1.5rem; font-size: 0.9rem; }
+  .status { margin-top: 1rem; font-size: 0.9rem; color: #555; }
+  .error { color: #b00020; }
+  .muted { color: #888; }
+  .live { color: #0a7d2c; font-weight: 600; }
+  .bet-card { border: 1px solid #ddd; border-radius: 6px; padding: 0.75rem 1rem; margin-top: 1rem; }
+  .bet-card ul { list-style: none; margin: 0.5rem 0 0; padding: 0; }
+  .bet-card li { padding: 0.15rem 0; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+  <div id="auth-nav"></div>
+  <h1>My Bets</h1>
+  <div id="status" class="status">Loading…</div>
+  <div id="bets-container"></div>
+
+<script src="auth.js"></script>
+<script>
+requireAuth();
+
+const statusEl = document.getElementById('status');
+const container = document.getElementById('bets-container');
+
+function statusClass(status) {
+  return status === 'Won' ? 'live' : status === 'Lost' ? 'error' : 'muted';
+}
+
+function render(bets) {
+  container.innerHTML = '';
+
+  if (bets.length === 0) {
+    statusEl.textContent = 'No bets placed yet.';
+    return;
+  }
+
+  statusEl.textContent = '';
+
+  for (const bet of bets) {
+    const card = document.createElement('div');
+    card.className = 'bet-card';
+
+    const header = document.createElement('div');
+    header.innerHTML = `<strong>${new Date(bet.placedAt).toLocaleString()}</strong> — `
+      + `Stake ${bet.stake.toFixed(2)} · Combined odds ${bet.combinedOdds.toFixed(2)} · `
+      + `Potential return ${bet.potentialReturn.toFixed(2)} · `
+      + `<span class="${statusClass(bet.status)}">${bet.status}</span>`;
+    card.appendChild(header);
+
+    const ul = document.createElement('ul');
+    for (const sel of bet.selections) {
+      const li = document.createElement('li');
+      li.textContent = `${sel.homeTeam} v ${sel.awayTeam} — ${sel.pick} (${sel.outcome})`;
+      if (sel.outcome === 'Correct') li.className = 'live';
+      if (sel.outcome === 'Incorrect') li.className = 'error';
+      ul.appendChild(li);
+    }
+    card.appendChild(ul);
+
+    container.appendChild(card);
+  }
+}
+
+async function loadBets() {
+  try {
+    const res = await authFetch('/api/bets/me');
+    if (!res.ok) {
+      throw new Error(`Request failed: ${res.status}`);
+    }
+    render(await res.json());
+  } catch (err) {
+    statusEl.textContent = `Error: ${err.message}`;
+    statusEl.className = 'status error';
+  }
+}
+
+loadBets();
+</script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+@page "/login"
+@inject ApiClient Api
+@inject AuthState AuthState
+@inject NavigationManager Nav
+
+<PageTitle>FullTime — Login</PageTitle>
+
+<h1>Log in</h1>
+
+<div class="page-card">
+    <EditForm Model="this" OnValidSubmit="SubmitAsync">
+        <div class="field">
+            <label for="email">Email</label>
+            <InputText id="email" type="email" @bind-Value="_email" />
+        </div>
+        <div class="field">
+            <label for="password">Password</label>
+            <InputText id="password" type="password" @bind-Value="_password" />
+        </div>
+        <button type="submit">Log in</button>
+    </EditForm>
+
+    <div class="status @(_error ? "error" : "")">@_status</div>
+
+    @if (_showResend)
+    {
+        <div>
+            <button type="button" @onclick="ResendAsync">Resend verification email</button>
+        </div>
+    }
+
+    <div class="muted"><a href="forgot-password">Forgot password?</a> · <a href="register">Register</a></div>
+</div>
+
+@code {
+    private string _email = "";
+    private string _password = "";
+    private string _status = "";
+    private bool _error;
+    private bool _showResend;
+
+    private async Task SubmitAsync()
+    {
+        _status = "Logging in…";
+        _error = false;
+        _showResend = false;
+
+        var result = await Api.LoginAsync(_email, _password);
+
+        if (result.EmailNotVerified)
+        {
+            _status = "Please verify your email before logging in.";
+            _error = true;
+            _showResend = true;
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _status = $"Error: {result.Error}";
+            _error = true;
+            return;
+        }
+
+        await AuthState.SetTokenAsync(result.Response!.Token);
+        Nav.NavigateTo("/");
+    }
+
+    private async Task ResendAsync()
+    {
+        if (string.IsNullOrEmpty(_email)) return;
+        _status = await Api.ResendVerificationAsync(_email);
+        _error = false;
+    }
+}
