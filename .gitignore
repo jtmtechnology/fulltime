@@ -11,9 +11,11 @@ publish/
 *.mobileprovision
 *.jks
 *.keystore
+*.p8
 
 ## Misc
 run.log
 *.dump
 *.zip
+*.ipa
 .claude/
