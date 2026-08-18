@@ -7,6 +7,8 @@ workflows:
       app_store_connect: FullTime
     environment:
       xcode: latest
+      groups:
+        - certs
       vars:
         BUNDLE_ID: com.jtmtechnology.fulltime.app
         DOTNET_PATH: $CM_BUILD_DIR/dotnet
@@ -17,6 +19,7 @@ workflows:
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --platform IOS \
             --type IOS_APP_ADHOC \
+            --certificate-key "@env:CERTIFICATE_PRIVATE_KEY" \
             --create
 
       - name: Set up keychain
