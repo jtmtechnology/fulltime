@@ -7,30 +7,13 @@ workflows:
       app_store_connect: FullTime
     environment:
       xcode: latest
-      groups:
-        - certs
+      ios_signing:
+        distribution_type: ad_hoc
+        bundle_identifier: com.jtmtechnology.fulltime.app
       vars:
-        BUNDLE_ID: com.jtmtechnology.fulltime.app
         DOTNET_PATH: $CM_BUILD_DIR/dotnet
         DOTNET: $CM_BUILD_DIR/dotnet/dotnet
     scripts:
-      - name: Fetch or create ad-hoc signing files
-        script: |
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --platform IOS \
-            --type IOS_APP_ADHOC \
-            --certificate-key "@env:CERTIFICATE_PRIVATE_KEY" \
-            --create
-
-      - name: Set up keychain
-        script: keychain initialize
-
-      - name: Add certificates to keychain
-        script: keychain add-certificates
-
-      - name: Set up provisioning profiles
-        script: xcode-project use-profiles
-
       - name: Install .NET SDK
         script: |
           wget https://dot.net/v1/dotnet-install.sh
