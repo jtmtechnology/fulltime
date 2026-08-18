@@ -34,7 +34,7 @@ workflows:
           cd FullTime.App/FullTime.App
           $DOTNET publish -f net10.0-ios \
             -c Release \
-            -p:TargetFrameworks=net10.0-ios \
+            -p:IosOnlyBuild=true \
             -p:BuildIpa=true \
             -p:ApplicationDisplayVersion="1.0.0" \
             -p:ApplicationVersion=$BUILD_NUMBER \

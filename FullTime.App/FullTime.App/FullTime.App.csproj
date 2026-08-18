@@ -4,6 +4,11 @@
     <TargetFrameworks>net10.0-android</TargetFrameworks>
     <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
+    <!-- CI build hosts (e.g. Codemagic) only install the iOS workload, not Android's SDK/NDK, so a
+         CI-only property collapses this app project down to a single TFM instead of the full multi-target
+         list. Scoped to this project only (not a global "TargetFrameworks" override) so it can't leak
+         into FullTime.App.Shared's own single-TFM restore via project-reference negotiation. -->
+    <TargetFrameworks Condition="'$(IosOnlyBuild)' == 'true'">net10.0-ios</TargetFrameworks>
 
     <!-- Note for MacCatalyst:
       The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
