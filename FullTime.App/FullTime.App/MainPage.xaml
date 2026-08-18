@@ -4,7 +4,8 @@
              xmlns:local="clr-namespace:FullTime.App"
              xmlns:shared="clr-namespace:FullTime.App.Shared;assembly=FullTime.App.Shared"
              x:Class="FullTime.App.MainPage"
-             BackgroundColor="#0D1117">
+             BackgroundColor="#0D1117"
+             SafeAreaEdges="None">
 
     <BlazorWebView x:Name="blazorWebView" HostPage="wwwroot/index.html" BackgroundColor="#0D1117">
         <BlazorWebView.RootComponents>
