@@ -46,7 +46,8 @@ builder.Services.AddAuthorization();
 builder.Services.Configure<BettingOptions>(builder.Configuration.GetSection(BettingOptions.SectionName));
 
 builder.Services.AddScoped<AuthService>();
-builder.Services.AddSingleton<IEmailSender, LoggingEmailSender>();
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
+builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.Configure<OddsApiOptions>(builder.Configuration.GetSection(OddsApiOptions.SectionName));
 builder.Services.AddHttpClient<FootballDataClient>((sp, client) =>
 {
