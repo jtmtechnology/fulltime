@@ -49,3 +49,54 @@ workflows:
       email:
         recipients:
           - alan.browne@telxl.com
+
+  ios-testflight:
+    name: FullTime iOS TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: FullTime
+    environment:
+      xcode: 26.6
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.jtmtechnology.fulltime.app
+      vars:
+        DOTNET_PATH: $CM_BUILD_DIR/dotnet
+        DOTNET: $CM_BUILD_DIR/dotnet/dotnet
+    scripts:
+      - name: Install .NET SDK
+        script: |
+          wget https://dot.net/v1/dotnet-install.sh
+          chmod +x dotnet-install.sh
+          ./dotnet-install.sh --channel 10.0 --install-dir $DOTNET_PATH
+
+      - name: Install MAUI iOS workload
+        script: |
+          $DOTNET workload install maui-ios
+
+      - name: Build and sign for App Store
+        script: |
+          CERT_NAME=$(keychain list-certificates | jq -r '.[0].common_name')
+          PROFILE_NAME=$(find "$HOME/Library/MobileDevice/Provisioning Profiles" \
+            -name "*.mobileprovision" -execdir sh -c \
+            '/usr/libexec/PlistBuddy -c "print :Name" /dev/stdin <<< $(security cms -D -i "$1")' _ {} \; | head -1)
+
+          cd FullTime.App/FullTime.App
+          $DOTNET publish -f net10.0-ios \
+            -c Release \
+            -p:IosOnlyBuild=true \
+            -p:BuildIpa=true \
+            -p:ApplicationDisplayVersion="1.0.0" \
+            -p:ApplicationVersion=$BUILD_NUMBER \
+            -p:RuntimeIdentifier=ios-arm64 \
+            -p:CodesignKey="$CERT_NAME" \
+            -p:CodesignProvision="$PROFILE_NAME"
+
+    artifacts:
+      - FullTime.App/FullTime.App/bin/Release/net10.0-ios/**/*.ipa
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
