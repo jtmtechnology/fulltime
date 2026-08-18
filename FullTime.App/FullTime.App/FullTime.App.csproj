@@ -34,7 +34,7 @@
     <MauiXamlInflator>SourceGen</MauiXamlInflator>
 
     <!-- Display name -->
-    <ApplicationTitle>FullTime.App</ApplicationTitle>
+    <ApplicationTitle>FullTime</ApplicationTitle>
 
     <!-- App Identifier -->
     <ApplicationId>com.companyname.fulltime.app</ApplicationId>
