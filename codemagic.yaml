@@ -6,7 +6,7 @@ workflows:
     integrations:
       app_store_connect: FullTime
     environment:
-      xcode: latest
+      xcode: edge
       ios_signing:
         distribution_type: ad_hoc
         bundle_identifier: com.jtmtechnology.fulltime.app
