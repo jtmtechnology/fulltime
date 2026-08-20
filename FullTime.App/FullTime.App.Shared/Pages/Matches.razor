@@ -162,8 +162,18 @@
             : _leagues.Where(l => l.LeagueId == _selectedLeagueId).SelectMany(l => l.Matches);
 
         return matches
-            .OrderBy(m => m.KickoffTime).ThenBy(m => m.HomeTeam)
+            .OrderBy(m => DateOnly.FromDateTime(m.KickoffTime.ToLocalTime().Date))
+            .ThenBy(m => LeagueSortRank(m.LeagueId))
+            .ThenBy(m => m.LeagueId)
+            .ThenBy(m => m.KickoffTime)
+            .ThenBy(m => m.HomeTeam)
             .GroupBy(m => DateOnly.FromDateTime(m.KickoffTime.ToLocalTime().Date));
+    }
+
+    private static int LeagueSortRank(long leagueId)
+    {
+        var index = Array.IndexOf(LeagueOrder, leagueId);
+        return index >= 0 ? index : int.MaxValue;
     }
 
     private static string LeagueName(long leagueId) => LeagueNames.GetValueOrDefault(leagueId, $"League {leagueId}");
