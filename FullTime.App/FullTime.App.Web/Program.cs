@@ -14,9 +14,11 @@ builder.Services.AddScoped<IJwtStore, WebJwtStore>();
 builder.Services.AddScoped<ISlipStore, WebSlipStore>();
 builder.Services.AddScoped<IActiveContextStore, WebActiveContextStore>();
 builder.Services.AddScoped<IPushRegistrar, WebPushRegistrar>();
+builder.Services.AddScoped<IMatchLeaguePreferenceStore, WebMatchLeaguePreferenceStore>();
 builder.Services.AddScoped<AuthState>();
 builder.Services.AddScoped<BetSlipState>();
 builder.Services.AddScoped<ActiveContextState>();
+builder.Services.AddScoped<MatchLeaguePreferences>();
 
 var apiBaseUrl = builder.Configuration["Api:BaseUrl"]
     ?? throw new InvalidOperationException("Api:BaseUrl configuration is missing.");

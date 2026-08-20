@@ -1,6 +1,7 @@
 @page "/"
 @implements IDisposable
 @inject ApiClient Api
+@inject MatchLeaguePreferences Prefs
 
 <PageTitle>FullTime — Matches</PageTitle>
 
@@ -20,8 +21,8 @@
         @foreach (var league in _leagues)
         {
             <button type="button" class="league-chip @(_selectedLeagueId == league.LeagueId ? "selected" : "")" @onclick="() => SelectLeague(league.LeagueId)">
-                <LogoImg Src="@LeagueLogoUrl(league.LeagueId)" Alt="@LeagueName(league.LeagueId)" />
-                <span>@LeagueName(league.LeagueId)</span>
+                <LogoImg Src="@LeagueCatalog.LogoUrl(league.LeagueId)" Alt="@LeagueCatalog.Name(league.LeagueId)" />
+                <span>@LeagueCatalog.Name(league.LeagueId)</span>
             </button>
         }
     </div>
@@ -35,8 +36,8 @@
     @foreach (var leagueGroup in dateGroup.GroupBy(m => m.LeagueId))
     {
         <div class="league-header">
-            <LogoImg Src="@LeagueLogoUrl(leagueGroup.Key)" Alt="@LeagueName(leagueGroup.Key)" />
-            <span>@LeagueName(leagueGroup.Key)</span>
+            <LogoImg Src="@LeagueCatalog.LogoUrl(leagueGroup.Key)" Alt="@LeagueCatalog.Name(leagueGroup.Key)" />
+            <span>@LeagueCatalog.Name(leagueGroup.Key)</span>
         </div>
         @foreach (var m in leagueGroup)
         {
@@ -46,35 +47,6 @@
 }
 
 @code {
-    // Known league/cup IDs this season. Some divisions are tagged under a provider-assigned
-    // temporary ID until it links them to the canonical one — both are listed where that applies.
-    private static readonly Dictionary<long, string> LeagueNames = new()
-    {
-        [47] = "Premier League",
-        [48] = "Championship",
-        [938218] = "Championship",
-        [108] = "League One",
-        [938219] = "League One",
-        [109] = "League Two",
-        [938220] = "League Two",
-        [132] = "FA Cup",
-        [133] = "EFL Cup",
-        [938221] = "EFL Cup",
-        [247] = "Community Shield",
-    };
-
-    private static readonly long[] LeagueOrder = [47, 48, 938218, 108, 938219, 109, 938220, 132, 133, 938221, 247];
-
-    // The provider's temporary per-season league IDs (see LeagueNames above) have no logo asset of
-    // their own yet — fall back to the canonical ID's logo, which does.
-    private static readonly Dictionary<long, long> LeagueLogoId = new()
-    {
-        [938218] = 48,
-        [938219] = 108,
-        [938220] = 109,
-        [938221] = 133,
-    };
-
     private record LeagueGroup(long LeagueId, List<UpcomingMatchDto> Matches);
 
     private readonly List<DateOnly> _days = Enumerable.Range(0, 14)
@@ -91,6 +63,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await Prefs.InitializeAsync();
         await LoadMatchesAsync(quiet: false);
         _ = AutoRefreshLoopAsync(_cts.Token);
     }
@@ -135,8 +108,10 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private void Render(List<UpcomingMatchDto> matches)
+    private void Render(List<UpcomingMatchDto> allMatches)
     {
+        var matches = allMatches.Where(m => Prefs.IsVisible(m.LeagueId)).ToList();
+
         if (matches.Count == 0)
         {
             _leagues = [];
@@ -149,8 +124,8 @@
         _error = false;
 
         var byLeague = matches.GroupBy(m => m.LeagueId).ToDictionary(g => g.Key, g => g.ToList());
-        var orderedIds = LeagueOrder.Where(byLeague.ContainsKey)
-            .Concat(byLeague.Keys.Where(id => !LeagueOrder.Contains(id)).OrderBy(id => id));
+        var orderedIds = LeagueCatalog.DisplayOrder.Where(byLeague.ContainsKey)
+            .Concat(byLeague.Keys.Where(id => !LeagueCatalog.DisplayOrder.Contains(id)).OrderBy(id => id));
 
         _leagues = orderedIds.Select(id => new LeagueGroup(id, byLeague[id])).ToList();
 
@@ -179,16 +154,8 @@
 
     private static int LeagueSortRank(long leagueId)
     {
-        var index = Array.IndexOf(LeagueOrder, leagueId);
+        var index = Array.IndexOf(LeagueCatalog.DisplayOrder, leagueId);
         return index >= 0 ? index : int.MaxValue;
-    }
-
-    private static string LeagueName(long leagueId) => LeagueNames.GetValueOrDefault(leagueId, $"League {leagueId}");
-
-    private static string LeagueLogoUrl(long leagueId)
-    {
-        var id = LeagueLogoId.GetValueOrDefault(leagueId, leagueId);
-        return $"https://images.fotmob.com/image_resources/logo/leaguelogo/{id}.png";
     }
 
     private async Task AutoRefreshLoopAsync(CancellationToken ct)

@@ -3,6 +3,7 @@
 @inject ApiClient Api
 @inject AuthState AuthState
 @inject NavigationManager Nav
+@inject MatchLeaguePreferences LeaguePrefs
 
 <PageTitle>FullTime — Profile</PageTitle>
 
@@ -44,6 +45,20 @@
             <button type="submit">Change password</button>
         </EditForm>
         <div class="status @(_passwordError ? "error" : "")">@_passwordStatus</div>
+
+        <h2>Extra leagues</h2>
+        <p class="hint">The Premier League, the English pyramid, and the UEFA cups always show in Matches. Add other countries' top flights too:</p>
+        <div class="league-toggle-list">
+            @foreach (var league in LeagueCatalog.OptionalLeagues)
+            {
+                <label class="league-toggle">
+                    <input type="checkbox" checked="@LeaguePrefs.EnabledOptionalLeagueIds.Contains(league.Id)"
+                           @onchange="e => ToggleLeagueAsync(league.Id, (bool)e.Value!)" />
+                    <LogoImg Src="@LeagueCatalog.LogoUrl(league.Id)" Alt="@league.Name" />
+                    <span>@league.Name</span>
+                </label>
+            }
+        </div>
     </div>
 }
 
@@ -73,6 +88,7 @@
             _me = await Api.GetMeAsync();
             _name = _me.Name;
             _myLeagues = await Api.GetMyLeaguesAsync();
+            await LeaguePrefs.InitializeAsync();
         }
         catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
         {
@@ -123,5 +139,10 @@
             _passwordStatus = $"Error: {ex.Message}";
             _passwordError = true;
         }
+    }
+
+    private async Task ToggleLeagueAsync(long leagueId, bool enabled)
+    {
+        await LeaguePrefs.SetEnabledAsync(leagueId, enabled);
     }
 }

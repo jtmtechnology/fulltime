@@ -307,6 +307,20 @@ button[type="submit"] {
 }
 .stat-row .label { color: var(--text-muted); }
 
+.hint { color: var(--text-muted); font-size: 0.85rem; margin: -0.25rem 0 0.75rem; }
+
+.league-toggle-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+.league-toggle {
+    display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.85rem;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    font-size: 0.9rem; cursor: pointer;
+}
+.league-toggle input { margin: 0; }
+.league-toggle img {
+    width: 22px; height: 22px; object-fit: contain;
+    background: #f4f7fa; border-radius: 50%; padding: 3px; box-sizing: border-box;
+}
+
 .invite-code {
     font-family: 'SFMono-Regular', Consolas, monospace;
     letter-spacing: 0.15em;
