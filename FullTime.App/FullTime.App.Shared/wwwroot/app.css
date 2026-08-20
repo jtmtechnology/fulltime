@@ -9,7 +9,7 @@
     --accent-ink: #05130a;
     --warn: #ffb020;
     --danger: #ff4d5e;
-    --tab-bar-height: 5.1rem;
+    --tab-bar-height: 5.6rem;
     --slip-fab-height: 3.25rem;
 }
 
@@ -166,10 +166,10 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
 }
 .tab-item {
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 0.2rem; color: var(--text-muted); text-decoration: none; font-size: 0.78rem;
+    gap: 0.25rem; color: var(--text-muted); text-decoration: none; font-size: 0.85rem;
     background: none; border: none; cursor: pointer; position: relative;
 }
-.tab-item svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.tab-item svg { width: 32px; height: 32px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .tab-item.active { color: var(--accent); }
 .tab-item .badge {
     position: absolute; top: 0.1rem; right: 24%;
