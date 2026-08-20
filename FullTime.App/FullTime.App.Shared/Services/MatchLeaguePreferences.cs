@@ -40,7 +40,10 @@ public class MatchLeaguePreferences(IMatchLeaguePreferenceStore store)
             return true;
         }
 
-        var group = LeagueCatalog.OptionalLeagues.FirstOrDefault(g => g.LeagueIds.Contains(leagueId));
-        return group.LeagueIds is not null && EnabledOptionalLeagueIds.Contains(group.LeagueIds[0]);
+        // A qualifying-round ID can belong to more than one cup's group (see LeagueCatalog) — it's
+        // visible if ANY group containing it is enabled, not just the first match.
+        return LeagueCatalog.OptionalLeagues
+            .Where(g => g.LeagueIds.Contains(leagueId))
+            .Any(g => EnabledOptionalLeagueIds.Contains(g.LeagueIds[0]));
     }
 }
