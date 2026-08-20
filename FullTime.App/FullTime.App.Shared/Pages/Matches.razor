@@ -32,9 +32,16 @@
 @foreach (var dateGroup in VisibleMatches())
 {
     <h3 class="match-date">@dateGroup.Key.ToString("dddd d MMMM")</h3>
-    @foreach (var m in dateGroup)
+    @foreach (var leagueGroup in dateGroup.GroupBy(m => m.LeagueId))
     {
-        <MatchCard Match="m" />
+        <div class="league-header">
+            <LogoImg Src="@LeagueLogoUrl(leagueGroup.Key)" Alt="@LeagueName(leagueGroup.Key)" />
+            <span>@LeagueName(leagueGroup.Key)</span>
+        </div>
+        @foreach (var m in leagueGroup)
+        {
+            <MatchCard Match="m" />
+        }
     }
 }
 

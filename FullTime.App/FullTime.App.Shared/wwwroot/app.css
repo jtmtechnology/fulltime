@@ -199,6 +199,15 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
     background: #f4f7fa; border-radius: 50%; padding: 3px; box-sizing: border-box;
 }
 
+.league-header {
+    display: flex; align-items: center; gap: 0.5rem; margin: 1rem 0 0.5rem;
+    color: var(--text-muted); font-size: 0.9rem; font-weight: 600;
+}
+.league-header img {
+    width: 24px; height: 24px; object-fit: contain;
+    background: #f4f7fa; border-radius: 50%; padding: 3px; box-sizing: border-box;
+}
+
 /* ===== Match cards ===== */
 .match-card {
     background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px;
