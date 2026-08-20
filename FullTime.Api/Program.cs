@@ -1,9 +1,12 @@
 using System.Text;
+using FirebaseAdmin;
 using FullTime.Api.Auth;
 using FullTime.Api.Betting;
 using FullTime.Api.Data;
 using FullTime.Api.Leagues;
+using FullTime.Api.Notifications;
 using FullTime.Api.OddsApi;
+using Google.Apis.Auth.OAuth2;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -64,6 +67,15 @@ builder.Services.AddScoped<SettlementService>();
 builder.Services.AddHostedService<SettlementSweepService>();
 
 builder.Services.AddScoped<LeagueService>();
+
+builder.Services.Configure<PushOptions>(builder.Configuration.GetSection(PushOptions.SectionName));
+FirebaseApp.Create(new AppOptions
+{
+    Credential = CredentialFactory.FromFile<ServiceAccountCredential>(
+        builder.Configuration.GetSection(PushOptions.SectionName)[nameof(PushOptions.ServiceAccountPath)]
+        ?? throw new InvalidOperationException("Push:ServiceAccountPath configuration is missing.")).ToGoogleCredential(),
+});
+builder.Services.AddScoped<PushNotificationService>();
 
 var app = builder.Build();
 

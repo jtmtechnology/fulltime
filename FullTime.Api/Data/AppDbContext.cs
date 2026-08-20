@@ -12,6 +12,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<BetSelection> BetSelections => Set<BetSelection>();
     public DbSet<League> Leagues => Set<League>();
     public DbSet<LeagueMembership> LeagueMemberships => Set<LeagueMembership>();
+    public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -99,5 +100,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(b => b.LeagueId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<DeviceToken>()
+            .HasOne(d => d.User)
+            .WithMany()
+            .HasForeignKey(d => d.UserId);
+
+        modelBuilder.Entity<DeviceToken>()
+            .HasIndex(d => d.Token)
+            .IsUnique();
     }
 }

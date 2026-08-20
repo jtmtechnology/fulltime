@@ -1,12 +1,13 @@
 using FullTime.Api.Betting;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
+using FullTime.Api.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace FullTime.Api.Leagues;
 
-public class LeagueService(AppDbContext db, IOptions<BettingOptions> options)
+public class LeagueService(AppDbContext db, PushNotificationService push, IOptions<BettingOptions> options)
 {
     // Avoids 0/O and 1/I, which look alike when a code is read aloud or typed from a text message.
     private const string CodeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -63,6 +64,13 @@ public class LeagueService(AppDbContext db, IOptions<BettingOptions> options)
             Balance = options.Value.StartingBalance,
         });
         await db.SaveChangesAsync(ct);
+
+        var otherMemberIds = await db.LeagueMemberships
+            .Where(m => m.LeagueId == league.Id && m.UserId != userId)
+            .Select(m => m.UserId)
+            .ToListAsync(ct);
+        var joiningUserName = await db.Users.Where(u => u.Id == userId).Select(u => u.Name).SingleAsync(ct);
+        await push.SendToUsersAsync(otherMemberIds, "New league member", $"{joiningUserName} joined {league.Name}", ct);
 
         return new JoinLeagueResult(JoinLeagueOutcome.Success, league);
     }

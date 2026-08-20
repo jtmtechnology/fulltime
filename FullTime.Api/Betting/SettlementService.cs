@@ -1,12 +1,13 @@
 using FullTime.Api.Data;
 using FullTime.Api.Models;
+using FullTime.Api.Notifications;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullTime.Api.Betting;
 
 // Runs on its own timer (SettlementSweepService), separate from MatchSyncBackgroundService — the
 // odds/score sync and bet settlement are independent concerns with independent cadences.
-public class SettlementService(AppDbContext db, ILogger<SettlementService> logger)
+public class SettlementService(AppDbContext db, PushNotificationService push, ILogger<SettlementService> logger)
 {
     public async Task SweepAsync(CancellationToken ct = default)
     {
@@ -71,6 +72,7 @@ public class SettlementService(AppDbContext db, ILogger<SettlementService> logge
 
         var settledCount = 0;
         var wonBets = new List<Bet>();
+        var lostBets = new List<Bet>();
 
         foreach (var bet in pendingBets)
         {
@@ -78,6 +80,7 @@ public class SettlementService(AppDbContext db, ILogger<SettlementService> logge
             {
                 bet.Status = BetStatus.Lost;
                 bet.SettledAt = DateTime.UtcNow;
+                lostBets.Add(bet);
                 settledCount++;
             }
             else if (bet.Selections.All(s => s.Outcome == SelectionOutcome.Correct))
@@ -129,5 +132,15 @@ public class SettlementService(AppDbContext db, ILogger<SettlementService> logge
 
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Settled {Count} bet(s)", settledCount);
+
+        foreach (var bet in wonBets)
+        {
+            await push.SendToUserAsync(bet.UserId, "Bet won!", $"Your bet won — +£{bet.PotentialReturn:0.00}", ct);
+        }
+
+        foreach (var bet in lostBets)
+        {
+            await push.SendToUserAsync(bet.UserId, "Bet settled", "Your bet didn't come in this time.", ct);
+        }
     }
 }
