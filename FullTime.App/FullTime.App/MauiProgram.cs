@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using FullTime.App.Shared.Services;
 using FullTime.App.Services;
+using Plugin.FirebasePushNotifications;
 
 namespace FullTime.App;
 
@@ -11,6 +12,7 @@ public static class MauiProgram
         var builder = MauiApp.CreateBuilder();
         builder
             .UseMauiApp<App>()
+            .UseFirebasePushNotifications()
             .ConfigureFonts(fonts =>
             {
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -21,6 +23,7 @@ public static class MauiProgram
         builder.Services.AddScoped<IJwtStore, MauiJwtStore>();
         builder.Services.AddScoped<ISlipStore, MauiSlipStore>();
         builder.Services.AddScoped<IActiveContextStore, MauiActiveContextStore>();
+        builder.Services.AddScoped<IPushRegistrar, MauiPushRegistrar>();
         builder.Services.AddScoped<AuthState>();
         builder.Services.AddScoped<BetSlipState>();
         builder.Services.AddScoped<ActiveContextState>();

@@ -1,4 +1,7 @@
 ﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject AuthState AuthState
+@inject IPushRegistrar PushRegistrar
 
 <div class="top-bar">
     <a class="brand-logo" href="">
@@ -32,3 +35,24 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        AuthState.Changed += OnAuthChanged;
+        if (AuthState.IsLoggedIn)
+        {
+            await PushRegistrar.RegisterAsync();
+        }
+    }
+
+    private void OnAuthChanged()
+    {
+        if (AuthState.IsLoggedIn)
+        {
+            _ = PushRegistrar.RegisterAsync();
+        }
+    }
+
+    public void Dispose() => AuthState.Changed -= OnAuthChanged;
+}

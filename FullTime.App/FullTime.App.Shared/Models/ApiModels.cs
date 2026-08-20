@@ -20,6 +20,8 @@ public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
 public record MessageResponse(string? Message, string? Error, string? Reason);
 
+public record RegisterDeviceRequest(string Token, string Platform);
+
 public record UpcomingMatchDto(
     Guid Id,
     long LeagueId,

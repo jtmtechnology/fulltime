@@ -13,6 +13,7 @@ builder.Services.AddSingleton<IFormFactor, FormFactor>();
 builder.Services.AddScoped<IJwtStore, WebJwtStore>();
 builder.Services.AddScoped<ISlipStore, WebSlipStore>();
 builder.Services.AddScoped<IActiveContextStore, WebActiveContextStore>();
+builder.Services.AddScoped<IPushRegistrar, WebPushRegistrar>();
 builder.Services.AddScoped<AuthState>();
 builder.Services.AddScoped<BetSlipState>();
 builder.Services.AddScoped<ActiveContextState>();

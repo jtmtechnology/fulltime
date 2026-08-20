@@ -179,4 +179,11 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         var res = await httpClient.DeleteAsync($"api/leagues/{leagueId}/membership");
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
     }
+
+    public async Task RegisterDeviceAsync(string token, string platform)
+    {
+        Authorize();
+        var res = await httpClient.PostAsJsonAsync("api/devices/register", new RegisterDeviceRequest(token, platform));
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+    }
 }
