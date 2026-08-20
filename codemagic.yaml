@@ -48,7 +48,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - alan.browne@telxl.com
+          - alan@jtmtechnology.co.uk
 
   ios-testflight:
     name: FullTime iOS TestFlight
