@@ -36,18 +36,21 @@ public static class LeagueCatalog
         [938221] = 133,
     };
 
-    // Always shown regardless of preference: the domestic English pyramid plus the three UEFA
-    // club competitions.
+    // Always shown regardless of preference: the domestic English pyramid only.
     public static readonly long[] AlwaysVisible =
-        [47, 48, 938218, 108, 938219, 109, 938220, 132, 133, 938221, 247, 42, 73, 10216];
+        [47, 48, 938218, 108, 938219, 109, 938220, 132, 133, 938221, 247];
 
-    // Opt-in: other countries' top flights. Order here also controls display order after AlwaysVisible.
+    // Opt-in: other countries' top flights plus the UEFA club competitions. Order here also
+    // controls display order after AlwaysVisible.
     public static readonly (long Id, string Name)[] OptionalLeagues =
     [
         (54, "Bundesliga"),
         (87, "La Liga"),
         (53, "Ligue 1"),
         (55, "Serie A"),
+        (42, "Champions League"),
+        (73, "Europa League"),
+        (10216, "Conference League"),
     ];
 
     public static readonly long[] DisplayOrder = [.. AlwaysVisible, .. OptionalLeagues.Select(l => l.Id)];
