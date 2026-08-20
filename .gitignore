@@ -13,6 +13,13 @@ publish/
 *.keystore
 *.p8
 
+## Firebase config — google-services.json/GoogleService-Info.plist are low-sensitivity
+## (client-side, scoped by package name/bundle ID) but keeping them out of a public-adjacent
+## repo is the safer default; a service-account key is a real secret and must never be committed.
+google-services.json
+GoogleService-Info.plist
+*firebase-adminsdk*.json
+
 ## Misc
 run.log
 *.dump
