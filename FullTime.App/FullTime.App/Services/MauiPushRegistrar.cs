@@ -12,8 +12,17 @@ public class MauiPushRegistrar(
     private static string PlatformName => DeviceInfo.Platform == DevicePlatform.iOS ? "iOS" : "Android";
 
     private bool _subscribed;
+    private Task? _registrationTask;
 
-    public async Task RegisterAsync()
+    // AuthState.Changed can fire more than once per app session (e.g. Routes.razor re-runs
+    // AuthState.InitializeAsync on first render as a Web-host prerendering workaround), and
+    // MainLayout calls RegisterAsync on every Changed event. Without this guard, that requests
+    // native notification permission more than once in quick succession — which is what made the
+    // iOS "Allow notifications" prompt appear twice. Registration only needs to happen once per
+    // session; TokenRefreshed already covers any later token changes.
+    public Task RegisterAsync() => _registrationTask ??= RegisterCoreAsync();
+
+    private async Task RegisterCoreAsync()
     {
         await notificationPermissions.RequestPermissionAsync();
 
