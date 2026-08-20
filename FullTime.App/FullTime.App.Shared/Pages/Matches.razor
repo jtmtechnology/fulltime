@@ -33,7 +33,7 @@
 @foreach (var dateGroup in VisibleMatches())
 {
     <h3 class="match-date">@dateGroup.Key.ToString("dddd d MMMM")</h3>
-    @foreach (var leagueGroup in dateGroup.GroupBy(m => m.LeagueId))
+    @foreach (var leagueGroup in dateGroup.GroupBy(m => LeagueCatalog.GroupKey(m.LeagueId)))
     {
         <div class="league-header">
             <LogoImg Src="@LeagueCatalog.LogoUrl(leagueGroup.Key)" Alt="@LeagueCatalog.Name(leagueGroup.Key)" />
@@ -123,7 +123,7 @@
         _status = matches.Count == 1 ? "1 match" : $"{matches.Count} matches";
         _error = false;
 
-        var byLeague = matches.GroupBy(m => m.LeagueId).ToDictionary(g => g.Key, g => g.ToList());
+        var byLeague = matches.GroupBy(m => LeagueCatalog.GroupKey(m.LeagueId)).ToDictionary(g => g.Key, g => g.ToList());
         var orderedIds = LeagueCatalog.DisplayOrder.Where(byLeague.ContainsKey)
             .Concat(byLeague.Keys.Where(id => !LeagueCatalog.DisplayOrder.Contains(id)).OrderBy(id => id));
 

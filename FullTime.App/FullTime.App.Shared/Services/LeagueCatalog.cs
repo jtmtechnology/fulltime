@@ -82,6 +82,12 @@ public static class LeagueCatalog
     public static readonly long[] DisplayOrder =
         [.. AlwaysVisible, .. OptionalLeagues.SelectMany(l => l.LeagueIds).Distinct()];
 
+    // The three UEFA-qualifying IDs share one display name (see Names above) — group/chip/select by
+    // this key instead of the raw league ID so they merge into a single chip and header rather than
+    // three identical-looking ones.
+    public static long GroupKey(long leagueId) =>
+        UefaQualifyingIds.Contains(leagueId) ? UefaQualifyingIds[0] : leagueId;
+
     public static string Name(long leagueId) => Names.GetValueOrDefault(leagueId, $"League {leagueId}");
 
     public static string LogoUrl(long leagueId)
