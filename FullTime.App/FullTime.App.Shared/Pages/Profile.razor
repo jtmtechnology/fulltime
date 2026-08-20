@@ -51,10 +51,11 @@
         <div class="league-toggle-list">
             @foreach (var league in LeagueCatalog.OptionalLeagues)
             {
+                var primaryId = league.LeagueIds[0];
                 <label class="league-toggle">
-                    <input type="checkbox" checked="@LeaguePrefs.EnabledOptionalLeagueIds.Contains(league.Id)"
-                           @onchange="e => ToggleLeagueAsync(league.Id, (bool)e.Value!)" />
-                    <LogoImg Src="@LeagueCatalog.LogoUrl(league.Id)" Alt="@league.Name" />
+                    <input type="checkbox" checked="@LeaguePrefs.EnabledOptionalLeagueIds.Contains(primaryId)"
+                           @onchange="e => ToggleLeagueAsync(primaryId, (bool)e.Value!)" />
+                    <LogoImg Src="@LeagueCatalog.LogoUrl(primaryId)" Alt="@league.Name" />
                     <span>@league.Name</span>
                 </label>
             }
