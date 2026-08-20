@@ -13,11 +13,9 @@ publish/
 *.keystore
 *.p8
 
-## Firebase config — google-services.json/GoogleService-Info.plist are low-sensitivity
-## (client-side, scoped by package name/bundle ID) but keeping them out of a public-adjacent
-## repo is the safer default; a service-account key is a real secret and must never be committed.
-google-services.json
-GoogleService-Info.plist
+## Firebase config — google-services.json/GoogleService-Info.plist are committed (Google's own
+## guidance: they're client-scoped, not secrets — Codemagic clones this repo and needs them at
+## build time). A service-account key is a real secret and must never be committed.
 *firebase-adminsdk*.json
 
 ## Misc
