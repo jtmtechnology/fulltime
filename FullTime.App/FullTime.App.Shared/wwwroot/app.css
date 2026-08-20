@@ -35,7 +35,7 @@ a, .btn-link {
 
 .content {
     padding: 1rem;
-    padding-bottom: calc(var(--tab-bar-height) + var(--slip-fab-height) + 2.5rem);
+    padding-bottom: calc(var(--tab-bar-height) + var(--slip-fab-height) + 4rem);
 }
 
 h1:focus {
