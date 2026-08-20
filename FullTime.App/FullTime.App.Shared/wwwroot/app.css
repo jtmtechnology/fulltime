@@ -35,7 +35,7 @@ a, .btn-link {
 
 .content {
     padding: 1rem;
-    padding-bottom: calc(var(--tab-bar-height) + var(--slip-fab-height) + 4rem);
+    padding-bottom: calc(var(--tab-bar-height) + var(--slip-fab-height) + 2.5rem);
 }
 
 h1:focus {
@@ -161,6 +161,7 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
     background: var(--bg-elevated);
     border-top: 1px solid var(--border);
     height: var(--tab-bar-height);
+    padding-top: 0.6rem;
     padding-bottom: max(env(safe-area-inset-bottom, 0px), 18px);
 }
 .tab-item {
