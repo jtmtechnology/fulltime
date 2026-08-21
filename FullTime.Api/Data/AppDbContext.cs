@@ -9,10 +9,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Match> Matches => Set<Match>();
     public DbSet<OddsSnapshot> OddsSnapshots => Set<OddsSnapshot>();
     public DbSet<Bet> Bets => Set<Bet>();
-    public DbSet<BetSelection> BetSelections => Set<BetSelection>();
+    public DbSet<BetLeg> BetLegs => Set<BetLeg>();
+    public DbSet<BetLegPick> BetLegPicks => Set<BetLegPick>();
     public DbSet<League> Leagues => Set<League>();
     public DbSet<LeagueMembership> LeagueMemberships => Set<LeagueMembership>();
     public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
+    public DbSet<BetBuilderMarket> BetBuilderMarkets => Set<BetBuilderMarket>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -30,15 +32,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(b => b.UserId);
 
-        modelBuilder.Entity<BetSelection>()
-            .HasOne(bs => bs.Bet)
-            .WithMany(b => b.Selections)
-            .HasForeignKey(bs => bs.BetId);
+        modelBuilder.Entity<BetLeg>()
+            .HasOne(l => l.Bet)
+            .WithMany(b => b.Legs)
+            .HasForeignKey(l => l.BetId);
 
-        modelBuilder.Entity<BetSelection>()
-            .HasOne(bs => bs.Match)
-            .WithMany(m => m.BetSelections)
-            .HasForeignKey(bs => bs.MatchId);
+        modelBuilder.Entity<BetLeg>()
+            .HasOne(l => l.Match)
+            .WithMany(m => m.BetLegs)
+            .HasForeignKey(l => l.MatchId);
+
+        modelBuilder.Entity<BetLegPick>()
+            .HasOne(p => p.BetLeg)
+            .WithMany(l => l.Picks)
+            .HasForeignKey(p => p.BetLegId);
 
         modelBuilder.Entity<User>()
             .Property(u => u.Balance)
@@ -62,8 +69,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Bet>()
             .Property(b => b.PotentialReturn).HasPrecision(18, 2);
 
-        modelBuilder.Entity<BetSelection>()
-            .Property(bs => bs.OddsAtPlacement).HasPrecision(10, 2);
+        modelBuilder.Entity<BetLeg>()
+            .Property(l => l.OddsAtPlacement).HasPrecision(10, 2);
+
+        modelBuilder.Entity<BetLegPick>()
+            .Property(p => p.OddsAtPlacement).HasPrecision(10, 2);
+
+        modelBuilder.Entity<BetLegPick>()
+            .Property(p => p.Line).HasPrecision(5, 2);
 
         modelBuilder.Entity<League>()
             .HasOne(l => l.CreatedBy)
@@ -109,5 +122,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<DeviceToken>()
             .HasIndex(d => d.Token)
             .IsUnique();
+
+        modelBuilder.Entity<BetBuilderMarket>()
+            .HasOne(m => m.Match)
+            .WithMany(match => match.BetBuilderMarkets)
+            .HasForeignKey(m => m.MatchId);
+
+        modelBuilder.Entity<BetBuilderMarket>()
+            .Property(m => m.Line).HasPrecision(5, 2);
+        modelBuilder.Entity<BetBuilderMarket>()
+            .Property(m => m.Price).HasPrecision(10, 2);
+
+        modelBuilder.Entity<Match>()
+            .HasIndex(m => m.HighlightlyMatchId);
     }
 }

@@ -6,12 +6,12 @@
 @inject ApiClient Api
 @inject NavigationManager Nav
 
-@if (Slip.Selections.Count > 0 || Slip.IsOpen)
+@if (Slip.Legs.Count > 0 || Slip.IsOpen)
 {
     @if (!Slip.IsOpen)
     {
         <button type="button" class="slip-fab" @onclick="() => Slip.SetOpen(true)">
-            <span>@Slip.Selections.Count selection@(Slip.Selections.Count == 1 ? "" : "s")</span>
+            <span>@Slip.Legs.Count selection@(Slip.Legs.Count == 1 ? "" : "s")</span>
             <span>@Slip.CombinedOdds.ToString("0.00")</span>
         </button>
     }
@@ -22,19 +22,19 @@
             <div class="sheet-handle"></div>
             <h2>Bet slip</h2>
 
-            @if (Slip.Selections.Count == 0)
+            @if (Slip.Legs.Count == 0)
             {
                 <div class="muted">No selections yet — tap an odds pill to add one.</div>
             }
             else
             {
                 <ul>
-                    @foreach (var entry in Slip.Selections)
+                    @foreach (var entry in Slip.Legs)
                     {
                         var matchId = entry.Key;
-                        var sel = entry.Value;
+                        var leg = entry.Value;
                         <li>
-                            <span>@sel.HomeTeam v @sel.AwayTeam — @PickLabel(sel.Pick) (@OddsCell.FormatOdds(sel.Odds))</span>
+                            <span>@leg.HomeTeam v @leg.AwayTeam — @string.Join(" + ", leg.Picks.Select(p => PickLabel(p, leg.HomeTeam, leg.AwayTeam))) (@OddsCell.FormatOdds(leg.CombinedOdds))</span>
                             <button type="button" class="remove-btn" title="Remove" @onclick="() => RemoveSelectionAsync(matchId)">×</button>
                         </li>
                     }
@@ -116,11 +116,14 @@
 
     private async Task RemoveSelectionAsync(Guid matchId) => await Slip.RemoveAsync(matchId);
 
-    private static string PickLabel(string pick) => pick switch
+    private static string PickLabel(SlipPick pick, string homeTeam, string awayTeam) => pick.MarketType switch
     {
-        "Home" => "Home win",
-        "Away" => "Away win",
-        _ => "Draw",
+        "MatchResult" => pick.Side switch { "Home" => "Home win", "Away" => "Away win", _ => "Draw" },
+        "OverUnder" => $"{pick.Side} {pick.Line:0.##}",
+        "BothTeamsToScore" => pick.Side == "Yes" ? "BTTS Yes" : "BTTS No",
+        "CorrectScore" => $"{pick.PredictedHomeScore} - {pick.PredictedAwayScore}",
+        "FirstTeamToScore" => $"First to score: {pick.Side switch { "Home" => homeTeam, "Away" => awayTeam, _ => "None" }}",
+        _ => pick.Side ?? "",
     };
 
     private async Task PlaceBetAsync()
@@ -138,8 +141,10 @@
 
         try
         {
-            var selections = Slip.Selections.Select(kv => new SelectionRequest(kv.Key, kv.Value.Pick)).ToList();
-            await Api.PlaceBetAsync(_stake, selections, ContextState.Current.LeagueId);
+            var legs = Slip.Legs.Select(kv => new LegRequest(
+                kv.Key, kv.Value.Picks.Select(p => new PickRequest(
+                    p.MarketType, p.Line, p.Side, p.PredictedHomeScore, p.PredictedAwayScore)).ToList())).ToList();
+            await Api.PlaceBetAsync(_stake, legs, ContextState.Current.LeagueId);
 
             await Slip.ClearAsync();
             Slip.SetOpen(false);

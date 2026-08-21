@@ -17,5 +17,5 @@ public class Bet
     public DateTime PlacedAt { get; set; }
     public DateTime? SettledAt { get; set; }
 
-    public List<BetSelection> Selections { get; set; } = [];
+    public List<BetLeg> Legs { get; set; } = [];
 }

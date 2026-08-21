@@ -23,13 +23,13 @@
                 <span class="@StatusClass(bet.Status)">@bet.Status</span>
             </div>
             <ul>
-                @foreach (var sel in bet.Selections)
+                @foreach (var leg in bet.Legs)
                 {
-                    <li class="@StatusClass(sel.Outcome)">
-                        <span class="muted">@sel.KickoffTime.ToLocalTime().ToString("ddd d MMM HH:mm")</span> —
-                        <LogoImg Src="@sel.HomeLogoUrl" CssClass="team-logo" Alt="@sel.HomeTeam" />@sel.HomeTeam v
-                        <LogoImg Src="@sel.AwayLogoUrl" CssClass="team-logo" Alt="@sel.AwayTeam" />@sel.AwayTeam
-                        — @sel.Pick (@sel.Outcome)
+                    <li class="@StatusClass(leg.Outcome)">
+                        <span class="muted">@leg.KickoffTime.ToLocalTime().ToString("ddd d MMM HH:mm")</span> —
+                        <LogoImg Src="@leg.HomeLogoUrl" CssClass="team-logo" Alt="@leg.HomeTeam" />@leg.HomeTeam v
+                        <LogoImg Src="@leg.AwayLogoUrl" CssClass="team-logo" Alt="@leg.AwayTeam" />@leg.AwayTeam
+                        — @string.Join(" + ", leg.Picks.Select(p => PickLabel(p, leg.HomeTeam, leg.AwayTeam))) (@leg.Outcome)
                     </li>
                 }
             </ul>
@@ -72,5 +72,15 @@
         "Won" or "Correct" => "live",
         "Lost" or "Incorrect" => "error",
         _ => "muted",
+    };
+
+    private static string PickLabel(BetLegPickDto pick, string homeTeam, string awayTeam) => pick.MarketType switch
+    {
+        "MatchResult" => pick.Side switch { "Home" => "Home win", "Away" => "Away win", _ => "Draw" },
+        "OverUnder" => $"{pick.Side} {pick.Line:0.##}",
+        "BothTeamsToScore" => pick.Side == "Yes" ? "BTTS Yes" : "BTTS No",
+        "CorrectScore" => $"{pick.PredictedHomeScore} - {pick.PredictedAwayScore}",
+        "FirstTeamToScore" => $"First to score: {pick.Side switch { "Home" => homeTeam, "Away" => awayTeam, _ => "None" }}",
+        _ => pick.Side ?? "",
     };
 }

@@ -230,7 +230,72 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
 .match-score.pending { color: var(--text-muted); font-size: 0.95rem; font-weight: 400; }
 
 .odds-row { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
-.bookmaker-row { display: flex; justify-content: flex-end; margin-top: 0.4rem; }
+.bookmaker-row { display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-top: 0.4rem; }
+
+.bet-builder-link {
+    font-size: 0.8rem; font-weight: 700; color: var(--accent); text-decoration: none;
+}
+
+/* ===== Bet builder page ===== */
+.page-header-row { display: flex; align-items: center; gap: 0.75rem; }
+.page-header-row h1 { margin: 0; }
+.back-btn {
+    width: 2.2rem; height: 2.2rem; flex-shrink: 0; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--bg-elevated); color: var(--text); font-size: 1.4rem; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0 0 0.1rem; line-height: 1;
+}
+
+.bet-builder-bookmaker-row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.3rem; }
+
+.market-group { margin-top: 1.25rem; }
+.market-group h4 { margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; }
+.market-picks { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.market-picks .odds { flex: 0 1 auto; min-width: 4.5rem; }
+
+/* Table-style markets (Total Goals): a line per row, Over/Under as columns */
+.odds-table { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.odds-table-header, .odds-table-row { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; }
+.odds-table-header {
+    background: var(--bg-elevated); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;
+    padding: 0.5rem 0.75rem;
+}
+.odds-table-header span:not(:first-child), .odds-table-row span:not(:first-child) { text-align: center; }
+.odds-table-row { padding: 0.4rem 0.75rem; border-top: 1px solid var(--border); }
+.odds-table-row .odds-table-label { color: var(--text); font-weight: 600; text-align: left; }
+.odds-table-cell {
+    font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); cursor: pointer;
+    padding: 0.4rem 0; border-radius: 6px;
+}
+.odds-table-cell.selected { background: var(--accent); color: var(--accent-ink); }
+
+/* List-style markets (Both Teams To Score, First Team To Score): one row per outcome */
+.odds-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.odds-list-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.65rem 0.85rem; border-top: 1px solid var(--border); cursor: pointer;
+}
+.odds-list-row:first-child { border-top: none; }
+.odds-list-row.selected { background: var(--accent); color: var(--accent-ink); }
+.odds-list-row .odds-list-price { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Correct score: a stepper per team instead of a wall of chips */
+.score-stepper-row { display: flex; justify-content: space-around; gap: 1rem; margin-top: 0.5rem; }
+.score-stepper { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+.score-stepper .team-name { font-size: 0.8rem; color: var(--text-muted); text-align: center; }
+.stepper-controls { display: flex; align-items: center; gap: 0.75rem; }
+.stepper-btn {
+    width: 2.2rem; height: 2.2rem; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--bg-elevated); color: var(--text); font-size: 1.2rem; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; line-height: 1; padding: 0;
+}
+.stepper-btn:disabled { opacity: 0.4; cursor: default; }
+.stepper-value { font-size: 1.4rem; font-weight: 700; min-width: 1.5rem; text-align: center; font-variant-numeric: tabular-nums; }
+.correct-score-price {
+    display: block; width: 100%; margin-top: 1rem; padding: 0.75rem; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text);
+    font-weight: 700; font-size: 1rem; cursor: pointer; text-align: center;
+}
+.correct-score-price.selected { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
 .odds {
     font-variant-numeric: tabular-nums; cursor: default; flex: 1; text-align: center;

@@ -1,8 +1,10 @@
+using FullTime.Api.BetBuilder;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
 using FullTime.Api.OddsApi;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace FullTime.Api.Controllers;
 
@@ -21,12 +23,26 @@ public record UpcomingMatchDto(
     decimal? DrawOdds,
     decimal? AwayOdds,
     string? Bookmaker,
-    string? BookmakerLogoUrl);
+    string? BookmakerLogoUrl,
+    bool BetBuilderAvailable);
+
+public record BetBuilderMarketDto(
+    string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore, decimal Price);
+public record BetBuilderMarketsResponse(bool Available, List<BetBuilderMarketDto> Markets, string? Bookmaker, string? BookmakerLogoUrl);
 
 [ApiController]
 [Route("api/matches")]
-public class MatchesController(AppDbContext db) : ControllerBase
+public class MatchesController(AppDbContext db, IOptions<HighlightlyOptions> highlightlyOptions) : ControllerBase
 {
+    // Only bet365 has a confirmed-working logo path (the same fotmob CDN convention the primary
+    // provider's own OddsSnapshot.BookmakerLogoUrl uses) — anything else falls back to plain text
+    // via BookmakerLogo's own graceful degradation rather than guessing an asset URL that might not exist.
+    private static readonly Dictionary<string, string> BookmakerLogoUrls = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["bet365"] = "https://images.fotmob.com/images/betting/bet365.png",
+    };
+
+
     // Pure DB read regardless of the date/league filter — MatchSyncBackgroundService's timer is the
     // only thing that calls the external odds/scores provider. A date outside its synced window
     // (today .. today+DaysAhead-1) will simply come back empty rather than triggering a fetch.
@@ -72,9 +88,33 @@ public class MatchesController(AppDbContext db) : ControllerBase
                 m.OddsSnapshots.OrderByDescending(o => o.FetchedAt).Select(o => (decimal?)o.DrawOdds).FirstOrDefault(),
                 m.OddsSnapshots.OrderByDescending(o => o.FetchedAt).Select(o => (decimal?)o.AwayOdds).FirstOrDefault(),
                 m.OddsSnapshots.OrderByDescending(o => o.FetchedAt).Select(o => o.Bookmaker).FirstOrDefault(),
-                m.OddsSnapshots.OrderByDescending(o => o.FetchedAt).Select(o => o.BookmakerLogoUrl).FirstOrDefault()))
+                m.OddsSnapshots.OrderByDescending(o => o.FetchedAt).Select(o => o.BookmakerLogoUrl).FirstOrDefault(),
+                m.BetBuilderMarkets.Any()))
             .ToListAsync(ct);
 
         return Ok(matches);
+    }
+
+    // Reads whatever BetBuilderSyncBackgroundService's timer has already stored — most matches will
+    // come back Available: false, since the odds-feed provider only prices the next gameweek or so
+    // per league. The client uses this to decide whether to offer the Bet Builder entry point at all.
+    [HttpGet("{id:guid}/bet-builder-markets")]
+    public async Task<ActionResult<BetBuilderMarketsResponse>> GetBetBuilderMarkets(Guid id, CancellationToken ct)
+    {
+        var markets = await db.BetBuilderMarkets
+            .Where(m => m.MatchId == id)
+            .OrderBy(m => m.MarketType)
+            .ThenBy(m => m.Line)
+            .ThenBy(m => m.PredictedHomeScore)
+            .ThenBy(m => m.PredictedAwayScore)
+            .Select(m => new BetBuilderMarketDto(
+                m.MarketType.ToString(), m.Line, m.Side.HasValue ? m.Side.ToString() : null,
+                m.PredictedHomeScore, m.PredictedAwayScore, m.Price))
+            .ToListAsync(ct);
+
+        var bookmaker = highlightlyOptions.Value.BookmakerName;
+        var logoUrl = BookmakerLogoUrls.GetValueOrDefault(bookmaker);
+
+        return Ok(new BetBuilderMarketsResponse(markets.Count > 0, markets, bookmaker, logoUrl));
     }
 }

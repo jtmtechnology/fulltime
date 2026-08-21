@@ -11,9 +11,9 @@
     <button type="button" class="tab-item @(Slip.IsOpen ? "active" : "")" @onclick="() => Slip.ToggleOpen()">
         <svg viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"/></svg>
         <span>Slip</span>
-        @if (Slip.Selections.Count > 0)
+        @if (Slip.Legs.Count > 0)
         {
-            <span class="badge">@Slip.Selections.Count</span>
+            <span class="badge">@Slip.Legs.Count</span>
         }
     </button>
 

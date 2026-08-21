@@ -30,6 +30,10 @@
 
     <div class="bookmaker-row">
         <BookmakerLogo Name="@Match.Bookmaker" LogoUrl="@Match.BookmakerLogoUrl" />
+        @if (Match.Status == "Upcoming" && Match.BetBuilderAvailable)
+        {
+            <a class="bet-builder-link" href="@BetBuilderHref()">Bet Builder</a>
+        }
     </div>
 </div>
 
@@ -41,4 +45,7 @@
         "InProgress" or "Finished" => $"{Match.HomeScore} - {Match.AwayScore}",
         _ => "vs",
     };
+
+    private string BetBuilderHref() =>
+        $"bet-builder/{Match.Id}?home={Uri.EscapeDataString(Match.HomeTeam)}&away={Uri.EscapeDataString(Match.AwayTeam)}&kickoff={Uri.EscapeDataString(Match.KickoffTime.ToString("O"))}";
 }

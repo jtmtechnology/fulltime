@@ -117,10 +117,10 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
     public async Task<ConfigResponse> GetConfigAsync() =>
         await httpClient.GetFromJsonAsync<ConfigResponse>("api/config") ?? new ConfigResponse(600);
 
-    public async Task<BetDto> PlaceBetAsync(decimal stake, List<SelectionRequest> selections, Guid? leagueId)
+    public async Task<BetDto> PlaceBetAsync(decimal stake, List<LegRequest> legs, Guid? leagueId)
     {
         Authorize();
-        var res = await httpClient.PostAsJsonAsync("api/bets", new PlaceBetRequest(stake, selections, leagueId));
+        var res = await httpClient.PostAsJsonAsync("api/bets", new PlaceBetRequest(stake, legs, leagueId));
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
         return (await res.Content.ReadFromJsonAsync<BetDto>())!;
     }
@@ -131,6 +131,13 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         var res = await httpClient.GetAsync("api/bets/me");
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
         return await res.Content.ReadFromJsonAsync<List<BetDto>>() ?? [];
+    }
+
+    public async Task<BetBuilderMarketsResponse> GetBetBuilderMarketsAsync(Guid matchId)
+    {
+        var res = await httpClient.GetAsync($"api/matches/{matchId}/bet-builder-markets");
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+        return (await res.Content.ReadFromJsonAsync<BetBuilderMarketsResponse>())!;
     }
 
     public async Task<List<LeaderboardEntryDto>> GetLeaderboardAsync()

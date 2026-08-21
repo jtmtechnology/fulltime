@@ -37,18 +37,26 @@ public record UpcomingMatchDto(
     decimal? DrawOdds,
     decimal? AwayOdds,
     string? Bookmaker,
-    string? BookmakerLogoUrl);
+    string? BookmakerLogoUrl,
+    bool BetBuilderAvailable);
 
 public record ConfigResponse(int RefreshIntervalSeconds);
 
-public record SelectionRequest(Guid MatchId, string Pick);
-public record PlaceBetRequest(decimal Stake, List<SelectionRequest> Selections, Guid? LeagueId);
+public record PickRequest(string MarketType, decimal? Line, string? Side, int? PredictedHomeScore = null, int? PredictedAwayScore = null);
+public record LegRequest(Guid MatchId, List<PickRequest> Picks);
+public record PlaceBetRequest(decimal Stake, List<LegRequest> Legs, Guid? LeagueId);
 
-public record BetSelectionDto(
+public record BetLegPickDto(
+    string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore,
+    decimal OddsAtPlacement, string Outcome);
+public record BetLegDto(
     Guid MatchId, string HomeTeam, string AwayTeam, string? HomeLogoUrl, string? AwayLogoUrl,
-    DateTime KickoffTime, string Pick, decimal OddsAtPlacement, string Outcome);
+    DateTime KickoffTime, decimal OddsAtPlacement, string Outcome, List<BetLegPickDto> Picks);
 public record BetDto(Guid Id, decimal Stake, decimal CombinedOdds, decimal PotentialReturn, string Status,
-    DateTime PlacedAt, DateTime? SettledAt, Guid? LeagueId, string? LeagueName, List<BetSelectionDto> Selections);
+    DateTime PlacedAt, DateTime? SettledAt, Guid? LeagueId, string? LeagueName, List<BetLegDto> Legs);
+
+public record BetBuilderMarketDto(string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore, decimal Price);
+public record BetBuilderMarketsResponse(bool Available, List<BetBuilderMarketDto> Markets, string? Bookmaker, string? BookmakerLogoUrl);
 
 public record LeaderboardEntryDto(Guid UserId, string Name, decimal Balance, decimal Profit);
 

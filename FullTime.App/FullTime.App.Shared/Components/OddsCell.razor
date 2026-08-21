@@ -34,7 +34,7 @@
     private async Task OnClickAsync()
     {
         if (!Clickable) return;
-        await Slip.ToggleAsync(MatchId, Pick, Odds!.Value, HomeTeam, AwayTeam, KickoffTime);
+        await Slip.ToggleMatchResultAsync(MatchId, Pick, Odds!.Value, HomeTeam, AwayTeam, KickoffTime);
     }
 
     public static string FormatOdds(decimal decimalOdds)

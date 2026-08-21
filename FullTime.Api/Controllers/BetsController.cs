@@ -9,14 +9,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullTime.Api.Controllers;
 
-public record SelectionRequest(Guid MatchId, string Pick);
-public record PlaceBetRequest(decimal Stake, List<SelectionRequest> Selections, Guid? LeagueId);
+public record PickRequest(string MarketType, decimal? Line, string? Side, int? PredictedHomeScore = null, int? PredictedAwayScore = null);
+public record LegRequest(Guid MatchId, List<PickRequest> Picks);
+public record PlaceBetRequest(decimal Stake, List<LegRequest> Legs, Guid? LeagueId);
 
-public record BetSelectionDto(
+public record BetLegPickDto(
+    string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore,
+    decimal OddsAtPlacement, string Outcome);
+public record BetLegDto(
     Guid MatchId, string HomeTeam, string AwayTeam, string? HomeLogoUrl, string? AwayLogoUrl,
-    DateTime KickoffTime, string Pick, decimal OddsAtPlacement, string Outcome);
+    DateTime KickoffTime, decimal OddsAtPlacement, string Outcome, List<BetLegPickDto> Picks);
 public record BetDto(Guid Id, decimal Stake, decimal CombinedOdds, decimal PotentialReturn, string Status,
-    DateTime PlacedAt, DateTime? SettledAt, Guid? LeagueId, string? LeagueName, List<BetSelectionDto> Selections);
+    DateTime PlacedAt, DateTime? SettledAt, Guid? LeagueId, string? LeagueName, List<BetLegDto> Legs);
 
 [ApiController]
 [Route("api/bets")]
@@ -26,17 +30,41 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
     [HttpPost]
     public async Task<IActionResult> PlaceBet([FromBody] PlaceBetRequest request, CancellationToken ct)
     {
-        var selections = new List<(Guid MatchId, MatchOutcome Pick)>();
-        foreach (var s in request.Selections)
+        var legs = new List<LegInput>();
+        foreach (var legRequest in request.Legs)
         {
-            if (!Enum.TryParse<MatchOutcome>(s.Pick, ignoreCase: true, out var pick))
+            var picks = new List<LegPickInput>();
+            foreach (var pickRequest in legRequest.Picks)
             {
-                return BadRequest(new { error = $"Invalid pick '{s.Pick}' — expected Home, Draw, or Away." });
+                if (!Enum.TryParse<MarketType>(pickRequest.MarketType, ignoreCase: true, out var marketType))
+                {
+                    return BadRequest(new { error = $"Invalid market type '{pickRequest.MarketType}'." });
+                }
+
+                SelectionSide? side = null;
+                if (marketType == MarketType.CorrectScore)
+                {
+                    if (pickRequest.PredictedHomeScore is null || pickRequest.PredictedAwayScore is null)
+                    {
+                        return BadRequest(new { error = "Correct Score picks need both PredictedHomeScore and PredictedAwayScore." });
+                    }
+                }
+                else if (!Enum.TryParse<SelectionSide>(pickRequest.Side, ignoreCase: true, out var parsedSide))
+                {
+                    return BadRequest(new { error = $"Invalid side '{pickRequest.Side}' — expected Home, Draw, Away, Over, Under, Yes, No, or None." });
+                }
+                else
+                {
+                    side = parsedSide;
+                }
+
+                picks.Add(new LegPickInput(marketType, pickRequest.Line, side, pickRequest.PredictedHomeScore, pickRequest.PredictedAwayScore));
             }
-            selections.Add((s.MatchId, pick));
+
+            legs.Add(new LegInput(legRequest.MatchId, picks));
         }
 
-        var result = await betService.PlaceBetAsync(CurrentUserId, request.Stake, selections, request.LeagueId, ct);
+        var result = await betService.PlaceBetAsync(CurrentUserId, request.Stake, legs, request.LeagueId, ct);
 
         if (result.Outcome != PlaceBetOutcome.Success)
         {
@@ -61,43 +89,43 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
     public async Task<ActionResult<List<BetDto>>> GetMyBets(CancellationToken ct)
     {
         var bets = await db.Bets
+            .Include(b => b.League)
+            .Include(b => b.Legs).ThenInclude(l => l.Match)
+            .Include(b => b.Legs).ThenInclude(l => l.Picks)
             .Where(b => b.UserId == CurrentUserId)
             .OrderByDescending(b => b.PlacedAt)
-            .Select(b => new BetDto(
-                b.Id, b.Stake, b.CombinedOdds, b.PotentialReturn, b.Status.ToString(), b.PlacedAt, b.SettledAt,
-                b.LeagueId, b.LeagueId != null ? b.League!.Name : null,
-                b.Selections.Select(s => new BetSelectionDto(
-                    s.MatchId,
-                    s.Match!.HomeTeam,
-                    s.Match!.AwayTeam,
-                    s.Match!.HomeTeamId > 0 ? $"https://images.fotmob.com/image_resources/logo/teamlogo/{s.Match!.HomeTeamId}_large.png" : null,
-                    s.Match!.AwayTeamId > 0 ? $"https://images.fotmob.com/image_resources/logo/teamlogo/{s.Match!.AwayTeamId}_large.png" : null,
-                    s.Match!.KickoffTime,
-                    s.Pick.ToString(),
-                    s.OddsAtPlacement,
-                    s.Outcome.ToString())).ToList()))
             .ToListAsync(ct);
 
-        return Ok(bets);
+        return Ok(bets.Select(ToBetDto).ToList());
     }
 
-    private async Task<BetDto?> LoadBetDtoAsync(Guid betId, CancellationToken ct) =>
-        await db.Bets
-            .Where(b => b.Id == betId)
-            .Select(b => new BetDto(
-                b.Id, b.Stake, b.CombinedOdds, b.PotentialReturn, b.Status.ToString(), b.PlacedAt, b.SettledAt,
-                b.LeagueId, b.LeagueId != null ? b.League!.Name : null,
-                b.Selections.Select(s => new BetSelectionDto(
-                    s.MatchId,
-                    s.Match!.HomeTeam,
-                    s.Match!.AwayTeam,
-                    s.Match!.HomeTeamId > 0 ? $"https://images.fotmob.com/image_resources/logo/teamlogo/{s.Match!.HomeTeamId}_large.png" : null,
-                    s.Match!.AwayTeamId > 0 ? $"https://images.fotmob.com/image_resources/logo/teamlogo/{s.Match!.AwayTeamId}_large.png" : null,
-                    s.Match!.KickoffTime,
-                    s.Pick.ToString(),
-                    s.OddsAtPlacement,
-                    s.Outcome.ToString())).ToList()))
-            .FirstOrDefaultAsync(ct);
+    private async Task<BetDto?> LoadBetDtoAsync(Guid betId, CancellationToken ct)
+    {
+        var bet = await db.Bets
+            .Include(b => b.League)
+            .Include(b => b.Legs).ThenInclude(l => l.Match)
+            .Include(b => b.Legs).ThenInclude(l => l.Picks)
+            .FirstOrDefaultAsync(b => b.Id == betId, ct);
+
+        return bet is null ? null : ToBetDto(bet);
+    }
+
+    private static BetDto ToBetDto(Bet b) => new(
+        b.Id, b.Stake, b.CombinedOdds, b.PotentialReturn, b.Status.ToString(), b.PlacedAt, b.SettledAt,
+        b.LeagueId, b.LeagueId != null ? b.League!.Name : null,
+        b.Legs.Select(l => new BetLegDto(
+            l.MatchId,
+            l.Match!.HomeTeam,
+            l.Match!.AwayTeam,
+            l.Match!.HomeTeamId > 0 ? $"https://images.fotmob.com/image_resources/logo/teamlogo/{l.Match!.HomeTeamId}_large.png" : null,
+            l.Match!.AwayTeamId > 0 ? $"https://images.fotmob.com/image_resources/logo/teamlogo/{l.Match!.AwayTeamId}_large.png" : null,
+            l.Match!.KickoffTime,
+            l.OddsAtPlacement,
+            l.Outcome.ToString(),
+            l.Picks.Select(p => new BetLegPickDto(
+                p.MarketType.ToString(), p.Line, p.Side.HasValue ? p.Side.ToString() : null,
+                p.PredictedHomeScore, p.PredictedAwayScore, p.OddsAtPlacement, p.Outcome.ToString())).ToList()
+        )).ToList());
 
     private Guid CurrentUserId =>
         Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);

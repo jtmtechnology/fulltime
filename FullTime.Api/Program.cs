@@ -1,6 +1,7 @@
 using System.Text;
 using FirebaseAdmin;
 using FullTime.Api.Auth;
+using FullTime.Api.BetBuilder;
 using FullTime.Api.Betting;
 using FullTime.Api.Data;
 using FullTime.Api.Leagues;
@@ -61,6 +62,17 @@ builder.Services.AddHttpClient<FootballDataClient>((sp, client) =>
 });
 builder.Services.AddScoped<MatchSyncService>();
 builder.Services.AddHostedService<MatchSyncBackgroundService>();
+
+builder.Services.Configure<HighlightlyOptions>(builder.Configuration.GetSection(HighlightlyOptions.SectionName));
+builder.Services.AddHttpClient<HighlightlyClient>((sp, client) =>
+{
+    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<HighlightlyOptions>>().Value;
+    client.BaseAddress = new Uri($"https://{opts.ApiHost}/");
+    client.DefaultRequestHeaders.Add("x-rapidapi-host", opts.ApiHost);
+    client.DefaultRequestHeaders.Add("x-rapidapi-key", opts.ApiKey);
+});
+builder.Services.AddScoped<BetBuilderSyncService>();
+builder.Services.AddHostedService<BetBuilderSyncBackgroundService>();
 
 builder.Services.AddScoped<BetService>();
 builder.Services.AddScoped<SettlementService>();

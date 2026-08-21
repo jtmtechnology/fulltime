@@ -1,0 +1,362 @@
+@page "/bet-builder/{MatchId:guid}"
+@inject ApiClient Api
+@inject BetSlipState Slip
+@inject NavigationManager Nav
+
+<PageTitle>FullTime — Bet Builder</PageTitle>
+
+<div class="page-header-row">
+    <button type="button" class="back-btn" @onclick="Cancel" aria-label="Cancel">‹</button>
+    <h1>Bet Builder</h1>
+</div>
+<div class="muted">@HomeTeam v @AwayTeam — @KickoffTime.ToLocalTime().ToString("ddd d MMM, HH:mm")</div>
+
+@if (_bookmaker is not null)
+{
+    <div class="bet-builder-bookmaker-row muted">
+        Prices from <BookmakerLogo Name="@_bookmaker" LogoUrl="@_bookmakerLogoUrl" />
+    </div>
+}
+
+<div class="status @(_error ? "error" : "")">@_status</div>
+
+@if (_overUnderLines.Count > 0)
+{
+    <div class="market-group">
+        <h4>Total goals</h4>
+        <div class="odds-table">
+            <div class="odds-table-header">
+                <span></span><span>Over</span><span>Under</span>
+            </div>
+            @foreach (var line in _overUnderLines)
+            {
+                var overPick = new SlipPick("OverUnder", line.Line, "Over", line.OverPrice);
+                var underPick = new SlipPick("OverUnder", line.Line, "Under", line.UnderPrice);
+                <div class="odds-table-row">
+                    <span class="odds-table-label">@line.Line.ToString("0.##")</span>
+                    <span class="@TableCellClass(overPick)" @onclick="() => TogglePick(overPick)">@OddsCell.FormatOdds(line.OverPrice)</span>
+                    <span class="@TableCellClass(underPick)" @onclick="() => TogglePick(underPick)">@OddsCell.FormatOdds(line.UnderPrice)</span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (_btts is { } btts)
+{
+    <div class="market-group">
+        <h4>Both teams to score</h4>
+        <div class="odds-list">
+            @foreach (var opt in BttsOptions(btts))
+            {
+                <div class="@ListRowClass(opt.Pick)" @onclick="() => TogglePick(opt.Pick)">
+                    <span>@opt.Label</span>
+                    <span class="odds-list-price">@OddsCell.FormatOdds(opt.Pick.Odds)</span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (_firstScorer is { } firstScorer)
+{
+    <div class="market-group">
+        <h4>First team to score</h4>
+        <div class="odds-list">
+            @foreach (var opt in FirstScorerOptions(firstScorer))
+            {
+                <div class="@ListRowClass(opt.Pick)" @onclick="() => TogglePick(opt.Pick)">
+                    <span>@opt.Label</span>
+                    <span class="odds-list-price">@OddsCell.FormatOdds(opt.Pick.Odds)</span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (_correctScoreLookup.Count > 0)
+{
+    <div class="market-group">
+        <h4>Correct score</h4>
+        <div class="score-stepper-row">
+            <div class="score-stepper">
+                <span class="team-name">@HomeTeam</span>
+                <div class="stepper-controls">
+                    <button type="button" class="stepper-btn" disabled="@(_correctScoreHome == 0)" @onclick="() => AdjustScore(home: true, delta: -1)">−</button>
+                    <span class="stepper-value">@_correctScoreHome</span>
+                    <button type="button" class="stepper-btn" disabled="@(_correctScoreHome >= _maxCorrectScoreHome)" @onclick="() => AdjustScore(home: true, delta: 1)">+</button>
+                </div>
+            </div>
+            <div class="score-stepper">
+                <span class="team-name">@AwayTeam</span>
+                <div class="stepper-controls">
+                    <button type="button" class="stepper-btn" disabled="@(_correctScoreAway == 0)" @onclick="() => AdjustScore(home: false, delta: -1)">−</button>
+                    <span class="stepper-value">@_correctScoreAway</span>
+                    <button type="button" class="stepper-btn" disabled="@(_correctScoreAway >= _maxCorrectScoreAway)" @onclick="() => AdjustScore(home: false, delta: 1)">+</button>
+                </div>
+            </div>
+        </div>
+
+        @if (CurrentCorrectScorePick is { } pick)
+        {
+            <span class="@("correct-score-price " + (_correctScoreSelected ? "selected" : ""))" @onclick="ToggleCorrectScoreSelected">
+                @_correctScoreHome - @_correctScoreAway (@OddsCell.FormatOdds(pick.Odds))
+            </span>
+        }
+        else
+        {
+            <div class="muted">Not priced for this score.</div>
+        }
+    </div>
+}
+
+@if (_markets is not null && _overUnderLines.Count == 0 && _btts is null && _firstScorer is null && _correctScoreLookup.Count == 0)
+{
+    <div class="muted">No extra markets are priced for this match right now.</div>
+}
+
+@if (HasAnySelection)
+{
+    <div class="market-group">
+        <div>Combined odds: <strong>@CombinedOdds.ToString("0.00")</strong></div>
+        @if (HasContradiction)
+        {
+            <div class="status error">These selections can never all be true together — remove one to continue.</div>
+        }
+        else
+        {
+            <button type="button" class="place-bet-btn" @onclick="AddToSlipAsync">Add to slip</button>
+        }
+    </div>
+}
+
+@code {
+    private record OverUnderLine(decimal Line, decimal OverPrice, decimal UnderPrice);
+    private record BttsOption(decimal YesPrice, decimal NoPrice);
+    private record FirstScorerOption(decimal HomePrice, decimal NonePrice, decimal AwayPrice);
+    private record PickOption(string Label, SlipPick Pick);
+
+    [Parameter] public Guid MatchId { get; set; }
+    [SupplyParameterFromQuery(Name = "home")] public string? Home { get; set; }
+    [SupplyParameterFromQuery(Name = "away")] public string? Away { get; set; }
+    [SupplyParameterFromQuery(Name = "kickoff")] public string? Kickoff { get; set; }
+
+    private string HomeTeam => Home ?? "";
+    private string AwayTeam => Away ?? "";
+    private DateTime KickoffTime => DateTime.TryParse(Kickoff, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt) ? dt : DateTime.UtcNow;
+
+    private List<BetBuilderMarketDto>? _markets;
+    private readonly List<OverUnderLine> _overUnderLines = [];
+    private BttsOption? _btts;
+    private FirstScorerOption? _firstScorer;
+    private string? _bookmaker;
+    private string? _bookmakerLogoUrl;
+
+    private readonly Dictionary<(int Home, int Away), decimal> _correctScoreLookup = [];
+    private int _correctScoreHome;
+    private int _correctScoreAway;
+    private int _maxCorrectScoreHome;
+    private int _maxCorrectScoreAway;
+
+    // Whether Correct Score is included in the bet at all — while true, it always tracks whatever
+    // score the stepper is currently on (see CurrentCorrectScorePick), rather than freezing the
+    // price from whenever it was first tapped. Kept separate from _selected because its pick isn't
+    // a fixed value like the other markets' chips — it changes as the stepper moves.
+    private bool _correctScoreSelected;
+
+    // Only one pick per market type at a time — combining e.g. Over 2.5 AND Under 1.5 in the same
+    // leg would be self-contradictory, so picking a new option within a market type replaces
+    // whatever was previously selected for that type.
+    private readonly Dictionary<string, SlipPick> _selected = [];
+
+    private string _status = "Loading…";
+    private bool _error;
+
+    private SlipPick? CurrentCorrectScorePick =>
+        _correctScoreLookup.TryGetValue((_correctScoreHome, _correctScoreAway), out var price)
+            ? new SlipPick("CorrectScore", null, null, price, _correctScoreHome, _correctScoreAway)
+            : null;
+
+    private IEnumerable<SlipPick> EffectiveSelectedPicks
+    {
+        get
+        {
+            foreach (var pick in _selected.Values)
+            {
+                yield return pick;
+            }
+
+            if (_correctScoreSelected && CurrentCorrectScorePick is { } csPick)
+            {
+                yield return csPick;
+            }
+        }
+    }
+
+    private bool HasAnySelection => _selected.Count > 0 || (_correctScoreSelected && CurrentCorrectScorePick is not null);
+
+    private decimal CombinedOdds => EffectiveSelectedPicks.Aggregate(1m, (acc, p) => acc * p.Odds);
+
+    // Different markets in the same leg all describe the same 90 minutes, so a combination is only
+    // ever placeable if some final score could satisfy every pick at once — e.g. "Coventry to score
+    // first" + "Arsenal 1-0 Coventry" can never both be true, since Coventry didn't score at all in
+    // that scoreline. Checked by searching for at least one (home, away) score consistent with every
+    // currently selected pick, rather than hand-writing a rule per pair of market types.
+    private bool HasContradiction => HasAnySelection && !IsConsistentSelection();
+
+    private bool IsConsistentSelection()
+    {
+        var picks = EffectiveSelectedPicks.ToList();
+        if (picks.Count <= 1)
+        {
+            return true;
+        }
+
+        var correctScore = picks.FirstOrDefault(p => p.MarketType == "CorrectScore");
+        if (correctScore is not null)
+        {
+            return picks.All(p => IsCompatible(p, correctScore.PredictedHomeScore!.Value, correctScore.PredictedAwayScore!.Value));
+        }
+
+        const int maxGoalsSearched = 15;
+        for (var home = 0; home <= maxGoalsSearched; home++)
+        {
+            for (var away = 0; away <= maxGoalsSearched; away++)
+            {
+                if (picks.All(p => IsCompatible(p, home, away)))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // Whether a final score of home-away is consistent with this pick — not that it's the specific
+    // score the pick was priced for, just that it doesn't rule the pick out.
+    private static bool IsCompatible(SlipPick pick, int home, int away) => pick.MarketType switch
+    {
+        "OverUnder" when pick.Line is { } line => pick.Side == "Over" ? home + away > line : home + away < line,
+        "BothTeamsToScore" => pick.Side == "Yes" ? home > 0 && away > 0 : home == 0 || away == 0,
+        "FirstTeamToScore" => pick.Side switch
+        {
+            "Home" => home >= 1,
+            "Away" => away >= 1,
+            _ => home == 0 && away == 0, // None
+        },
+        "CorrectScore" => home == pick.PredictedHomeScore && away == pick.PredictedAwayScore,
+        _ => true,
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var response = await Api.GetBetBuilderMarketsAsync(MatchId);
+            _markets = response.Markets;
+            _bookmaker = response.Bookmaker;
+            _bookmakerLogoUrl = response.BookmakerLogoUrl;
+
+            _overUnderLines.AddRange(_markets
+                .Where(m => m.MarketType == "OverUnder" && m.Line is not null)
+                .GroupBy(m => m.Line!.Value)
+                .Where(g => g.Any(m => m.Side == "Over") && g.Any(m => m.Side == "Under"))
+                .Select(g => new OverUnderLine(g.Key, g.First(m => m.Side == "Over").Price, g.First(m => m.Side == "Under").Price))
+                .OrderBy(l => l.Line));
+
+            var yes = _markets.FirstOrDefault(m => m.MarketType == "BothTeamsToScore" && m.Side == "Yes");
+            var no = _markets.FirstOrDefault(m => m.MarketType == "BothTeamsToScore" && m.Side == "No");
+            _btts = yes is null || no is null ? null : new BttsOption(yes.Price, no.Price);
+
+            var fHome = _markets.FirstOrDefault(m => m.MarketType == "FirstTeamToScore" && m.Side == "Home");
+            var fNone = _markets.FirstOrDefault(m => m.MarketType == "FirstTeamToScore" && m.Side == "None");
+            var fAway = _markets.FirstOrDefault(m => m.MarketType == "FirstTeamToScore" && m.Side == "Away");
+            _firstScorer = fHome is null || fNone is null || fAway is null
+                ? null
+                : new FirstScorerOption(fHome.Price, fNone.Price, fAway.Price);
+
+            foreach (var m in _markets.Where(m => m.MarketType == "CorrectScore" && m.PredictedHomeScore is not null && m.PredictedAwayScore is not null))
+            {
+                _correctScoreLookup[(m.PredictedHomeScore!.Value, m.PredictedAwayScore!.Value)] = m.Price;
+            }
+
+            if (_correctScoreLookup.Count > 0)
+            {
+                _maxCorrectScoreHome = _correctScoreLookup.Keys.Max(k => k.Home);
+                _maxCorrectScoreAway = _correctScoreLookup.Keys.Max(k => k.Away);
+            }
+
+            _status = "";
+        }
+        catch (Exception ex)
+        {
+            _status = $"Error: {ex.Message}";
+            _error = true;
+        }
+    }
+
+    private void AdjustScore(bool home, int delta)
+    {
+        if (home)
+        {
+            _correctScoreHome = Math.Clamp(_correctScoreHome + delta, 0, _maxCorrectScoreHome);
+        }
+        else
+        {
+            _correctScoreAway = Math.Clamp(_correctScoreAway + delta, 0, _maxCorrectScoreAway);
+        }
+
+        // Moving off a score that has no price at all — nothing sensible to keep selected.
+        if (_correctScoreSelected && CurrentCorrectScorePick is null)
+        {
+            _correctScoreSelected = false;
+        }
+    }
+
+    private void ToggleCorrectScoreSelected() => _correctScoreSelected = !_correctScoreSelected;
+
+    private static List<PickOption> BttsOptions(BttsOption btts) =>
+    [
+        new("Yes", new SlipPick("BothTeamsToScore", null, "Yes", btts.YesPrice)),
+        new("No", new SlipPick("BothTeamsToScore", null, "No", btts.NoPrice)),
+    ];
+
+    private List<PickOption> FirstScorerOptions(FirstScorerOption option) =>
+    [
+        new(HomeTeam, new SlipPick("FirstTeamToScore", null, "Home", option.HomePrice)),
+        new("None", new SlipPick("FirstTeamToScore", null, "None", option.NonePrice)),
+        new(AwayTeam, new SlipPick("FirstTeamToScore", null, "Away", option.AwayPrice)),
+    ];
+
+    private bool IsSelected(SlipPick pick) =>
+        _selected.TryGetValue(pick.MarketType, out var existing)
+        && existing.Line == pick.Line && existing.Side == pick.Side
+        && existing.PredictedHomeScore == pick.PredictedHomeScore && existing.PredictedAwayScore == pick.PredictedAwayScore;
+
+    private string TableCellClass(SlipPick pick) => IsSelected(pick) ? "odds-table-cell selected" : "odds-table-cell";
+
+    private string ListRowClass(SlipPick pick) => IsSelected(pick) ? "odds-list-row selected" : "odds-list-row";
+
+    private void TogglePick(SlipPick pick)
+    {
+        if (IsSelected(pick))
+        {
+            _selected.Remove(pick.MarketType);
+        }
+        else
+        {
+            _selected[pick.MarketType] = pick;
+        }
+    }
+
+    private async Task AddToSlipAsync()
+    {
+        await Slip.SetLegAsync(MatchId, EffectiveSelectedPicks.ToList(), HomeTeam, AwayTeam, KickoffTime);
+        Slip.SetOpen(true);
+        Nav.NavigateTo("/");
+    }
+
+    // Leaves without touching the slip at all — any picks made here are simply discarded.
+    private void Cancel() => Nav.NavigateTo("/");
+}
