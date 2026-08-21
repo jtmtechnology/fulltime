@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullTime.Api.Betting;
 
-// Runs on its own timer (SettlementSweepService), separate from MatchSyncBackgroundService — the
+// Runs on its own timer (SettlementSweepService), separate from HighlightlyMatchSyncBackgroundService — the
 // odds/score sync and bet settlement are independent concerns with independent cadences.
 public class SettlementService(AppDbContext db, PushNotificationService push, ILogger<SettlementService> logger)
 {

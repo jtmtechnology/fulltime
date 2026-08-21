@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 namespace FullTime.Api.BetBuilder;
 
 // The only caller of RefreshAsync is BetBuilderSyncBackgroundService's timer — same choke-point
-// pattern as MatchSyncService for the primary odds/scores provider.
+// pattern as HighlightlyMatchSyncService for the primary match/score sync.
 public class BetBuilderSyncService(
     HighlightlyClient client,
     AppDbContext db,
@@ -24,15 +24,17 @@ public class BetBuilderSyncService(
     private async Task SyncMatchesAndOddsAsync(CancellationToken ct)
     {
         var opts = options.Value;
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var horizon = DateTime.UtcNow.AddDays(opts.MatchWindowDays);
 
         var candidateMatches = await db.Matches
             .Where(m => m.Status == MatchStatus.Upcoming && m.KickoffTime <= horizon)
             .ToListAsync(ct);
 
+        // Matches are synced directly from Highlightly (see HighlightlyMatchSyncService), so
+        // LeagueId/ExternalId/HomeTeamId/AwayTeamId are already Highlightly's own IDs — no
+        // reconciliation against a second provider needed.
         var relevantMatches = candidateMatches
-            .Where(m => HighlightlyLeagueMap.LeagueIds.ContainsKey(m.LeagueId))
+            .Where(m => HighlightlyLeagueMap.TrackedLeagueIds.Contains(m.LeagueId))
             .ToList();
 
         if (relevantMatches.Count == 0)
@@ -40,66 +42,15 @@ public class BetBuilderSyncService(
             return;
         }
 
-        // Cache one /football/matches call per (leagueId, date) pair — several of our own LeagueId
-        // variants (e.g. the UEFA-qualifying temp pool) can map to the same Highlightly league id
-        // and the same date, so this avoids re-fetching identical pages.
-        var matchesCache = new Dictionary<(int LeagueId, DateOnly Date), List<MatchDto>>();
-
-        async Task<List<MatchDto>> GetCachedMatchesAsync(int highlightlyLeagueId, DateOnly date)
-        {
-            var key = (highlightlyLeagueId, date);
-            if (!matchesCache.TryGetValue(key, out var cached))
-            {
-                cached = await client.GetMatchesAsync(highlightlyLeagueId, SeasonFor(date), date, ct);
-                matchesCache[key] = cached;
-            }
-
-            return cached;
-        }
-
-        var matchedCount = 0;
-        foreach (var match in relevantMatches.Where(m => m.HighlightlyMatchId is null))
-        {
-            var date = DateOnly.FromDateTime(match.KickoffTime);
-
-            foreach (var highlightlyLeagueId in HighlightlyLeagueMap.LeagueIds[match.LeagueId])
-            {
-                var candidates = await GetCachedMatchesAsync(highlightlyLeagueId, date);
-                var found = FindMatchingMatch(match, candidates);
-                if (found is null)
-                {
-                    continue;
-                }
-
-                match.HighlightlyMatchId = found.Id;
-                match.HighlightlyLeagueId = highlightlyLeagueId;
-                match.HighlightlyHomeTeamId = found.HomeTeam.Id;
-                match.HighlightlyAwayTeamId = found.AwayTeam.Id;
-                matchedCount++;
-                break;
-            }
-        }
-
-        if (matchedCount > 0)
-        {
-            await db.SaveChangesAsync(ct);
-        }
-
-        var matchedMatches = relevantMatches.Where(m => m.HighlightlyMatchId is not null).ToList();
-        if (matchedMatches.Count == 0)
-        {
-            return;
-        }
-
-        // Odds are fetched per (leagueId, date) too, paginated — cheaper than one call per match
-        // since the provider returns several matches per page (still capped at 5, so a busy
-        // matchday needs a few pages).
-        var oddsKeys = matchedMatches
-            .Select(m => (LeagueId: m.HighlightlyLeagueId!.Value, Date: DateOnly.FromDateTime(m.KickoffTime)))
+        // Odds are fetched per (leagueId, date), paginated — cheaper than one call per match since
+        // the provider returns several matches per page (still capped at 5, so a busy matchday
+        // needs a few pages).
+        var oddsKeys = relevantMatches
+            .Select(m => (LeagueId: (int)m.LeagueId, Date: DateOnly.FromDateTime(m.KickoffTime)))
             .Distinct()
             .ToList();
 
-        var matchByHighlightlyId = matchedMatches.ToDictionary(m => m.HighlightlyMatchId!.Value);
+        var matchByHighlightlyId = relevantMatches.ToDictionary(m => long.Parse(m.ExternalId));
         var fetchedAt = DateTime.UtcNow;
         var storedCount = 0;
 
@@ -108,7 +59,10 @@ public class BetBuilderSyncService(
             var offset = 0;
             while (true)
             {
-                var page = await client.GetOddsAsync(leagueId, date, opts.BookmakerName, offset, ct);
+                // Fetched unfiltered (every bookmaker) in one call — cheaper than a second
+                // bookmaker-filtered call just for the 1X2 price, and SnapshotOneXTwoIfChangedAsync
+                // needs to see every bookmaker anyway.
+                var page = await client.GetOddsAsync(leagueId, date, offset, ct: ct);
                 if (page is null || page.Data.Count == 0)
                 {
                     break;
@@ -119,6 +73,16 @@ public class BetBuilderSyncService(
                     if (!matchByHighlightlyId.TryGetValue(matchOdds.MatchId, out var match))
                     {
                         continue;
+                    }
+
+                    // 1X2: whichever bookmaker's "Full Time Result" entry appears first for this
+                    // match — deliberately not pinned to opts.BookmakerName, so the price shown
+                    // varies by match rather than always being the same book (confirmed via a real
+                    // odds page that the first-listed bookmaker does vary match to match).
+                    var fullTimeResult = matchOdds.Odds.FirstOrDefault(o => o.Market == "Full Time Result");
+                    if (fullTimeResult is not null)
+                    {
+                        await SnapshotOneXTwoIfChangedAsync(match, fullTimeResult, fetchedAt, ct);
                     }
 
                     foreach (var entry in matchOdds.Odds)
@@ -152,8 +116,55 @@ public class BetBuilderSyncService(
 
         await db.SaveChangesAsync(ct);
         logger.LogInformation(
-            "Bet-builder sync: matched {MatchCount} match(es) to Highlightly, stored {MarketCount} market row(s)",
-            matchedMatches.Count, storedCount);
+            "Bet-builder sync: stored {MarketCount} market row(s) across {MatchCount} match(es)",
+            storedCount, relevantMatches.Count);
+    }
+
+    private async Task SnapshotOneXTwoIfChangedAsync(Match match, OddsEntryDto entry, DateTime fetchedAt, CancellationToken ct)
+    {
+        decimal? home = null, draw = null, away = null;
+        foreach (var value in entry.Values)
+        {
+            switch (value.Value)
+            {
+                case "Home": home = value.Odd; break;
+                case "Draw": draw = value.Odd; break;
+                case "Away": away = value.Odd; break;
+            }
+        }
+
+        if (home is null || draw is null || away is null)
+        {
+            return;
+        }
+
+        var latest = await db.OddsSnapshots
+            .Where(o => o.MatchId == match.Id)
+            .OrderByDescending(o => o.FetchedAt)
+            .FirstOrDefaultAsync(ct);
+
+        var changed = latest is null
+            || latest.HomeOdds != home.Value
+            || latest.DrawOdds != draw.Value
+            || latest.AwayOdds != away.Value
+            || !string.Equals(latest.Bookmaker, entry.BookmakerName, StringComparison.OrdinalIgnoreCase);
+
+        if (!changed)
+        {
+            return;
+        }
+
+        db.OddsSnapshots.Add(new OddsSnapshot
+        {
+            Id = Guid.NewGuid(),
+            MatchId = match.Id,
+            HomeOdds = home.Value,
+            DrawOdds = draw.Value,
+            AwayOdds = away.Value,
+            Bookmaker = entry.BookmakerName,
+            BookmakerLogoUrl = BookmakerLogos.UrlFor(entry.BookmakerName),
+            FetchedAt = fetchedAt,
+        });
     }
 
     // Resolves MarketType.FirstTeamToScore, which can't be derived from the final score alone —
@@ -164,7 +175,7 @@ public class BetBuilderSyncService(
     private async Task ResolveFirstGoalScorersAsync(CancellationToken ct)
     {
         var candidates = await db.Matches
-            .Where(m => m.Status == MatchStatus.Finished && m.HighlightlyMatchId != null && m.FirstGoalScorerSide == null)
+            .Where(m => m.Status == MatchStatus.Finished && m.FirstGoalScorerSide == null)
             .ToListAsync(ct);
 
         if (candidates.Count == 0)
@@ -183,7 +194,7 @@ public class BetBuilderSyncService(
                 continue;
             }
 
-            var events = await client.GetEventsAsync(match.HighlightlyMatchId!.Value, ct);
+            var events = await client.GetEventsAsync(long.Parse(match.ExternalId), ct);
             var firstGoal = events
                 .Where(e => e.Type == "Goal")
                 .OrderBy(e => ParseMinute(e.Time))
@@ -194,9 +205,9 @@ public class BetBuilderSyncService(
                 continue;
             }
 
-            match.FirstGoalScorerSide = firstGoal.Team.Id == match.HighlightlyHomeTeamId
+            match.FirstGoalScorerSide = firstGoal.Team.Id == match.HomeTeamId
                 ? SelectionSide.Home
-                : firstGoal.Team.Id == match.HighlightlyAwayTeamId
+                : firstGoal.Team.Id == match.AwayTeamId
                     ? SelectionSide.Away
                     : null;
 
@@ -224,9 +235,6 @@ public class BetBuilderSyncService(
         var added = parts.Length > 1 && int.TryParse(parts[1], out var a) ? a : 0;
         return (baseMinute, added);
     }
-
-    // European domestic/UEFA seasons run August–May and are numbered by their starting year.
-    private static int SeasonFor(DateOnly date) => date.Month >= 7 ? date.Year : date.Year - 1;
 
     private record ParsedOutcome(MarketType MarketType, decimal? Line, SelectionSide? Side, int? PredictedHomeScore, int? PredictedAwayScore);
 
@@ -306,58 +314,5 @@ public class BetBuilderSyncService(
 
         existing.Price = price;
         existing.FetchedAt = fetchedAt;
-    }
-
-    private static MatchDto? FindMatchingMatch(Match match, IEnumerable<MatchDto> candidates)
-    {
-        var matchDate = DateOnly.FromDateTime(match.KickoffTime);
-
-        return candidates.FirstOrDefault(c =>
-            DateOnly.FromDateTime(c.Date) == matchDate
-            && TeamNamesMatch(match.HomeTeam, c.HomeTeam.Name)
-            && TeamNamesMatch(match.AwayTeam, c.AwayTeam.Name));
-    }
-
-    // Word-by-word prefix matching rather than raw substring containment on the whole squashed
-    // name — the latter fails on common abbreviations our primary provider uses that Highlightly
-    // doesn't (e.g. "Man United" vs "Manchester United": "manunited" is not a substring of
-    // "manchesterunited" in either direction, but "man" is a prefix of "manchester" and "united"
-    // matches "united" word-for-word). Every word of the shorter name needs a prefix match against
-    // some word of the longer name.
-    private static bool TeamNamesMatch(string ours, string theirs)
-    {
-        var a = NormalizeTeamWords(ours);
-        var b = NormalizeTeamWords(theirs);
-        if (a.Count == 0 || b.Count == 0)
-        {
-            return false;
-        }
-
-        var (shorter, longer) = a.Count <= b.Count ? (a, b) : (b, a);
-        return shorter.All(word => longer.Any(other => other.StartsWith(word, StringComparison.Ordinal) || word.StartsWith(other, StringComparison.Ordinal)));
-    }
-
-    private static List<string> NormalizeTeamWords(string name)
-    {
-        var words = name.ToLowerInvariant()
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Select(w => new string(w.Where(char.IsLetterOrDigit).ToArray()))
-            .Where(w => w.Length > 0)
-            .ToList();
-
-        if (words.Count > 0)
-        {
-            var last = words[^1];
-            foreach (var suffix in new[] { "fc", "afc", "cf", "cfc" })
-            {
-                if (last.EndsWith(suffix, StringComparison.Ordinal) && last.Length > suffix.Length)
-                {
-                    words[^1] = last[..^suffix.Length];
-                    break;
-                }
-            }
-        }
-
-        return words;
     }
 }

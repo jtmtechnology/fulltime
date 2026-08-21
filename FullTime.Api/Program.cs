@@ -6,7 +6,6 @@ using FullTime.Api.Betting;
 using FullTime.Api.Data;
 using FullTime.Api.Leagues;
 using FullTime.Api.Notifications;
-using FullTime.Api.OddsApi;
 using Google.Apis.Auth.OAuth2;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -52,17 +51,6 @@ builder.Services.Configure<BettingOptions>(builder.Configuration.GetSection(Bett
 builder.Services.AddScoped<AuthService>();
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
-builder.Services.Configure<OddsApiOptions>(builder.Configuration.GetSection(OddsApiOptions.SectionName));
-builder.Services.AddHttpClient<FootballDataClient>((sp, client) =>
-{
-    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OddsApiOptions>>().Value;
-    client.BaseAddress = new Uri($"https://{opts.ApiHost}/");
-    client.DefaultRequestHeaders.Add("x-rapidapi-host", opts.ApiHost);
-    client.DefaultRequestHeaders.Add("x-rapidapi-key", opts.ApiKey);
-});
-builder.Services.AddScoped<MatchSyncService>();
-builder.Services.AddHostedService<MatchSyncBackgroundService>();
-
 builder.Services.Configure<HighlightlyOptions>(builder.Configuration.GetSection(HighlightlyOptions.SectionName));
 builder.Services.AddHttpClient<HighlightlyClient>((sp, client) =>
 {
@@ -71,6 +59,8 @@ builder.Services.AddHttpClient<HighlightlyClient>((sp, client) =>
     client.DefaultRequestHeaders.Add("x-rapidapi-host", opts.ApiHost);
     client.DefaultRequestHeaders.Add("x-rapidapi-key", opts.ApiKey);
 });
+builder.Services.AddScoped<HighlightlyMatchSyncService>();
+builder.Services.AddHostedService<HighlightlyMatchSyncBackgroundService>();
 builder.Services.AddScoped<BetBuilderSyncService>();
 builder.Services.AddHostedService<BetBuilderSyncBackgroundService>();
 
@@ -108,7 +98,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-app.MapGet("/api/config", async (MatchSyncService syncService, Microsoft.Extensions.Options.IOptions<OddsApiOptions> opts) =>
+app.MapGet("/api/config", async (HighlightlyMatchSyncService syncService, Microsoft.Extensions.Options.IOptions<HighlightlyOptions> opts) =>
 {
     var hasLiveMatch = await syncService.HasLiveMatchAsync();
     var interval = hasLiveMatch ? opts.Value.LiveRefreshIntervalSeconds : opts.Value.IdleRefreshIntervalSeconds;

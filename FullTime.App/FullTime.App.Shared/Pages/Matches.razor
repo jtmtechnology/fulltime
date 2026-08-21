@@ -28,7 +28,10 @@
     </div>
 }
 
-<div class="status @(_error ? "error" : "")">@_status</div>
+@if (!string.IsNullOrEmpty(_status))
+{
+    <div class="status @(_error ? "error" : "")">@_status</div>
+}
 
 @foreach (var dateGroup in VisibleMatches())
 {
@@ -120,7 +123,7 @@
             return;
         }
 
-        _status = matches.Count == 1 ? "1 match" : $"{matches.Count} matches";
+        _status = "";
         _error = false;
 
         var byLeague = matches.GroupBy(m => LeagueCatalog.GroupKey(m.LeagueId)).ToDictionary(g => g.Key, g => g.ToList());

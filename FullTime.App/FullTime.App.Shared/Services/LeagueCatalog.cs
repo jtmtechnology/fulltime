@@ -1,98 +1,56 @@
 namespace FullTime.App.Shared.Services;
 
-// Known league/cup IDs from the odds provider. Some divisions are tagged under a provider-assigned
-// temporary ID until it links them to the canonical one — both are listed where that applies.
+// Known league/cup IDs, keyed on Highlightly's own league IDs (see FullTime.Api's
+// HighlightlyLeagueMap.cs, the server-side source of truth for these same values). Unlike the old
+// provider, Highlightly keeps qualifying/play-off rounds under the *same* ID as the main
+// competition and gives every tracked competition, including the English lower divisions, a
+// stable ID with its own logo — so there's no temporary-ID remapping or shared qualifying-round
+// pool to maintain here any more.
 public static class LeagueCatalog
 {
-    // The three UEFA club competitions' qualifying/play-off rounds show up under temporary,
-    // provider-assigned IDs that get re-minted per round (same pattern as the English lower
-    // divisions' temp IDs below) — and unlike those, there's no reliable signal in the match data
-    // to tell which of the three competitions a given temp ID's round actually belongs to. Rather
-    // than mislabel matches, all of them are treated as one shared qualifying pool: any of the three
-    // cup toggles being on shows all of them. This list may need new IDs added as later qualifying
-    // rounds mint fresh ones — it isn't a permanent, set-and-forget mapping.
-    private static readonly long[] UefaQualifyingIds = [937348, 937349, 937351];
-
     public static readonly Dictionary<long, string> Names = new()
     {
-        [47] = "Premier League",
-        [48] = "Championship",
-        [938218] = "Championship",
-        [108] = "League One",
-        [938219] = "League One",
-        [109] = "League Two",
-        [938220] = "League Two",
-        [132] = "FA Cup",
-        [133] = "EFL Cup",
-        [938221] = "EFL Cup",
-        [247] = "Community Shield",
-        [42] = "Champions League",
-        [10611] = "Champions League",
-        [73] = "Europa League",
-        [10613] = "Europa League",
-        [10216] = "Conference League",
-        [10615] = "Conference League",
-        [937348] = "UEFA Cup Qualifying",
-        [937349] = "UEFA Cup Qualifying",
-        [937351] = "UEFA Cup Qualifying",
-        [54] = "Bundesliga",
-        [87] = "La Liga",
-        [53] = "Ligue 1",
-        [55] = "Serie A",
-    };
-
-    // The provider's temporary per-season league IDs, and separate qualification-round IDs for the
-    // UEFA cups (see Names above), have no logo asset of their own yet — fall back to the canonical
-    // competition's logo, which does.
-    public static readonly Dictionary<long, long> LogoId = new()
-    {
-        [938218] = 48,
-        [938219] = 108,
-        [938220] = 109,
-        [938221] = 133,
-        [10611] = 42,
-        [10613] = 73,
-        [10615] = 10216,
-        [937348] = 42,
-        [937349] = 42,
-        [937351] = 42,
+        [33973] = "Premier League",
+        [34824] = "Championship",
+        [35675] = "League One",
+        [36526] = "League Two",
+        [39079] = "FA Cup",
+        [41632] = "EFL Cup",
+        [450112] = "Community Shield",
+        [67162] = "Bundesliga",
+        [119924] = "La Liga",
+        [52695] = "Ligue 1",
+        [115669] = "Serie A",
+        [2486] = "Champions League",
+        [3337] = "Europa League",
+        [722432] = "Conference League",
     };
 
     // Always shown regardless of preference: the domestic English pyramid only.
     public static readonly long[] AlwaysVisible =
-        [47, 48, 938218, 108, 938219, 109, 938220, 132, 133, 938221, 247];
+        [33973, 34824, 35675, 36526, 39079, 41632, 450112];
 
-    // Opt-in: other countries' top flights plus the UEFA club competitions. Each cup's LeagueIds
-    // covers every stage — qualifying and play-off rounds included, not just the main draw — so
-    // enabling "Europa League" shows the whole competition, not only the group stage. All three cups
-    // share the same UefaQualifyingIds pool (see its comment above) since qualifying-round matches
-    // can't be reliably split between them.
-    // Order here also controls display order after AlwaysVisible.
+    // Opt-in: other countries' top flights plus the UEFA club competitions. Order here also
+    // controls display order after AlwaysVisible.
     public static readonly (string Name, long[] LeagueIds)[] OptionalLeagues =
     [
-        ("Bundesliga", [54]),
-        ("La Liga", [87]),
-        ("Ligue 1", [53]),
-        ("Serie A", [55]),
-        ("Champions League", [42, 10611, .. UefaQualifyingIds]),
-        ("Europa League", [73, 10613, .. UefaQualifyingIds]),
-        ("Conference League", [10216, 10615, .. UefaQualifyingIds]),
+        ("Bundesliga", [67162]),
+        ("La Liga", [119924]),
+        ("Ligue 1", [52695]),
+        ("Serie A", [115669]),
+        ("Champions League", [2486]),
+        ("Europa League", [3337]),
+        ("Conference League", [722432]),
     ];
 
     public static readonly long[] DisplayOrder =
         [.. AlwaysVisible, .. OptionalLeagues.SelectMany(l => l.LeagueIds).Distinct()];
 
-    // The three UEFA-qualifying IDs share one display name (see Names above) — group/chip/select by
-    // this key instead of the raw league ID so they merge into a single chip and header rather than
-    // three identical-looking ones.
-    public static long GroupKey(long leagueId) =>
-        UefaQualifyingIds.Contains(leagueId) ? UefaQualifyingIds[0] : leagueId;
+    // No-op now that every competition (main draw and qualifying alike) lives under one Highlightly
+    // ID — kept so callers that group/chip/select by this key don't need to change.
+    public static long GroupKey(long leagueId) => leagueId;
 
     public static string Name(long leagueId) => Names.GetValueOrDefault(leagueId, $"League {leagueId}");
 
-    public static string LogoUrl(long leagueId)
-    {
-        var id = LogoId.GetValueOrDefault(leagueId, leagueId);
-        return $"https://images.fotmob.com/image_resources/logo/leaguelogo/{id}.png";
-    }
+    public static string LogoUrl(long leagueId) => $"https://highlightly.net/soccer/images/leagues/{leagueId}.png";
 }

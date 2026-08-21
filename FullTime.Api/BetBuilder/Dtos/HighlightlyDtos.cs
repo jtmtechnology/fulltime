@@ -27,12 +27,25 @@ public class MatchDto
 
     [JsonPropertyName("awayTeam")]
     public required TeamDto AwayTeam { get; set; }
+
+    [JsonPropertyName("league")]
+    public required LeagueDto League { get; set; }
 }
 
 public class MatchStateDto
 {
     [JsonPropertyName("description")]
     public required string Description { get; set; }
+
+    [JsonPropertyName("score")]
+    public ScoreDto? Score { get; set; }
+}
+
+// "current" is a "H - A" string (e.g. "1 - 2"), null before kickoff.
+public class ScoreDto
+{
+    [JsonPropertyName("current")]
+    public string? Current { get; set; }
 }
 
 public class TeamDto
@@ -42,6 +55,21 @@ public class TeamDto
 
     [JsonPropertyName("name")]
     public required string Name { get; set; }
+
+    [JsonPropertyName("logo")]
+    public string? Logo { get; set; }
+}
+
+public class LeagueDto
+{
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
+    [JsonPropertyName("name")]
+    public required string Name { get; set; }
+
+    [JsonPropertyName("logo")]
+    public string? Logo { get; set; }
 }
 
 public class PaginationDto

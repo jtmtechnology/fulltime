@@ -132,8 +132,5 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Property(m => m.Line).HasPrecision(5, 2);
         modelBuilder.Entity<BetBuilderMarket>()
             .Property(m => m.Price).HasPrecision(10, 2);
-
-        modelBuilder.Entity<Match>()
-            .HasIndex(m => m.HighlightlyMatchId);
     }
 }

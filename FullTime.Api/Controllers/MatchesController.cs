@@ -1,7 +1,6 @@
 using FullTime.Api.BetBuilder;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
-using FullTime.Api.OddsApi;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -34,18 +33,10 @@ public record BetBuilderMarketsResponse(bool Available, List<BetBuilderMarketDto
 [Route("api/matches")]
 public class MatchesController(AppDbContext db, IOptions<HighlightlyOptions> highlightlyOptions) : ControllerBase
 {
-    // Only bet365 has a confirmed-working logo path (the same fotmob CDN convention the primary
-    // provider's own OddsSnapshot.BookmakerLogoUrl uses) — anything else falls back to plain text
-    // via BookmakerLogo's own graceful degradation rather than guessing an asset URL that might not exist.
-    private static readonly Dictionary<string, string> BookmakerLogoUrls = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["bet365"] = "https://images.fotmob.com/images/betting/bet365.png",
-    };
-
-
-    // Pure DB read regardless of the date/league filter — MatchSyncBackgroundService's timer is the
-    // only thing that calls the external odds/scores provider. A date outside its synced window
-    // (today .. today+DaysAhead-1) will simply come back empty rather than triggering a fetch.
+    // Pure DB read regardless of the date/league filter — HighlightlyMatchSyncBackgroundService's
+    // timer is the only thing that calls the external odds/scores provider. A date outside its
+    // synced window (today .. today+MatchSyncDaysAhead-1) will simply come back empty rather than
+    // triggering a fetch.
     [HttpGet("upcoming")]
     public async Task<ActionResult<List<UpcomingMatchDto>>> GetUpcoming(
         [FromQuery] DateOnly? date, [FromQuery] long? leagueId, CancellationToken ct)
@@ -78,8 +69,8 @@ public class MatchesController(AppDbContext db, IOptions<HighlightlyOptions> hig
                 m.LeagueId,
                 m.HomeTeam,
                 m.AwayTeam,
-                m.HomeTeamId > 0 ? $"https://images.fotmob.com/image_resources/logo/teamlogo/{m.HomeTeamId}_large.png" : null,
-                m.AwayTeamId > 0 ? $"https://images.fotmob.com/image_resources/logo/teamlogo/{m.AwayTeamId}_large.png" : null,
+                m.HomeTeamLogoUrl,
+                m.AwayTeamLogoUrl,
                 m.KickoffTime,
                 m.Status.ToString(),
                 m.HomeScore,
@@ -113,7 +104,7 @@ public class MatchesController(AppDbContext db, IOptions<HighlightlyOptions> hig
             .ToListAsync(ct);
 
         var bookmaker = highlightlyOptions.Value.BookmakerName;
-        var logoUrl = BookmakerLogoUrls.GetValueOrDefault(bookmaker);
+        var logoUrl = BookmakerLogos.UrlFor(bookmaker);
 
         return Ok(new BetBuilderMarketsResponse(markets.Count > 0, markets, bookmaker, logoUrl));
     }

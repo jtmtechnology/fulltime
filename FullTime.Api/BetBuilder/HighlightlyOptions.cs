@@ -18,4 +18,15 @@ public class HighlightlyOptions
     // this provider has per match — keeps sync payloads small (odds pages are capped at 5 matches
     // each) and gives a consistent, recognisable price source across the app.
     public string BookmakerName { get; set; } = "bet365";
+
+    // How many dates (today..today+N-1) the primary match/score sync fetches every idle tick, via
+    // the global (no leagueId) matches-by-date endpoint. Kept modest — fixtures this far out barely
+    // change — since this multiplies directly into daily call volume; see
+    // HighlightlyMatchSyncService for the full quota calculation.
+    public int MatchSyncDaysAhead { get; set; } = 6;
+
+    // The primary match/score sync backs off to this cadence when nothing's live, and switches to
+    // LiveRefreshIntervalSeconds whenever at least one tracked match is in progress.
+    public int IdleRefreshIntervalSeconds { get; set; } = 300;
+    public int LiveRefreshIntervalSeconds { get; set; } = 45;
 }
