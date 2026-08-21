@@ -76,10 +76,12 @@ public class BetBuilderSyncService(
                     }
 
                     // 1X2: whichever bookmaker's "Full Time Result" entry appears first for this
-                    // match — deliberately not pinned to opts.BookmakerName, so the price shown
-                    // varies by match rather than always being the same book (confirmed via a real
-                    // odds page that the first-listed bookmaker does vary match to match).
-                    var fullTimeResult = matchOdds.Odds.FirstOrDefault(o => o.Market == "Full Time Result");
+                    // match, restricted to BookmakerLogos' confirmed set so every displayed price
+                    // also has a logo — deliberately not pinned to a single opts.BookmakerName like
+                    // the other markets, so the price shown still varies by match (confirmed via a
+                    // real odds page that the first-listed bookmaker varies match to match).
+                    var fullTimeResult = matchOdds.Odds.FirstOrDefault(o =>
+                        o.Market == "Full Time Result" && BookmakerLogos.HasLogo(o.BookmakerName));
                     if (fullTimeResult is not null)
                     {
                         await SnapshotOneXTwoIfChangedAsync(match, fullTimeResult, fetchedAt, ct);
