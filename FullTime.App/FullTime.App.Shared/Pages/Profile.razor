@@ -17,7 +17,6 @@
         <div class="stat-list">
             <div class="stat-row"><span class="label">Email</span><span>@_me.Email</span></div>
             <div class="stat-row"><span class="label">Verified</span><span class="@(_me.EmailVerified ? "live" : "error")">@(_me.EmailVerified ? "Yes" : "No")</span></div>
-            <div class="stat-row"><span class="label">Balance</span><span>£@_me.Balance.ToString("0.00")</span></div>
             <div class="stat-row"><span class="label">Joined</span><span>@_me.CreatedAt.ToLocalTime().ToString("d MMM yyyy")</span></div>
             <div class="stat-row"><span class="label">Leagues</span><span>@LeagueSummary()</span></div>
         </div>

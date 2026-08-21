@@ -4,15 +4,17 @@ namespace FullTime.App.Shared.Services;
 
 public record BettingContext(Guid? LeagueId, string Name);
 
-// Scoped, same lifetime pattern as AuthState/BetSlipState. Holds which pool bets are currently
-// placed against — the global "Worldwide" balance, or a specific private league's own balance —
-// since each pool now tracks fully independent bets/balance. The header context switcher and
-// BetSlipSheet both read from this.
+// Scoped, same lifetime pattern as AuthState/BetSlipState. Holds which league's balance bets are
+// currently placed against — every bet needs one, there's no standalone Worldwide pool any more
+// (see BetService.PlaceBetAsync and LeaderboardController, where "Worldwide" is now just a computed
+// average across a user's leagues, not something you can bet against directly). The header context
+// switcher and BetSlipSheet both read from this.
 public class ActiveContextState(IActiveContextStore store, ApiClient api)
 {
-    public static readonly BettingContext Worldwide = new(null, "Worldwide");
+    // Sentinel for "nothing to bet with yet" — a user who hasn't joined or created a league.
+    public static readonly BettingContext NoLeagues = new(null, "No leagues yet");
 
-    public BettingContext Current { get; private set; } = Worldwide;
+    public BettingContext Current { get; private set; } = NoLeagues;
     public decimal? Balance { get; private set; }
     public List<LeagueSummaryDto> MyLeagues { get; private set; } = [];
 
@@ -36,9 +38,14 @@ public class ActiveContextState(IActiveContextStore store, ApiClient api)
         await RefreshLeaguesAsync();
 
         var storedId = await store.GetAsync();
-        Current = Guid.TryParse(storedId, out var leagueId) && MyLeagues.FirstOrDefault(l => l.Id == leagueId) is { } league
-            ? new BettingContext(league.Id, league.Name)
-            : Worldwide;
+        var storedLeague = Guid.TryParse(storedId, out var leagueId)
+            ? MyLeagues.FirstOrDefault(l => l.Id == leagueId)
+            : null;
+
+        // Default to the first league rather than a standalone Worldwide pool — a single-league
+        // user shouldn't have to open the switcher just to bet in the only league they're in.
+        var league = storedLeague ?? MyLeagues.FirstOrDefault();
+        Current = league is not null ? new BettingContext(league.Id, league.Name) : NoLeagues;
 
         await RefreshBalanceAsync();
     }
@@ -68,7 +75,8 @@ public class ActiveContextState(IActiveContextStore store, ApiClient api)
         {
             if (Current.LeagueId is null)
             {
-                Balance = (await api.GetMeAsync()).Balance;
+                // NoLeagues sentinel — nothing to bet with, so nothing to show a balance for.
+                Balance = null;
             }
             else
             {

@@ -11,6 +11,7 @@ public enum PlaceBetOutcome
     InsufficientBalance,
     MatchNotAvailable,
     InvalidLeague,
+    NoLeagueSelected,
 }
 
 public record PlaceBetResult(PlaceBetOutcome Outcome, Bet? Bet = null);

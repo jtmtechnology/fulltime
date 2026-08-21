@@ -359,6 +359,11 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
 .slip-sheet li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
 .slip-sheet .remove-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 1.1rem; padding: 0 0.25rem; }
 .slip-sheet input[type="number"] { width: 6rem; }
+.leave-league-btn {
+    margin-top: 0.75rem; background: transparent; border: 1px solid var(--danger); color: var(--danger);
+    padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer;
+}
+
 .place-bet-btn {
     width: 100%; background: var(--accent); color: var(--accent-ink); border: none;
     padding: 1rem; border-radius: 10px; font-weight: 700; font-size: 1.15rem; margin-top: 0.75rem; cursor: pointer;

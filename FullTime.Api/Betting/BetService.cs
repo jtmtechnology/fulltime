@@ -35,21 +35,23 @@ public class BetService(AppDbContext db, ILogger<BetService> logger)
             return new PlaceBetResult(PlaceBetOutcome.InsufficientBalance);
         }
 
-        // Betting "in" a league debits/credits that league's own membership balance rather than
-        // the user's global Worldwide balance — each pool is fully independent.
-        LeagueMembership? membership = null;
-        if (leagueId is { } leagueIdValue)
+        // Every bet now has to be placed "in" a specific league — there's no standalone Worldwide
+        // pool any more (the Worldwide leaderboard is a computed average across a user's leagues,
+        // not its own bankroll; see LeaderboardController). Old bets with LeagueId == null from
+        // before this change are left as historical records — only new placements are blocked here.
+        if (leagueId is null)
         {
-            membership = await db.LeagueMemberships
-                .FirstOrDefaultAsync(m => m.LeagueId == leagueIdValue && m.UserId == userId, ct);
-            if (membership is null)
-            {
-                return new PlaceBetResult(PlaceBetOutcome.InvalidLeague);
-            }
+            return new PlaceBetResult(PlaceBetOutcome.NoLeagueSelected);
         }
 
-        var availableBalance = membership?.Balance ?? user.Balance;
-        if (stake > availableBalance)
+        var membership = await db.LeagueMemberships
+            .FirstOrDefaultAsync(m => m.LeagueId == leagueId.Value && m.UserId == userId, ct);
+        if (membership is null)
+        {
+            return new PlaceBetResult(PlaceBetOutcome.InvalidLeague);
+        }
+
+        if (stake > membership.Balance)
         {
             return new PlaceBetResult(PlaceBetOutcome.InsufficientBalance);
         }
@@ -121,14 +123,7 @@ public class BetService(AppDbContext db, ILogger<BetService> logger)
             Legs = betLegs,
         };
 
-        if (membership is not null)
-        {
-            membership.Balance -= stake;
-        }
-        else
-        {
-            user.Balance -= stake;
-        }
+        membership.Balance -= stake;
 
         db.Bets.Add(bet);
         await db.SaveChangesAsync(ct);

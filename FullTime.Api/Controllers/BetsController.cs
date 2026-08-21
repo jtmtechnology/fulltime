@@ -76,6 +76,7 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
                 PlaceBetOutcome.InsufficientBalance => "Stake exceeds your current balance.",
                 PlaceBetOutcome.MatchNotAvailable => "One or more selections are no longer available (kicked off, finished, or missing odds).",
                 PlaceBetOutcome.InvalidLeague => "You're not a member of that league.",
+                PlaceBetOutcome.NoLeagueSelected => "Select a league to bet in.",
                 _ => "Could not place bet.",
             };
             return BadRequest(new { error });

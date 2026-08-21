@@ -46,7 +46,15 @@
                 </div>
                 <div>Potential return: <strong>£@((_stake * Slip.CombinedOdds).ToString("0.00"))</strong></div>
 
-                @if (AuthState.IsLoggedIn)
+                @if (!AuthState.IsLoggedIn)
+                {
+                    <div class="muted"><a href="login">Log in</a> to place this bet.</div>
+                }
+                else if (ContextState.Current.LeagueId is null)
+                {
+                    <div class="muted">Join or create a league on the Leaderboard tab before placing a bet.</div>
+                }
+                else
                 {
                     <div class="muted">
                         Betting in: <strong>@ContextState.Current.Name</strong>
@@ -56,10 +64,6 @@
                         }
                     </div>
                     <button type="button" class="place-bet-btn" @onclick="PlaceBetAsync" disabled="@_placing">Place bet</button>
-                }
-                else
-                {
-                    <div class="muted"><a href="login">Log in</a> to place this bet.</div>
                 }
             }
 
