@@ -361,9 +361,13 @@ else if (!string.IsNullOrEmpty(_status))
     {
         await Slip.SetLegAsync(MatchId, EffectiveSelectedPicks.ToList(), HomeTeam, AwayTeam, KickoffTime);
         Slip.SetOpen(true);
-        Nav.NavigateTo("/");
+        Nav.NavigateTo(BackToMatchesUrl);
     }
 
     // Leaves without touching the slip at all — any picks made here are simply discarded.
-    private void Cancel() => Nav.NavigateTo("/");
+    private void Cancel() => Nav.NavigateTo(BackToMatchesUrl);
+
+    // Returns to whichever date this match's card was on (Matches.razor's day-picker), rather than
+    // always resetting to today.
+    private string BackToMatchesUrl => $"/?date={DateOnly.FromDateTime(KickoffTime.ToLocalTime()):yyyy-MM-dd}";
 }

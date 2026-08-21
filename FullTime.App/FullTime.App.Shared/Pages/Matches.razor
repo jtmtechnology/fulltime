@@ -60,6 +60,10 @@ else if (!string.IsNullOrEmpty(_status))
         .Select(i => DateOnly.FromDateTime(DateTime.Today.AddDays(i)))
         .ToList();
 
+    // Set when navigating back from Bet Builder (see BetBuilder.razor's Cancel/AddToSlipAsync) so
+    // returning lands back on the date the match card was on, instead of always resetting to today.
+    [SupplyParameterFromQuery(Name = "date")] public string? Date { get; set; }
+
     private DateOnly _selectedDate = DateOnly.FromDateTime(DateTime.Today);
     private long? _selectedLeagueId;
     private bool _hasQueried;
@@ -70,6 +74,11 @@ else if (!string.IsNullOrEmpty(_status))
 
     protected override async Task OnInitializedAsync()
     {
+        if (DateOnly.TryParse(Date, out var requestedDate) && _days.Contains(requestedDate))
+        {
+            _selectedDate = requestedDate;
+        }
+
         await Prefs.InitializeAsync();
         await LoadMatchesAsync(quiet: false);
         _ = AutoRefreshLoopAsync(_cts.Token);

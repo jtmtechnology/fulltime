@@ -80,6 +80,7 @@
     private bool _placing;
     private string _slipStatus = "";
     private bool _slipError;
+    private bool _wasOpen;
 
     protected override async Task OnInitializedAsync()
     {
@@ -105,7 +106,20 @@
         }
     }
 
-    private void OnSlipChanged() => InvokeAsync(StateHasChanged);
+    private void OnSlipChanged()
+    {
+        // _slipStatus is transient feedback from the last placement attempt — without this, opening
+        // the sheet again later (to place a brand new bet) would still show "Bet placed!" from a
+        // previous, unrelated bet.
+        if (Slip.IsOpen && !_wasOpen)
+        {
+            _slipStatus = "";
+            _slipError = false;
+        }
+
+        _wasOpen = Slip.IsOpen;
+        InvokeAsync(StateHasChanged);
+    }
 
     private void OnContextChanged() => InvokeAsync(StateHasChanged);
 
