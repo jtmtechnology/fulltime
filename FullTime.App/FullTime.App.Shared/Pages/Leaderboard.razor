@@ -13,7 +13,14 @@
     <button type="button" class="league-chip @(_view == View.Worldwide ? "selected" : "")" @onclick="() => _view = View.Worldwide">Worldwide Top 50</button>
 </div>
 
-<div class="status @(_error ? "error" : "")">@_status</div>
+@if (_status == "Loading…")
+{
+    <LoadingSpinner />
+}
+else if (!string.IsNullOrEmpty(_status))
+{
+    <div class="status @(_error ? "error" : "")">@_status</div>
+}
 
 @if (_view == View.Worldwide)
 {

@@ -101,6 +101,31 @@ button {
 .muted { color: var(--text-muted); }
 .live { color: var(--accent); font-weight: 600; }
 
+/* Native-style activity spinner, used in place of a "Loading…" text status. Fixed/centred on the
+   whole viewport (not just its position in the page flow) so it reads like a native app's
+   full-screen loading state regardless of where it's inserted in a page's markup. */
+.loading-spinner-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 15;
+}
+.loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 5px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
 table.simple-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
 table.simple-table th, table.simple-table td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); }
 table.simple-table th { background: var(--bg-elevated); color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; }
@@ -334,9 +359,9 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
 .slip-sheet li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
 .slip-sheet .remove-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 1.1rem; padding: 0 0.25rem; }
 .slip-sheet input[type="number"] { width: 6rem; }
-.slip-sheet .place-bet-btn {
+.place-bet-btn {
     width: 100%; background: var(--accent); color: var(--accent-ink); border: none;
-    padding: 0.75rem; border-radius: 8px; font-weight: 700; font-size: 1rem; margin-top: 0.75rem; cursor: pointer;
+    padding: 1rem; border-radius: 10px; font-weight: 700; font-size: 1.15rem; margin-top: 0.75rem; cursor: pointer;
 }
 .slip-sheet button[disabled] { opacity: 0.5; }
 

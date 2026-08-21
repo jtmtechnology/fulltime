@@ -18,7 +18,14 @@
     </div>
 }
 
-<div class="status @(_error ? "error" : "")">@_status</div>
+@if (_status == "Loading…")
+{
+    <LoadingSpinner />
+}
+else if (!string.IsNullOrEmpty(_status))
+{
+    <div class="status @(_error ? "error" : "")">@_status</div>
+}
 
 @if (_overUnderLines.Count > 0)
 {
