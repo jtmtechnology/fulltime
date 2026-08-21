@@ -143,7 +143,7 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
     private async Task SettleBetsAsync(CancellationToken ct)
     {
         var pendingBets = await db.Bets
-            .Include(b => b.Legs)
+            .Include(b => b.Legs).ThenInclude(l => l.Match)
             .Include(b => b.User)
             .Where(b => b.Status == BetStatus.Pending)
             .ToListAsync(ct);
@@ -213,12 +213,19 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
 
         foreach (var bet in wonBets)
         {
-            await push.SendToUserAsync(bet.UserId, "Bet won!", $"Your bet won — +£{bet.PotentialReturn:0.00}", ct);
+            await push.SendToUserAsync(bet.UserId, "Bet won!", $"{DescribeBet(bet)} — +£{bet.PotentialReturn:0.00}", ct);
         }
 
         foreach (var bet in lostBets)
         {
-            await push.SendToUserAsync(bet.UserId, "Bet settled", "Your bet didn't come in this time.", ct);
+            await push.SendToUserAsync(bet.UserId, "Bet settled", $"{DescribeBet(bet)} didn't come in.", ct);
         }
     }
+
+    // A single-match bet (a straight pick or a same-game Bet Builder multi) is identified by its
+    // teams; an accumulator across several matches just gets its leg count rather than listing
+    // every team, which could otherwise make the notification unreadably long.
+    private static string DescribeBet(Bet bet) => bet.Legs.Count == 1
+        ? $"{bet.Legs[0].Match!.HomeTeam} v {bet.Legs[0].Match!.AwayTeam}"
+        : $"{bet.Legs.Count}-leg bet";
 }

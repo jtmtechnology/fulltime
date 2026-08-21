@@ -152,11 +152,19 @@ public class BetBuilderSyncService(
             .OrderByDescending(o => o.FetchedAt)
             .FirstOrDefaultAsync(ct);
 
+        var logoUrl = BookmakerLogos.UrlFor(entry.BookmakerName);
+
+        // Includes BookmakerLogoUrl even though it's derived purely from Bookmaker — a row written
+        // before BookmakerLogos gained an entry for this bookmaker would otherwise stay logo-less
+        // forever once the price and bookmaker themselves settle down and stop changing tick to
+        // tick (confirmed happening in production: several matches stuck on a null logo despite
+        // their bookmaker having a confirmed one by the time this was investigated).
         var changed = latest is null
             || latest.HomeOdds != home.Value
             || latest.DrawOdds != draw.Value
             || latest.AwayOdds != away.Value
-            || !string.Equals(latest.Bookmaker, entry.BookmakerName, StringComparison.OrdinalIgnoreCase);
+            || !string.Equals(latest.Bookmaker, entry.BookmakerName, StringComparison.OrdinalIgnoreCase)
+            || latest.BookmakerLogoUrl != logoUrl;
 
         if (!changed)
         {
@@ -171,7 +179,7 @@ public class BetBuilderSyncService(
             DrawOdds = draw.Value,
             AwayOdds = away.Value,
             Bookmaker = entry.BookmakerName,
-            BookmakerLogoUrl = BookmakerLogos.UrlFor(entry.BookmakerName),
+            BookmakerLogoUrl = logoUrl,
             FetchedAt = fetchedAt,
         });
     }
