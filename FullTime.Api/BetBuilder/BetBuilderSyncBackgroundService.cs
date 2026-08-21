@@ -9,28 +9,15 @@ public class BetBuilderSyncBackgroundService(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // On a cold start, this can otherwise race HighlightlyMatchSyncBackgroundService's own
-        // first tick: if this runs first, every match still has its pre-restart LeagueId/ExternalId
-        // and nothing matches HighlightlyLeagueMap yet, so this tick prices nothing and then waits
-        // its full SyncIntervalMinutes (up to an hour) before trying again. A short settle delay
-        // gives the match sync's first tick (observed to take well under a minute) time to land.
-        try
-        {
-            await Task.Delay(TimeSpan.FromSeconds(90), stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-
         while (!stoppingToken.IsCancellationRequested)
         {
             using var scope = scopeFactory.CreateScope();
             var syncService = scope.ServiceProvider.GetRequiredService<BetBuilderSyncService>();
 
+            var foundMatches = false;
             try
             {
-                await syncService.RefreshAsync(stoppingToken);
+                foundMatches = await syncService.RefreshAsync(stoppingToken);
                 logger.LogInformation("Bet-builder sync tick complete");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -39,9 +26,19 @@ public class BetBuilderSyncBackgroundService(
                 logger.LogError(ex, "Background bet-builder sync tick failed");
             }
 
+            // On a cold start this can race HighlightlyMatchSyncBackgroundService's own first tick —
+            // if this runs first, nothing matches HighlightlyLeagueMap yet and RefreshAsync finds
+            // nothing to price. With SyncIntervalMinutes now a full day, waiting for the normal
+            // interval before retrying would leave odds blank for the rest of the day, so retry soon
+            // instead whenever a tick found nothing (a real "no upcoming matches" case retries this
+            // often too, but that's harmless — it's just an empty query).
+            var delay = foundMatches
+                ? TimeSpan.FromMinutes(Math.Max(1, options.Value.SyncIntervalMinutes))
+                : TimeSpan.FromMinutes(2);
+
             try
             {
-                await Task.Delay(TimeSpan.FromMinutes(Math.Max(1, options.Value.SyncIntervalMinutes)), stoppingToken);
+                await Task.Delay(delay, stoppingToken);
             }
             catch (OperationCanceledException)
             {

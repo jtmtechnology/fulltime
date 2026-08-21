@@ -9,6 +9,11 @@ public class HighlightlyMatchSyncBackgroundService(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Runs on every tick regardless of cadence — fixture discovery (today+1..N) is comparatively
+        // rare and gets its own timer here rather than a separate hosted service, since it shares
+        // the same scoped HighlightlyMatchSyncService and DB context pattern.
+        var lastFixtureDiscoveryUtc = DateTime.MinValue;
+
         while (!stoppingToken.IsCancellationRequested)
         {
             using var scope = scopeFactory.CreateScope();
@@ -16,13 +21,29 @@ public class HighlightlyMatchSyncBackgroundService(
 
             try
             {
-                await syncService.RefreshMatchesAsync(stoppingToken);
-                logger.LogInformation("Match sync tick complete");
+                await syncService.RefreshLiveAsync(stoppingToken);
+                logger.LogInformation("Live match sync tick complete");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // A tick failing (e.g. the provider throttling us) must not take the whole host down.
-                logger.LogError(ex, "Background match sync tick failed");
+                logger.LogError(ex, "Background live match sync tick failed");
+            }
+
+            var dueForFixtureDiscovery = DateTime.UtcNow - lastFixtureDiscoveryUtc
+                >= TimeSpan.FromMinutes(options.Value.FixtureDiscoveryIntervalMinutes);
+            if (dueForFixtureDiscovery)
+            {
+                try
+                {
+                    await syncService.RefreshFixturesAsync(stoppingToken);
+                    lastFixtureDiscoveryUtc = DateTime.UtcNow;
+                    logger.LogInformation("Fixture discovery tick complete");
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    logger.LogError(ex, "Background fixture discovery tick failed");
+                }
             }
 
             var hasLiveMatch = await syncService.HasLiveMatchAsync(stoppingToken);

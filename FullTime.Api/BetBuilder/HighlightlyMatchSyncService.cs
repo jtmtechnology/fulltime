@@ -6,29 +6,31 @@ using Microsoft.Extensions.Options;
 
 namespace FullTime.Api.BetBuilder;
 
-// The only caller of RefreshMatchesAsync is HighlightlyMatchSyncBackgroundService's timer — same
-// choke-point pattern as BetBuilderSyncService for the extra markets. This is now the primary sync:
-// fixtures, live scores, and match status all come from Highlightly's global (no leagueId)
-// matches-by-date endpoint, filtered to HighlightlyLeagueMap.TrackedLeagueIds — one paginated fetch
-// per date instead of one call per tracked league.
+// The only caller of RefreshLiveAsync/RefreshFixturesAsync is HighlightlyMatchSyncBackgroundService's
+// timer — same choke-point pattern as BetBuilderSyncService for the extra markets. This is now the
+// primary sync: fixtures, live scores, and match status all come from Highlightly's global (no
+// leagueId) matches-by-date endpoint, filtered to HighlightlyLeagueMap.TrackedLeagueIds — one
+// paginated fetch per date instead of one call per tracked league.
+//
+// Split into two cadences to stay well within the 7,500 req/day RapidAPI quota: fixtures and prices
+// barely change once set, so there's no need to re-poll them often, but a live match's score does —
+// see the "Retire free-api-live-football-data" plan's rate-limit writeup for the numbers that led
+// here (a global per-date fetch on a busy day can be 5-10+ pages; refetching several days of that
+// every few minutes burned through the daily quota in under 10 hours in practice).
 public class HighlightlyMatchSyncService(
     HighlightlyClient client,
     AppDbContext db,
     IOptions<HighlightlyOptions> options,
     ILogger<HighlightlyMatchSyncService> logger)
 {
-    public async Task RefreshMatchesAsync(CancellationToken ct = default)
+    // Today's date plus any not-yet-Finished match's own kickoff date (a match that kicked off but
+    // never reached Finished — e.g. the day rolled over before the provider reported a final score —
+    // would otherwise never get re-synced and never settle). Deliberately NOT the full future
+    // window: only matches that could plausibly be live right now need this frequent a refresh.
+    public async Task RefreshLiveAsync(CancellationToken ct = default)
     {
-        var opts = options.Value;
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var datesToSync = new HashSet<DateOnly> { DateOnly.FromDateTime(DateTime.UtcNow) };
 
-        var datesToSync = Enumerable.Range(0, opts.MatchSyncDaysAhead)
-            .Select(i => today.AddDays(i))
-            .ToHashSet();
-
-        // A match that kicked off but never reached Finished (e.g. the day rolled over before the
-        // provider reported a final score) would otherwise fall out of the DaysAhead window forever
-        // and never settle — keep re-syncing its date until it actually finishes.
         var unfinishedKickoffs = await db.Matches
             .Where(m => m.Status != MatchStatus.Finished)
             .Select(m => m.KickoffTime)
@@ -47,7 +49,28 @@ public class HighlightlyMatchSyncService(
 
         if (upsertedCount > 0)
         {
-            logger.LogInformation("Match sync: upserted {Count} tracked match(es)", upsertedCount);
+            logger.LogInformation("Live match sync: upserted {Count} tracked match(es)", upsertedCount);
+        }
+    }
+
+    // The full today..today+MatchSyncDaysAhead-1 window — i.e. fixture discovery for matches that
+    // aren't happening yet. Run far less often than RefreshLiveAsync (see
+    // HighlightlyOptions.FixtureDiscoveryIntervalMinutes) since a fixture list doesn't need
+    // minute-to-minute freshness.
+    public async Task RefreshFixturesAsync(CancellationToken ct = default)
+    {
+        var opts = options.Value;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var upsertedCount = 0;
+        foreach (var i in Enumerable.Range(0, opts.MatchSyncDaysAhead))
+        {
+            upsertedCount += await FetchAndUpsertDateAsync(today.AddDays(i), ct);
+        }
+
+        if (upsertedCount > 0)
+        {
+            logger.LogInformation("Fixture discovery: upserted {Count} tracked match(es)", upsertedCount);
         }
     }
 

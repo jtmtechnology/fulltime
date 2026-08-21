@@ -15,13 +15,19 @@ public class BetBuilderSyncService(
     IOptions<HighlightlyOptions> options,
     ILogger<BetBuilderSyncService> logger)
 {
-    public async Task RefreshAsync(CancellationToken ct = default)
+    // Returns whether any Highlightly-tracked match was found to price. False is a signal to the
+    // caller (BetBuilderSyncBackgroundService) to retry soon rather than wait its normal, much
+    // longer interval — the only realistic cause is a cold-start race against
+    // HighlightlyMatchSyncService's own first tick, since there's no second provider to reconcile
+    // against any more (see HighlightlyMatchSyncService's own comment for the full context).
+    public async Task<bool> RefreshAsync(CancellationToken ct = default)
     {
-        await SyncMatchesAndOddsAsync(ct);
+        var foundMatches = await SyncMatchesAndOddsAsync(ct);
         await ResolveFirstGoalScorersAsync(ct);
+        return foundMatches;
     }
 
-    private async Task SyncMatchesAndOddsAsync(CancellationToken ct)
+    private async Task<bool> SyncMatchesAndOddsAsync(CancellationToken ct)
     {
         var opts = options.Value;
         var horizon = DateTime.UtcNow.AddDays(opts.MatchWindowDays);
@@ -39,7 +45,7 @@ public class BetBuilderSyncService(
 
         if (relevantMatches.Count == 0)
         {
-            return;
+            return false;
         }
 
         // Odds are fetched per (leagueId, date), paginated — cheaper than one call per match since
@@ -120,6 +126,7 @@ public class BetBuilderSyncService(
         logger.LogInformation(
             "Bet-builder sync: stored {MarketCount} market row(s) across {MatchCount} match(es)",
             storedCount, relevantMatches.Count);
+        return true;
     }
 
     private async Task SnapshotOneXTwoIfChangedAsync(Match match, OddsEntryDto entry, DateTime fetchedAt, CancellationToken ct)
