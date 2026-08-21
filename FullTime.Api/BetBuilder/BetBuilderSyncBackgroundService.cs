@@ -9,6 +9,20 @@ public class BetBuilderSyncBackgroundService(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // On a cold start, this can otherwise race HighlightlyMatchSyncBackgroundService's own
+        // first tick: if this runs first, every match still has its pre-restart LeagueId/ExternalId
+        // and nothing matches HighlightlyLeagueMap yet, so this tick prices nothing and then waits
+        // its full SyncIntervalMinutes (up to an hour) before trying again. A short settle delay
+        // gives the match sync's first tick (observed to take well under a minute) time to land.
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(90), stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
         while (!stoppingToken.IsCancellationRequested)
         {
             using var scope = scopeFactory.CreateScope();
