@@ -145,12 +145,16 @@ public class HighlightlyMatchSyncService(
 
         var (homeScore, awayScore) = ParseScore(dto.State.Score?.Current);
         var newStatus = DeriveStatus(dto.State.Description);
+        var isHalfTime = dto.State.Description.Contains("half", StringComparison.OrdinalIgnoreCase);
 
-        var changed = match.HomeScore != homeScore || match.AwayScore != awayScore || match.Status != newStatus;
+        var changed = match.HomeScore != homeScore || match.AwayScore != awayScore || match.Status != newStatus
+            || match.Minute != dto.State.Clock || match.IsHalfTime != isHalfTime;
 
         match.HomeScore = homeScore;
         match.AwayScore = awayScore;
         match.Status = newStatus;
+        match.Minute = dto.State.Clock;
+        match.IsHalfTime = isHalfTime;
 
         if (changed)
         {
@@ -159,7 +163,9 @@ public class HighlightlyMatchSyncService(
             // is harmless — it'll see the change on its next poll regardless — so this doesn't need
             // to block the sync loop or retry.
             await hub.Clients.All.SendAsync(
-                "MatchUpdated", new MatchLiveUpdate(match.Id, homeScore, awayScore, newStatus.ToString()), ct);
+                "MatchUpdated",
+                new MatchLiveUpdate(match.Id, homeScore, awayScore, newStatus.ToString(), dto.State.Clock, isHalfTime),
+                ct);
         }
     }
 

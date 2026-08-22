@@ -3,6 +3,11 @@
         @if (Match.Status == "InProgress")
         {
             <span class="live-dot"></span>
+            <span class="live-clock">@LiveClockText()</span>
+        }
+        else if (Match.Status == "Finished")
+        {
+            <span class="live-clock finished">FT</span>
         }
         <span>@Match.KickoffTime.ToLocalTime().ToString("ddd d MMM, HH:mm")</span>
     </div>
@@ -45,6 +50,11 @@
         "InProgress" or "Finished" => $"{Match.HomeScore} - {Match.AwayScore}",
         _ => "vs",
     };
+
+    // Highlightly's own match minute ("clock"), null before kickoff. Half time is a distinct flag
+    // rather than inferred from the minute, since the clock alone can't tell "still 1st half, 45th
+    // minute" apart from "paused at half time, sitting at 45".
+    private string LiveClockText() => Match.IsHalfTime ? "HT" : Match.Minute is { } minute ? $"{minute}'" : "";
 
     private string BetBuilderHref() =>
         $"bet-builder/{Match.Id}?home={Uri.EscapeDataString(Match.HomeTeam)}&away={Uri.EscapeDataString(Match.AwayTeam)}&kickoff={Uri.EscapeDataString(Match.KickoffTime.ToString("O"))}";

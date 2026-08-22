@@ -33,6 +33,8 @@ public record UpcomingMatchDto(
     string Status,
     int? HomeScore,
     int? AwayScore,
+    int? Minute,
+    bool IsHalfTime,
     decimal? HomeOdds,
     decimal? DrawOdds,
     decimal? AwayOdds,

@@ -39,6 +39,11 @@ public class MatchStateDto
 
     [JsonPropertyName("score")]
     public ScoreDto? Score { get; set; }
+
+    // Current match minute — null before kickoff, confirmed a plain int (e.g. 90 for a finished
+    // match) rather than an object with extra-time detail.
+    [JsonPropertyName("clock")]
+    public int? Clock { get; set; }
 }
 
 // "current" is a "H - A" string (e.g. "1 - 2"), null before kickoff.

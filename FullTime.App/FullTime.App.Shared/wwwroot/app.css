@@ -243,6 +243,8 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
     width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
     animation: pulse 1.4s infinite;
 }
+.live-clock { color: var(--accent); font-weight: 700; }
+.live-clock.finished { color: var(--text-muted); }
 @keyframes pulse {
     0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(57,255,136,0.5); }
     50% { opacity: 0.55; box-shadow: 0 0 0 4px rgba(57,255,136,0); }

@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 
 namespace FullTime.App.Shared.Services;
 
-public record MatchLiveUpdate(Guid MatchId, int? HomeScore, int? AwayScore, string Status);
+public record MatchLiveUpdate(Guid MatchId, int? HomeScore, int? AwayScore, string Status, int? Minute, bool IsHalfTime);
 
 // Scoped, same lifetime as the other per-circuit (Web)/per-session (MAUI) services. Opens one
 // persistent SignalR connection directly to FullTime.Api's hub — the same host ApiClient already

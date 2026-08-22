@@ -27,6 +27,19 @@ public class Match
     public int? HomeScore { get; set; }
     public int? AwayScore { get; set; }
 
+    // Current match minute while Status == InProgress — Highlightly's own "clock" value, null
+    // before kickoff. Not meaningful once Finished (stays at whatever it last was, e.g. 90) — the
+    // client shows "FT" instead of a stale minute once Status flips.
+    public int? Minute { get; set; }
+
+    // True only during the pause between halves — Highlightly's own description says so explicitly
+    // (checked case-insensitively for "half" rather than an exact string match, since the confirmed
+    // in-play vocabulary so far — "Not started"/"Finished"*/"Postponed" — didn't include a live
+    // example to pin the exact wording down; verify once a real match reaches half time). Kept
+    // separate from MatchStatus rather than adding a new enum value there, since Status ==
+    // InProgress is still correct for settlement/betting purposes during a half-time break.
+    public bool IsHalfTime { get; set; }
+
     public List<OddsSnapshot> OddsSnapshots { get; set; } = [];
     public List<BetLeg> BetLegs { get; set; } = [];
     public List<BetBuilderMarket> BetBuilderMarkets { get; set; } = [];
