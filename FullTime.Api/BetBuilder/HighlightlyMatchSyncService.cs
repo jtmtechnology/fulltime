@@ -27,20 +27,24 @@ public class HighlightlyMatchSyncService(
     IHubContext<MatchUpdatesHub> hub,
     ILogger<HighlightlyMatchSyncService> logger)
 {
-    // Today's date plus any not-yet-Finished match's own kickoff date (a match that kicked off but
-    // never reached Finished — e.g. the day rolled over before the provider reported a final score —
-    // would otherwise never get re-synced and never settle). Deliberately NOT the full future
-    // window: only matches that could plausibly be live right now need this frequent a refresh.
+    // Today's date plus the kickoff date of any match that has already KICKED OFF but never reached
+    // Finished (e.g. the day rolled over before the provider reported a final score) — that's the
+    // only case that would otherwise never get re-synced and never settle. Deliberately excludes
+    // future Upcoming fixtures, which are also "not Finished" but don't need 30s-frequency polling
+    // (RefreshFixturesAsync's daily discovery covers those) — including them blew up datesToSync to
+    // every date with any fixture in the whole MatchSyncDaysAhead window (confirmed in production:
+    // 20 distinct dates), multiplying every live tick's cost by ~20x for zero benefit.
     public async Task RefreshLiveAsync(CancellationToken ct = default)
     {
-        var datesToSync = new HashSet<DateOnly> { DateOnly.FromDateTime(DateTime.UtcNow) };
+        var now = DateTime.UtcNow;
+        var datesToSync = new HashSet<DateOnly> { DateOnly.FromDateTime(now) };
 
-        var unfinishedKickoffs = await db.Matches
-            .Where(m => m.Status != MatchStatus.Finished)
+        var staleKickoffs = await db.Matches
+            .Where(m => m.Status != MatchStatus.Finished && m.KickoffTime <= now)
             .Select(m => m.KickoffTime)
             .ToListAsync(ct);
 
-        foreach (var kickoff in unfinishedKickoffs)
+        foreach (var kickoff in staleKickoffs)
         {
             datesToSync.Add(DateOnly.FromDateTime(kickoff));
         }

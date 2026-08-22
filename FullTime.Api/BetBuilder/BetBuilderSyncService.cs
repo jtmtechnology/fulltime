@@ -188,11 +188,18 @@ public class BetBuilderSyncService(
     // needs the goal timeline from Highlightly's own event data. A 0-0 result needs no external
     // call at all (nobody scored, so "None" is certain); any other finished match needs one
     // /football/events lookup. Left Pending (retried next tick) if the provider hasn't backfilled
-    // events for that match yet.
+    // events for that match yet — but only for matches that finished recently. Confirmed in
+    // production that some matches (e.g. smaller continental/qualifying fixtures) get an empty
+    // events array permanently, never just "not yet backfilled" — without this cutoff, every one of
+    // those gets re-queried every single tick, forever, and the pile only grows daily. A
+    // FirstTeamToScore pick on a match whose events never backfill was already stuck Pending either
+    // way (see SettlementService.ResolvePicksAsync's guard), so aging out the retry doesn't change
+    // any settlement outcome — it just stops paying quota to reconfirm "still unknown".
     private async Task ResolveFirstGoalScorersAsync(CancellationToken ct)
     {
+        var cutoff = DateTime.UtcNow.AddDays(-3);
         var candidates = await db.Matches
-            .Where(m => m.Status == MatchStatus.Finished && m.FirstGoalScorerSide == null)
+            .Where(m => m.Status == MatchStatus.Finished && m.FirstGoalScorerSide == null && m.KickoffTime >= cutoff)
             .ToListAsync(ct);
 
         if (candidates.Count == 0)
