@@ -175,9 +175,25 @@ else if (!string.IsNullOrEmpty(_status))
         await InvokeAsync(StateHasChanged);
     }
 
+    // The periodic poll (AutoRefreshLoopAsync) and the SignalR push (OnMatchUpdated) both write into
+    // _leagues independently. If a poll's HTTP round trip is slow enough that its response lands
+    // after a faster, more recent SignalR push already advanced a match card, applying it would
+    // overwrite the newer minute/score with the older one - confirmed happening as a visible
+    // "minute drops then jumps back up" flicker. Guard against a poll regressing any match that's
+    // currently displayed as InProgress with a higher minute than the poll just returned.
+    private static bool IsPollRegression(UpcomingMatchDto? existing, UpcomingMatchDto incoming) =>
+        existing is { Status: "InProgress", Minute: { } existingMinute }
+        && incoming is { Status: "InProgress", Minute: { } incomingMinute }
+        && incomingMinute < existingMinute;
+
     private void Render(List<UpcomingMatchDto> allMatches)
     {
-        var matches = allMatches.Where(m => Prefs.IsVisible(m.LeagueId)).ToList();
+        var previousById = (_leagues ?? []).SelectMany(l => l.Matches).ToDictionary(m => m.Id);
+
+        var matches = allMatches
+            .Where(m => Prefs.IsVisible(m.LeagueId))
+            .Select(m => previousById.TryGetValue(m.Id, out var previous) && IsPollRegression(previous, m) ? previous : m)
+            .ToList();
 
         if (matches.Count == 0)
         {
