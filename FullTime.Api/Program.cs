@@ -101,11 +101,10 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<MatchUpdatesHub>("/hubs/matches");
 
-app.MapGet("/api/config", async (HighlightlyMatchSyncService syncService, Microsoft.Extensions.Options.IOptions<HighlightlyOptions> opts) =>
+app.MapGet("/api/config", async (HighlightlyMatchSyncService syncService) =>
 {
-    var hasLiveMatch = await syncService.HasLiveMatchAsync();
-    var interval = hasLiveMatch ? opts.Value.LiveRefreshIntervalSeconds : opts.Value.IdleRefreshIntervalSeconds;
-    return Results.Ok(new { refreshIntervalSeconds = interval });
+    var delay = await syncService.NextPollDelayAsync();
+    return Results.Ok(new { refreshIntervalSeconds = (int)delay.TotalSeconds });
 });
 
 app.Run();

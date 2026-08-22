@@ -46,12 +46,11 @@ public class HighlightlyMatchSyncBackgroundService(
                 }
             }
 
-            var hasLiveMatch = await syncService.HasLiveMatchAsync(stoppingToken);
-            var seconds = hasLiveMatch ? options.Value.LiveRefreshIntervalSeconds : options.Value.IdleRefreshIntervalSeconds;
+            var delay = await syncService.NextPollDelayAsync(stoppingToken);
 
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(Math.Max(1, seconds)), stoppingToken);
+                await Task.Delay(delay < TimeSpan.FromSeconds(1) ? TimeSpan.FromSeconds(1) : delay, stoppingToken);
             }
             catch (OperationCanceledException)
             {

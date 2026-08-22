@@ -85,6 +85,45 @@ public class HighlightlyMatchSyncService(
     public Task<bool> HasLiveMatchAsync(CancellationToken ct = default) =>
         db.Matches.AnyAsync(m => m.Status == MatchStatus.InProgress, ct);
 
+    // Backing off to the hour-long idle cadence is only safe while nothing is about to kick off —
+    // otherwise a match going Upcoming -> live partway through that hour sits undetected until the
+    // next tick (confirmed happening: 9 matches sat stuck at Upcoming for ~25 minutes after their
+    // real kickoff). If the soonest still-Upcoming kickoff falls within the idle window, shorten the
+    // wait to just past that kickoff instead, so the next tick catches it going live.
+    public async Task<TimeSpan> NextPollDelayAsync(CancellationToken ct = default)
+    {
+        var opts = options.Value;
+
+        if (await HasLiveMatchAsync(ct))
+        {
+            return TimeSpan.FromSeconds(opts.LiveRefreshIntervalSeconds);
+        }
+
+        var now = DateTime.UtcNow;
+        var idle = TimeSpan.FromSeconds(opts.IdleRefreshIntervalSeconds);
+
+        var nextKickoff = await db.Matches
+            .Where(m => m.Status == MatchStatus.Upcoming && m.KickoffTime <= now + idle)
+            .OrderBy(m => m.KickoffTime)
+            .Select(m => m.KickoffTime)
+            .FirstOrDefaultAsync(ct);
+
+        if (nextKickoff == default)
+        {
+            return idle;
+        }
+
+        // A small buffer past the kickoff itself, since a provider needs a moment to flip a match to
+        // live once it actually starts. Never shorter than the live cadence (a kickoff already in
+        // the past clamps to that instead of hammering the provider with a near-zero delay).
+        var untilKickoff = nextKickoff - now + TimeSpan.FromSeconds(60);
+        var delay = untilKickoff < TimeSpan.FromSeconds(opts.LiveRefreshIntervalSeconds)
+            ? TimeSpan.FromSeconds(opts.LiveRefreshIntervalSeconds)
+            : untilKickoff;
+
+        return delay < idle ? delay : idle;
+    }
+
     private async Task<int> FetchAndUpsertDateAsync(DateOnly date, CancellationToken ct)
     {
         var count = 0;
@@ -149,7 +188,10 @@ public class HighlightlyMatchSyncService(
 
         var (homeScore, awayScore) = ParseScore(dto.State.Score?.Current);
         var newStatus = DeriveStatus(dto.State.Description);
-        var isHalfTime = dto.State.Description.Contains("half", StringComparison.OrdinalIgnoreCase);
+        // Confirmed via a real live match: the in-play description is "First half" (and presumably
+        // "Second half"), which a bare "half" substring check wrongly flags as HT too — every
+        // currently-playing match was showing as half-time. Match on "half time" specifically.
+        var isHalfTime = dto.State.Description.Contains("half time", StringComparison.OrdinalIgnoreCase);
 
         var changed = match.HomeScore != homeScore || match.AwayScore != awayScore || match.Status != newStatus
             || match.Minute != dto.State.Clock || match.IsHalfTime != isHalfTime;
