@@ -3,13 +3,16 @@
         @if (Match.Status == "InProgress")
         {
             <span class="live-dot"></span>
+        }
+        <span>@Match.KickoffTime.ToLocalTime().ToString("ddd d MMM, HH:mm")</span>
+        @if (Match.Status == "InProgress")
+        {
             <span class="live-clock">@LiveClockText()</span>
         }
         else if (Match.Status == "Finished")
         {
             <span class="live-clock finished">FT</span>
         }
-        <span>@Match.KickoffTime.ToLocalTime().ToString("ddd d MMM, HH:mm")</span>
     </div>
 
     <div class="match-teams-row">
