@@ -63,6 +63,7 @@ builder.Services.AddHttpClient<HighlightlyClient>((sp, client) =>
 });
 builder.Services.AddScoped<HighlightlyMatchSyncService>();
 builder.Services.AddHostedService<HighlightlyMatchSyncBackgroundService>();
+builder.Services.AddHostedService<HighlightlyFixtureDiscoveryBackgroundService>();
 builder.Services.AddScoped<BetBuilderSyncService>();
 builder.Services.AddHostedService<BetBuilderSyncBackgroundService>();
 

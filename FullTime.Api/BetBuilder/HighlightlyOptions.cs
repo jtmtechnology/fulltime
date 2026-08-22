@@ -13,13 +13,13 @@ public class HighlightlyOptions
     // confirmed some leagues have nothing priced 3 days out while others have prices 6+ days out).
     public int MatchWindowDays { get; set; } = 7;
 
-    // Prices barely move once set, so this doesn't need anywhere near live-score frequency — but
-    // hourly (rather than once/day) catches matches that had no price at all yet (confirmed
-    // happening — some fixtures simply aren't priced by any bookmaker until closer to kickoff) much
-    // sooner than waiting up to 24h. ~150-250 calls/run × 24 ≈ 6,000/day against the 25,000 req/day
-    // quota — see IdleRefreshIntervalSeconds/LiveRefreshIntervalSeconds for how this trades off
+    // Prices barely move once set, so this doesn't need anywhere near live-score frequency — every
+    // 4 hours still catches matches that had no price at all yet (confirmed happening — some
+    // fixtures simply aren't priced by any bookmaker until closer to kickoff) far sooner than
+    // waiting up to 24h, while costing ~150-250 calls/run × 6 ≈ 900-1,500/day instead of ~6,000/day
+    // at hourly — see IdleRefreshIntervalSeconds/LiveRefreshIntervalSeconds for how this trades off
     // against live-score polling budget.
-    public int SyncIntervalMinutes { get; set; } = 60;
+    public int SyncIntervalMinutes { get; set; } = 240;
 
     // A single well-known bookmaker's prices, rather than showing every one of the 50+ bookmakers
     // this provider has per match — keeps sync payloads small (odds pages are capped at 5 matches
@@ -44,10 +44,11 @@ public class HighlightlyOptions
 
     // ...and switches to this cadence whenever at least one tracked match is in progress. Costs a
     // fixed ~14 calls/tick (one call per tracked league, not a paginated worldwide fetch — see
-    // HighlightlyMatchSyncService), so a 30s live cadence plus hourly idle checks, hourly odds sync
-    // (SyncIntervalMinutes), and once-daily fixture discovery comes to roughly 18,600 calls/day even
-    // on a heavy ~12-live-hour Saturday (staggered EFL kickoffs through a European night) — leaves
-    // real headroom against the 25,000 req/day quota, but re-check real usage after a live matchday
-    // if this ever gets pushed further.
-    public int LiveRefreshIntervalSeconds { get; set; } = 30;
+    // HighlightlyMatchSyncService), confirmed via real production logs once the earlier
+    // future-fixture-date bug (see HighlightlyMatchSyncService.RefreshLiveAsync) was fixed. At 15s
+    // that's ~3,360 calls/hour of live coverage; with SyncIntervalMinutes moved to 4h (~900-1,500/day
+    // instead of ~6,000/day) the daily budget left for live ticks is ~23,250-23,900, i.e. ~6.9h/day —
+    // tight on the heaviest ~8-10h Saturdays (staggered EFL kickoffs through a Saturday-evening
+    // European night game), so re-check real usage after a genuinely heavy matchday.
+    public int LiveRefreshIntervalSeconds { get; set; } = 15;
 }
