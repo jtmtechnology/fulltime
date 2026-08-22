@@ -8,15 +8,16 @@ namespace FullTime.Api.BetBuilder;
 
 // The only caller of RefreshLiveAsync/RefreshFixturesAsync is HighlightlyMatchSyncBackgroundService's
 // timer — same choke-point pattern as BetBuilderSyncService for the extra markets. This is now the
-// primary sync: fixtures, live scores, and match status all come from Highlightly's global (no
-// leagueId) matches-by-date endpoint, filtered to HighlightlyLeagueMap.TrackedLeagueIds — one
-// paginated fetch per date instead of one call per tracked league.
+// primary sync: fixtures, live scores, and match status all come from one
+// football/matches?leagueId=X&date=Y call per HighlightlyLeagueMap.TrackedLeagueIds entry, per date
+// — NOT the global (no leagueId) matches-by-date endpoint, which returns every match worldwide and
+// has to be paginated through in full just to find the ones we track (confirmed 800+ matches / ~9
+// pages on a busy Saturday). Costs a fixed ~14 calls per tick regardless of how many matches are
+// happening worldwide that day, instead of a variable, sometimes much larger, page count.
 //
-// Split into two cadences to stay well within the 7,500 req/day RapidAPI quota: fixtures and prices
-// barely change once set, so there's no need to re-poll them often, but a live match's score does —
-// see the "Retire free-api-live-football-data" plan's rate-limit writeup for the numbers that led
-// here (a global per-date fetch on a busy day can be 5-10+ pages; refetching several days of that
-// every few minutes burned through the daily quota in under 10 hours in practice).
+// Split into two cadences to stay well within the RapidAPI daily quota: fixtures and prices barely
+// change once set, so there's no need to re-poll them often, but a live match's score does — see
+// HighlightlyOptions.FixtureDiscoveryIntervalMinutes.
 public class HighlightlyMatchSyncService(
     HighlightlyClient client,
     AppDbContext db,
@@ -79,37 +80,25 @@ public class HighlightlyMatchSyncService(
 
     private async Task<int> FetchAndUpsertDateAsync(DateOnly date, CancellationToken ct)
     {
-        var offset = 0;
         var count = 0;
 
-        while (true)
+        foreach (var leagueId in HighlightlyLeagueMap.TrackedLeagueIds)
         {
-            MatchesResponse? page;
+            List<MatchDto> matches;
             try
             {
-                page = await client.GetAllMatchesAsync(date, offset, ct);
+                matches = await client.GetMatchesAsync((int)leagueId, SeasonFor(date), date, ct);
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to fetch matches for {Date} at offset {Offset}", date, offset);
-                break;
+                logger.LogWarning(ex, "Failed to fetch matches for league {LeagueId} on {Date}", leagueId, date);
+                continue;
             }
 
-            if (page is null || page.Data.Count == 0)
-            {
-                break;
-            }
-
-            foreach (var dto in page.Data.Where(m => HighlightlyLeagueMap.TrackedLeagueIds.Contains(m.League.Id)))
+            foreach (var dto in matches)
             {
                 await UpsertMatchAsync(dto, ct);
                 count++;
-            }
-
-            offset += page.Data.Count;
-            if (page.Pagination is null || offset >= page.Pagination.TotalCount)
-            {
-                break;
             }
         }
 
@@ -120,6 +109,9 @@ public class HighlightlyMatchSyncService(
 
         return count;
     }
+
+    // European domestic/UEFA seasons run August–May and are numbered by their starting year.
+    private static int SeasonFor(DateOnly date) => date.Month >= 7 ? date.Year : date.Year - 1;
 
     private async Task UpsertMatchAsync(MatchDto dto, CancellationToken ct)
     {

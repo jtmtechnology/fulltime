@@ -23,24 +23,28 @@ public class HighlightlyOptions
     // each) and gives a consistent, recognisable price source across the app.
     public string BookmakerName { get; set; } = "bet365";
 
-    // How many dates (today..today+N-1) fixture discovery fetches, via the global (no leagueId)
-    // matches-by-date endpoint. This runs once a day (FixtureDiscoveryIntervalMinutes) rather than
-    // every tick — see HighlightlyMatchSyncService.RefreshFixturesAsync — so it can afford to cover
-    // the same window MatchWindowDays prices.
+    // How many dates (today..today+N-1) fixture discovery fetches, one football/matches?leagueId=X
+    // call per HighlightlyLeagueMap.TrackedLeagueIds entry per date. This runs once a day
+    // (FixtureDiscoveryIntervalMinutes) rather than every tick — see
+    // HighlightlyMatchSyncService.RefreshFixturesAsync — so it can afford to cover the same window
+    // MatchWindowDays prices.
     public int MatchSyncDaysAhead { get; set; } = 7;
 
     // How often HighlightlyMatchSyncService.RefreshFixturesAsync (the full future-fixture window)
-    // runs, separately from RefreshLiveAsync (today + any unfinished match, every tick). A global
-    // per-date fetch can be several pages on a busy day, and re-fetching a whole week of that every
-    // few minutes is what actually burned through the 7,500 req/day RapidAPI quota in under 10 hours
-    // during the Highlightly cutover — see the retirement plan's rate-limit writeup. Fixtures don't
-    // need re-discovering that often.
+    // runs, separately from RefreshLiveAsync (today + any unfinished match, every tick). Fixtures
+    // don't need re-discovering that often once captured.
     public int FixtureDiscoveryIntervalMinutes { get; set; } = 1440;
 
     // RefreshLiveAsync backs off to this cadence when nothing's live, and switches to
     // LiveRefreshIntervalSeconds whenever at least one tracked match is in progress. Scoped to just
-    // today + catch-up dates (not the whole future window), so this can stay reasonably frequent
-    // without approaching the daily quota.
-    public int IdleRefreshIntervalSeconds { get; set; } = 300;
-    public int LiveRefreshIntervalSeconds { get; set; } = 60;
+    // today + catch-up dates (not the whole future window) and now costing a fixed ~14 calls/tick
+    // (one call per tracked league, not a paginated worldwide fetch — see
+    // HighlightlyMatchSyncService), so this affords a much shorter cadence than before without
+    // meaningfully risking the daily quota. Sized against the 25,000 req/day tier: even a heavy
+    // Saturday with ~10 live hours (120 ticks/hour × 14 calls at 30s) plus ~14 idle hours (20
+    // ticks/hour × 14 calls at 180s) comes to roughly 21,000 calls/day including fixture discovery
+    // and the Bet Builder/odds sync — leaves real headroom, but re-check real usage after a live
+    // matchday if this ever gets pushed further.
+    public int IdleRefreshIntervalSeconds { get; set; } = 180;
+    public int LiveRefreshIntervalSeconds { get; set; } = 30;
 }

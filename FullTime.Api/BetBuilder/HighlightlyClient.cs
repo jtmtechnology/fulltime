@@ -17,14 +17,6 @@ public class HighlightlyClient(HttpClient httpClient, ILogger<HighlightlyClient>
         return result?.Data ?? [];
     }
 
-    // Every match worldwide on a given date, no leagueId filter — one paginated stream instead of
-    // one call per tracked league. Callers paginate on the response's own Pagination.TotalCount.
-    public async Task<MatchesResponse?> GetAllMatchesAsync(DateOnly date, int offset, CancellationToken ct = default)
-    {
-        return await GetWithRetryAsync<MatchesResponse>(
-            $"football/matches?date={date:yyyy-MM-dd}&limit=100&offset={offset}", ct);
-    }
-
     // Paginated at 5 matches per page by the provider (each match's own "odds" array carries every
     // bookmaker/market combination for it, so this stays 5 matches/page regardless of whether
     // bookmakerName filters it down) — callers loop, bumping offset by the page size until it
