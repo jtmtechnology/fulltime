@@ -1,6 +1,13 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true"></application>
+    <!-- android:usesCleartextTraffic: the API itself is plain HTTP with no domain yet (see
+         FullTime.Api/Program.cs's own comment on this), so this isn't a downgrade — it's making
+         SignalR's connection consistent with the REST calls, which already go over cleartext HTTP
+         successfully via a different underlying handler (AndroidMessageHandler, used internally by
+         SignalR.Client's HttpConnection, otherwise enforces Android's default cleartext block even
+         though the app's regular HttpClient doesn't hit it). Confirmed via a real "Cleartext HTTP
+         traffic to 10.0.2.2 not permitted" failure without this. -->
+    <application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true" android:usesCleartextTraffic="true"></application>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
 </manifest>

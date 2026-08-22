@@ -34,5 +34,16 @@
     <array>
         <string>remote-notification</string>
     </array>
+    <!-- The API itself is plain HTTP with no domain yet (see FullTime.Api/Program.cs's own comment
+         on this) — regular API calls already work today, likely because .NET's default HTTP stack
+         on iOS doesn't enforce ATS the same way SignalR.Client's connection does internally (same
+         asymmetry confirmed on Android: SignalR failed with a cleartext block that the app's own
+         HttpClient never hit). Added pre-emptively so the SignalR live-score push doesn't silently
+         fail the same way on a real iPhone. -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
 </dict>
 </plist>
