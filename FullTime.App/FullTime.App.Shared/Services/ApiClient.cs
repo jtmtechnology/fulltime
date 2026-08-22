@@ -11,6 +11,10 @@ public record LoginOutcome(bool Success, bool EmailNotVerified, LoginResponse? R
 // session (MAUI). BaseAddress is configured per-host at DI registration time.
 public class ApiClient(HttpClient httpClient, AuthState authState)
 {
+    // Lets MatchUpdatesClient point its SignalR connection at the same API host this ApiClient
+    // already talks to, without duplicating the per-host base-URL configuration.
+    public Uri? BaseAddress => httpClient.BaseAddress;
+
     private void Authorize()
     {
         httpClient.DefaultRequestHeaders.Authorization = authState.Token is null

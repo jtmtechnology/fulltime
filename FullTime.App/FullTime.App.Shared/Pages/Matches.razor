@@ -2,6 +2,7 @@
 @implements IDisposable
 @inject ApiClient Api
 @inject MatchLeaguePreferences Prefs
+@inject MatchUpdatesClient MatchUpdates
 
 <PageTitle>FullTime — Matches</PageTitle>
 
@@ -82,6 +83,54 @@ else if (!string.IsNullOrEmpty(_status))
         await Prefs.InitializeAsync();
         await LoadMatchesAsync(quiet: false);
         _ = AutoRefreshLoopAsync(_cts.Token);
+
+        // Live score pushes on top of the poll loop above, which stays as a fallback if the
+        // connection never establishes (e.g. a proxy blocking WebSockets) — a failure here must not
+        // break the page.
+        MatchUpdates.MatchUpdated += OnMatchUpdated;
+        try
+        {
+            await MatchUpdates.EnsureStartedAsync();
+        }
+        catch
+        {
+            // Falls back to the existing poll loop.
+        }
+    }
+
+    // Patches a displayed match card's score/status directly instead of waiting for the next poll.
+    // UpcomingMatchDto is a positional record (init-only properties), so this replaces the entry
+    // rather than mutating it in place.
+    private void OnMatchUpdated(MatchLiveUpdate update)
+    {
+        if (_leagues is null)
+        {
+            return;
+        }
+
+        var changed = false;
+        foreach (var group in _leagues)
+        {
+            var index = group.Matches.FindIndex(m => m.Id == update.MatchId);
+            if (index < 0)
+            {
+                continue;
+            }
+
+            group.Matches[index] = group.Matches[index] with
+            {
+                Status = update.Status,
+                HomeScore = update.HomeScore,
+                AwayScore = update.AwayScore,
+            };
+            changed = true;
+            break;
+        }
+
+        if (changed)
+        {
+            InvokeAsync(StateHasChanged);
+        }
     }
 
     private async Task SelectDateAsync(DateOnly day)
@@ -206,6 +255,7 @@ else if (!string.IsNullOrEmpty(_status))
 
     public void Dispose()
     {
+        MatchUpdates.MatchUpdated -= OnMatchUpdated;
         _cts.Cancel();
         _cts.Dispose();
     }

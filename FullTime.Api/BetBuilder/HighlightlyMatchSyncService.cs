@@ -1,6 +1,8 @@
 using FullTime.Api.BetBuilder.Dtos;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
+using FullTime.Api.Realtime;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -22,6 +24,7 @@ public class HighlightlyMatchSyncService(
     HighlightlyClient client,
     AppDbContext db,
     IOptions<HighlightlyOptions> options,
+    IHubContext<MatchUpdatesHub> hub,
     ILogger<HighlightlyMatchSyncService> logger)
 {
     // Today's date plus any not-yet-Finished match's own kickoff date (a match that kicked off but
@@ -141,9 +144,23 @@ public class HighlightlyMatchSyncService(
         match.KickoffTime = dto.Date;
 
         var (homeScore, awayScore) = ParseScore(dto.State.Score?.Current);
+        var newStatus = DeriveStatus(dto.State.Description);
+
+        var changed = match.HomeScore != homeScore || match.AwayScore != awayScore || match.Status != newStatus;
+
         match.HomeScore = homeScore;
         match.AwayScore = awayScore;
-        match.Status = DeriveStatus(dto.State.Description);
+        match.Status = newStatus;
+
+        if (changed)
+        {
+            // Fire-and-forget from the caller's perspective isn't appropriate here (a dropped
+            // exception would look like a silent no-op), but a connected client missing one push
+            // is harmless — it'll see the change on its next poll regardless — so this doesn't need
+            // to block the sync loop or retry.
+            await hub.Clients.All.SendAsync(
+                "MatchUpdated", new MatchLiveUpdate(match.Id, homeScore, awayScore, newStatus.ToString()), ct);
+        }
     }
 
     // "current" is a "H - A" string (e.g. "1 - 2"), null before kickoff.

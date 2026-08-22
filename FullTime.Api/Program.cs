@@ -6,6 +6,7 @@ using FullTime.Api.Betting;
 using FullTime.Api.Data;
 using FullTime.Api.Leagues;
 using FullTime.Api.Notifications;
+using FullTime.Api.Realtime;
 using Google.Apis.Auth.OAuth2;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +19,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+builder.Services.AddSignalR();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
@@ -97,6 +99,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<MatchUpdatesHub>("/hubs/matches");
 
 app.MapGet("/api/config", async (HighlightlyMatchSyncService syncService, Microsoft.Extensions.Options.IOptions<HighlightlyOptions> opts) =>
 {
