@@ -13,10 +13,13 @@ public class HighlightlyOptions
     // confirmed some leagues have nothing priced 3 days out while others have prices 6+ days out).
     public int MatchWindowDays { get; set; } = 7;
 
-    // Once fixtures and prices are captured they barely change, so there's no need to keep
-    // re-polling them anywhere near as often as live scores — this is a once-a-day cadence for both
-    // this (Bet Builder markets + 1X2 odds) and HighlightlyMatchSyncService's fixture discovery.
-    public int SyncIntervalMinutes { get; set; } = 1440;
+    // Prices barely move once set, so this doesn't need anywhere near live-score frequency — but
+    // hourly (rather than once/day) catches matches that had no price at all yet (confirmed
+    // happening — some fixtures simply aren't priced by any bookmaker until closer to kickoff) much
+    // sooner than waiting up to 24h. ~150-250 calls/run × 24 ≈ 6,000/day against the 25,000 req/day
+    // quota — see IdleRefreshIntervalSeconds/LiveRefreshIntervalSeconds for how this trades off
+    // against live-score polling budget.
+    public int SyncIntervalMinutes { get; set; } = 60;
 
     // A single well-known bookmaker's prices, rather than showing every one of the 50+ bookmakers
     // this provider has per match — keeps sync payloads small (odds pages are capped at 5 matches
@@ -35,16 +38,16 @@ public class HighlightlyOptions
     // don't need re-discovering that often once captured.
     public int FixtureDiscoveryIntervalMinutes { get; set; } = 1440;
 
-    // RefreshLiveAsync backs off to this cadence when nothing's live, and switches to
-    // LiveRefreshIntervalSeconds whenever at least one tracked match is in progress. Scoped to just
-    // today + catch-up dates (not the whole future window) and now costing a fixed ~14 calls/tick
-    // (one call per tracked league, not a paginated worldwide fetch — see
-    // HighlightlyMatchSyncService), so this affords a much shorter cadence than before without
-    // meaningfully risking the daily quota. Sized against the 25,000 req/day tier: even a heavy
-    // Saturday with ~10 live hours (120 ticks/hour × 14 calls at 30s) plus ~14 idle hours (20
-    // ticks/hour × 14 calls at 180s) comes to roughly 21,000 calls/day including fixture discovery
-    // and the Bet Builder/odds sync — leaves real headroom, but re-check real usage after a live
-    // matchday if this ever gets pushed further.
-    public int IdleRefreshIntervalSeconds { get; set; } = 180;
+    // RefreshLiveAsync backs off to this cadence when nothing's live — no need for anything faster
+    // than hourly, since nothing changes between matches.
+    public int IdleRefreshIntervalSeconds { get; set; } = 3600;
+
+    // ...and switches to this cadence whenever at least one tracked match is in progress. Costs a
+    // fixed ~14 calls/tick (one call per tracked league, not a paginated worldwide fetch — see
+    // HighlightlyMatchSyncService), so a 30s live cadence plus hourly idle checks, hourly odds sync
+    // (SyncIntervalMinutes), and once-daily fixture discovery comes to roughly 18,600 calls/day even
+    // on a heavy ~12-live-hour Saturday (staggered EFL kickoffs through a European night) — leaves
+    // real headroom against the 25,000 req/day quota, but re-check real usage after a live matchday
+    // if this ever gets pushed further.
     public int LiveRefreshIntervalSeconds { get; set; } = 30;
 }
