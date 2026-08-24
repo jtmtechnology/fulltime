@@ -41,7 +41,6 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
     [HttpGet("mine")]
     public async Task<ActionResult<List<LeagueSummaryDto>>> GetMyLeagues(CancellationToken ct)
     {
-        var startingBalance = options.Value.StartingBalance;
         var userId = CurrentUserId;
 
         // Filter the specific membership by CurrentUserId inside the projection — filtering the
@@ -54,13 +53,13 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
             {
                 l.Id, l.Name, l.InviteCode, l.CreatedAt, l.CreatedByUserId,
                 MemberCount = l.Memberships.Count,
-                MyBalance = l.Memberships.First(m => m.UserId == userId).Balance,
+                MyMembership = l.Memberships.First(m => m.UserId == userId),
             })
             .ToListAsync(ct);
 
         return Ok(leagues.Select(l => new LeagueSummaryDto(
             l.Id, l.Name, l.InviteCode, l.MemberCount, l.CreatedAt, l.CreatedByUserId == userId,
-            l.MyBalance, l.MyBalance - startingBalance)));
+            l.MyMembership.Balance, l.MyMembership.Balance - l.MyMembership.StartingBalance)));
     }
 
     [HttpPost("join")]
@@ -102,13 +101,11 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
             return NotFound(new { error = "League not found." });
         }
 
-        var startingBalance = options.Value.StartingBalance;
-
         var entries = await db.LeagueMemberships
             .Where(m => m.LeagueId == id)
             .Include(m => m.User)
             .OrderByDescending(m => m.Balance)
-            .Select(m => new LeaderboardEntryDto(m.UserId, m.User!.Name, m.Balance, m.Balance - startingBalance))
+            .Select(m => new LeaderboardEntryDto(m.UserId, m.User!.Name, m.Balance, m.Balance - m.StartingBalance))
             .ToListAsync(ct);
 
         return Ok(entries);

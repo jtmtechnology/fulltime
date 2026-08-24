@@ -1,9 +1,7 @@
-using FullTime.Api.Betting;
 using FullTime.Api.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace FullTime.Api.Controllers;
 
@@ -12,7 +10,7 @@ public record LeaderboardEntryDto(Guid UserId, string Name, decimal Balance, dec
 [ApiController]
 [Route("api/leaderboard")]
 [Authorize]
-public class LeaderboardController(AppDbContext db, IOptions<BettingOptions> options) : ControllerBase
+public class LeaderboardController(AppDbContext db) : ControllerBase
 {
     // "Worldwide" isn't its own bankroll — every bet is placed in a specific league now, so this is
     // a computed average of a user's balance across whichever leagues they're in (not a sum, so
@@ -21,14 +19,21 @@ public class LeaderboardController(AppDbContext db, IOptions<BettingOptions> opt
     [HttpGet]
     public async Task<ActionResult<List<LeaderboardEntryDto>>> GetLeaderboard(CancellationToken ct)
     {
-        var startingBalance = options.Value.StartingBalance;
-
+        // Both averages must come from the same group - averaging balance against a separately
+        // re-read *current* StartingBalance config broke this exactly like the per-league
+        // leaderboard did (confirmed happening: a global StartingBalance change retroactively
+        // inflated everyone's profit, or masked a real loss as a fake profit).
         var entries = await db.LeagueMemberships
             .GroupBy(m => new { m.UserId, m.User!.Name })
-            .Select(g => new { g.Key.UserId, g.Key.Name, AverageBalance = g.Average(m => m.Balance) })
+            .Select(g => new
+            {
+                g.Key.UserId, g.Key.Name,
+                AverageBalance = g.Average(m => m.Balance),
+                AverageStartingBalance = g.Average(m => m.StartingBalance),
+            })
             .OrderByDescending(e => e.AverageBalance)
             .Take(50)
-            .Select(e => new LeaderboardEntryDto(e.UserId, e.Name, e.AverageBalance, e.AverageBalance - startingBalance))
+            .Select(e => new LeaderboardEntryDto(e.UserId, e.Name, e.AverageBalance, e.AverageBalance - e.AverageStartingBalance))
             .ToListAsync(ct);
 
         return Ok(entries);

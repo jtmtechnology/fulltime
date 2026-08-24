@@ -31,6 +31,7 @@ public class LeagueService(AppDbContext db, PushNotificationService push, IOptio
             UserId = userId,
             JoinedAt = league.CreatedAt,
             Balance = options.Value.StartingBalance,
+            StartingBalance = options.Value.StartingBalance,
         });
 
         db.Leagues.Add(league);
@@ -62,6 +63,7 @@ public class LeagueService(AppDbContext db, PushNotificationService push, IOptio
             UserId = userId,
             JoinedAt = DateTime.UtcNow,
             Balance = options.Value.StartingBalance,
+            StartingBalance = options.Value.StartingBalance,
         });
         await db.SaveChangesAsync(ct);
 
