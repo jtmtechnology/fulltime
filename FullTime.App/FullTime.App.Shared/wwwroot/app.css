@@ -390,6 +390,14 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
     padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer;
 }
 
+.primary-btn {
+    background: var(--accent); color: var(--accent-ink); border: none;
+    padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer;
+}
+.primary-btn[disabled], .cancel-btn[disabled] { opacity: 0.5; }
+
+.button-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+
 .place-bet-btn {
     width: 100%; background: var(--accent); color: var(--accent-ink); border: none;
     padding: 1rem; border-radius: 10px; font-weight: 700; font-size: 1.15rem; margin-top: 0.75rem; cursor: pointer;

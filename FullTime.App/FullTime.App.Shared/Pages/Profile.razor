@@ -12,6 +12,23 @@
 
 <div class="status @(_error ? "error" : "")">@_status</div>
 
+<div class="page-card">
+    <h2>Ads</h2>
+    @if (AdsRemoval.AdsRemoved)
+    {
+        <p class="hint live">Ads removed — thanks for supporting FullTime!</p>
+    }
+    else
+    {
+        <p class="hint">Remove the ads shown on startup and after placing a bet with a one-off purchase.</p>
+        <div class="button-row">
+            <button type="button" class="primary-btn" disabled="@_purchasing" @onclick="PurchaseRemoveAdsAsync">Remove ads</button>
+            <button type="button" class="cancel-btn" disabled="@_purchasing" @onclick="RestorePurchasesAsync">Restore purchase</button>
+        </div>
+        <div class="status @(_adsError ? "error" : "")">@_adsStatus</div>
+    }
+</div>
+
 @if (_me is not null)
 {
     <div class="page-card">
@@ -60,19 +77,6 @@
                 </label>
             }
         </div>
-
-        <h2>Ads</h2>
-        @if (AdsRemoval.AdsRemoved)
-        {
-            <p class="hint live">Ads removed — thanks for supporting FullTime!</p>
-        }
-        else
-        {
-            <p class="hint">Remove the ads shown on startup and after placing a bet with a one-off purchase.</p>
-            <button type="button" disabled="@_purchasing" @onclick="PurchaseRemoveAdsAsync">Remove ads</button>
-            <button type="button" class="cancel-btn" disabled="@_purchasing" @onclick="RestorePurchasesAsync">Restore purchase</button>
-            <div class="status @(_adsError ? "error" : "")">@_adsStatus</div>
-        }
     </div>
 }
 
