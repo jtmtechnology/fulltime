@@ -27,16 +27,16 @@ else if (!string.IsNullOrEmpty(_status))
                 Stake £@bet.Stake.ToString("0.00") ·
                 Combined odds @bet.CombinedOdds.ToString("0.00") ·
                 Potential return £@bet.PotentialReturn.ToString("0.00") ·
-                <span class="@StatusClass(bet.Status)">@bet.Status</span>
+                <span class="@BetDisplay.StatusClass(bet.Status)">@bet.Status</span>
             </div>
             <ul>
                 @foreach (var leg in bet.Legs)
                 {
-                    <li class="@StatusClass(leg.Outcome)">
+                    <li class="@BetDisplay.StatusClass(leg.Outcome)">
                         <span class="muted">@leg.KickoffTime.ToLocalTime().ToString("ddd d MMM HH:mm")</span> —
                         <LogoImg Src="@leg.HomeLogoUrl" CssClass="team-logo" Alt="@leg.HomeTeam" />@leg.HomeTeam v
                         <LogoImg Src="@leg.AwayLogoUrl" CssClass="team-logo" Alt="@leg.AwayTeam" />@leg.AwayTeam
-                        — @string.Join(" + ", leg.Picks.Select(p => PickLabel(p, leg.HomeTeam, leg.AwayTeam))) (@leg.Outcome)
+                        — @string.Join(" + ", leg.Picks.Select(p => BetDisplay.PickLabel(p, leg.HomeTeam, leg.AwayTeam))) (@leg.Outcome)
                     </li>
                 }
             </ul>
@@ -74,20 +74,4 @@ else if (!string.IsNullOrEmpty(_status))
         }
     }
 
-    private static string StatusClass(string status) => status switch
-    {
-        "Won" or "Correct" => "live",
-        "Lost" or "Incorrect" => "error",
-        _ => "muted",
-    };
-
-    private static string PickLabel(BetLegPickDto pick, string homeTeam, string awayTeam) => pick.MarketType switch
-    {
-        "MatchResult" => pick.Side switch { "Home" => "Home win", "Away" => "Away win", _ => "Draw" },
-        "OverUnder" => $"{pick.Side} {pick.Line:0.##}",
-        "BothTeamsToScore" => pick.Side == "Yes" ? "BTTS Yes" : "BTTS No",
-        "CorrectScore" => $"{pick.PredictedHomeScore} - {pick.PredictedAwayScore}",
-        "FirstTeamToScore" => $"First to score: {pick.Side switch { "Home" => homeTeam, "Away" => awayTeam, _ => "None" }}",
-        _ => pick.Side ?? "",
-    };
 }

@@ -184,6 +184,14 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         return await res.Content.ReadFromJsonAsync<List<LeaderboardEntryDto>>() ?? [];
     }
 
+    public async Task<List<LiveBetDto>> GetLiveBetsAsync(Guid leagueId)
+    {
+        Authorize();
+        var res = await httpClient.GetAsync($"api/leagues/{leagueId}/live-bets");
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+        return await res.Content.ReadFromJsonAsync<List<LiveBetDto>>() ?? [];
+    }
+
     public async Task LeaveLeagueAsync(Guid leagueId)
     {
         Authorize();

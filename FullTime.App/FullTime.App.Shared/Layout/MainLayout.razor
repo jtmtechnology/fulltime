@@ -2,6 +2,7 @@
 @implements IDisposable
 @inject AuthState AuthState
 @inject IPushRegistrar PushRegistrar
+@inject NavigationManager Nav
 
 <div class="top-bar">
     <a class="brand-logo" href="">
@@ -23,7 +24,11 @@
 </div>
 
 <main class="content">
-    @Body
+    @* @key forces a new DOM node per route so the fade-in CSS animation replays on every tab
+       switch instead of only on first render. *@
+    <div class="page-transition" @key="Nav.Uri">
+        @Body
+    </div>
 </main>
 
 <BetSlipSheet />

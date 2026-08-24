@@ -230,6 +230,7 @@ else if (!string.IsNullOrEmpty(_status))
             .OrderBy(m => DateOnly.FromDateTime(m.KickoffTime.ToLocalTime().Date))
             .ThenBy(m => LeagueSortRank(m.LeagueId))
             .ThenBy(m => m.LeagueId)
+            .ThenBy(m => m.Status == "Finished" ? 1 : 0)
             .ThenBy(m => m.KickoffTime)
             .ThenBy(m => m.HomeTeam)
             .GroupBy(m => DateOnly.FromDateTime(m.KickoffTime.ToLocalTime().Date));

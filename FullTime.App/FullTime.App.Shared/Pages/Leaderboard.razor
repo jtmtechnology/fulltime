@@ -62,8 +62,12 @@ else
 
                 @if (_leagueEntries.TryGetValue(league.Id, out var entries) && entries.Count > 0)
                 {
+                    var liveStakeByUser = _leagueLiveBets.TryGetValue(league.Id, out var liveBets)
+                        ? liveBets.GroupBy(b => b.UserName).ToDictionary(g => g.Key, g => g.Sum(b => b.Stake))
+                        : [];
+
                     <table class="simple-table">
-                        <thead><tr><th>#</th><th>Name</th><th>Balance</th><th>Profit</th></tr></thead>
+                        <thead><tr><th>#</th><th>Name</th><th>Balance</th><th>Profit</th><th>Live Bets</th></tr></thead>
                         <tbody>
                             @for (var i = 0; i < entries.Count; i++)
                             {
@@ -73,13 +77,36 @@ else
                                     <td>@entry.Name</td>
                                     <td>£@entry.Balance.ToString("0.00")</td>
                                     <td class="@(entry.Profit >= 0 ? "live" : "error")">@(entry.Profit >= 0 ? "+£" : "-£")@Math.Abs(entry.Profit).ToString("0.00")</td>
+                                    <td>
+                                        @if (liveStakeByUser.TryGetValue(entry.Name, out var stake))
+                                        {
+                                            <span class="live">£@stake.ToString("0.00")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="muted">—</span>
+                                        }
+                                    </td>
                                 </tr>
                             }
                         </tbody>
                     </table>
                 }
 
-                <button type="button" class="leave-league-btn" @onclick="() => LeaveLeagueAsync(league.Id)">Leave league</button>
+                @if (_confirmingLeaveLeagueId == league.Id)
+                {
+                    <div class="leave-league-confirm">
+                        <span>Leave "@league.Name"? You'll need a new invite to rejoin.</span>
+                        <div class="leave-league-confirm-actions">
+                            <button type="button" class="leave-league-btn" @onclick="() => LeaveLeagueAsync(league.Id)">Yes, leave</button>
+                            <button type="button" class="cancel-btn" @onclick="() => _confirmingLeaveLeagueId = null">Cancel</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <button type="button" class="leave-league-btn" @onclick="() => _confirmingLeaveLeagueId = league.Id">Leave league</button>
+                }
             </div>
         }
     }
@@ -118,7 +145,9 @@ else
     private List<LeaderboardEntryDto>? _worldwide;
     private List<LeagueSummaryDto>? _myLeagues;
     private Dictionary<Guid, List<LeaderboardEntryDto>> _leagueEntries = [];
+    private Dictionary<Guid, List<LiveBetDto>> _leagueLiveBets = [];
     private bool _loadingLeagues = true;
+    private Guid? _confirmingLeaveLeagueId;
 
     private string _status = "Loading…";
     private bool _error;
@@ -165,12 +194,15 @@ else
         _myLeagues = await Api.GetMyLeaguesAsync();
 
         var loaded = await Task.WhenAll(_myLeagues.Select(async l =>
-            (Id: l.Id, Entries: await Api.GetLeagueLeaderboardAsync(l.Id))));
+            (Id: l.Id, Entries: await Api.GetLeagueLeaderboardAsync(l.Id), LiveBets: await Api.GetLiveBetsAsync(l.Id))));
         _leagueEntries = loaded.ToDictionary(e => e.Id, e => e.Entries);
+        _leagueLiveBets = loaded.ToDictionary(e => e.Id, e => e.LiveBets);
 
         _loadingLeagues = false;
     }
 
+    // One line per leg — a same-game multi (Bet Builder) already reads fine joined with " + "
+    // (mirrors MyBets.razor's leg rendering); a multi-match accumulator gets one line per match.
     private async Task CreateLeagueAsync()
     {
         if (string.IsNullOrWhiteSpace(_newLeagueName))
@@ -245,6 +277,8 @@ else
 
     private async Task LeaveLeagueAsync(Guid leagueId)
     {
+        _confirmingLeaveLeagueId = null;
+
         try
         {
             await Api.LeaveLeagueAsync(leagueId);
