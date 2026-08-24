@@ -51,4 +51,11 @@ public class HighlightlyOptions
     // tight on the heaviest ~8-10h Saturdays (staggered EFL kickoffs through a Saturday-evening
     // European night game), so re-check real usage after a genuinely heavy matchday.
     public int LiveRefreshIntervalSeconds { get; set; } = 15;
+
+    // How often BetBuilderSyncService.ResolveFirstGoalScorersAsync runs, independent of
+    // SyncIntervalMinutes — this used to share the odds-sync cadence, which meant a
+    // FirstTeamToScore bet could sit unsettled for up to SyncIntervalMinutes after its match
+    // actually finished (confirmed happening: ~4h delay once that moved to 240). Kept short since
+    // it only touches matches Finished in the last 3 days and is cheap when nothing's pending.
+    public int GoalScorerResolutionIntervalMinutes { get; set; } = 5;
 }

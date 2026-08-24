@@ -20,12 +20,7 @@ public class BetBuilderSyncService(
     // longer interval — the only realistic cause is a cold-start race against
     // HighlightlyMatchSyncService's own first tick, since there's no second provider to reconcile
     // against any more (see HighlightlyMatchSyncService's own comment for the full context).
-    public async Task<bool> RefreshAsync(CancellationToken ct = default)
-    {
-        var foundMatches = await SyncMatchesAndOddsAsync(ct);
-        await ResolveFirstGoalScorersAsync(ct);
-        return foundMatches;
-    }
+    public Task<bool> RefreshAsync(CancellationToken ct = default) => SyncMatchesAndOddsAsync(ct);
 
     private async Task<bool> SyncMatchesAndOddsAsync(CancellationToken ct)
     {
@@ -195,7 +190,14 @@ public class BetBuilderSyncService(
     // FirstTeamToScore pick on a match whose events never backfill was already stuck Pending either
     // way (see SettlementService.ResolvePicksAsync's guard), so aging out the retry doesn't change
     // any settlement outcome — it just stops paying quota to reconfirm "still unknown".
-    private async Task ResolveFirstGoalScorersAsync(CancellationToken ct)
+    //
+    // Called independently by GoalScorerResolutionBackgroundService on its own short interval, NOT
+    // from RefreshAsync/the odds-sync cadence — it used to run only every SyncIntervalMinutes (moved
+    // to 4h to save quota), which meant a FirstTeamToScore bet could sit unsettled for up to 4 hours
+    // after its match actually finished (confirmed happening: a bet on a match that finished ~21:20
+    // didn't settle until ~01:06 the next sync tick). This is a settlement-latency concern, not a
+    // price-freshness one, so it shouldn't share the odds interval.
+    public async Task ResolveFirstGoalScorersAsync(CancellationToken ct)
     {
         var cutoff = DateTime.UtcNow.AddDays(-3);
         var candidates = await db.Matches

@@ -66,6 +66,7 @@ builder.Services.AddHostedService<HighlightlyMatchSyncBackgroundService>();
 builder.Services.AddHostedService<HighlightlyFixtureDiscoveryBackgroundService>();
 builder.Services.AddScoped<BetBuilderSyncService>();
 builder.Services.AddHostedService<BetBuilderSyncBackgroundService>();
+builder.Services.AddHostedService<GoalScorerResolutionBackgroundService>();
 
 builder.Services.AddScoped<BetService>();
 builder.Services.AddScoped<SettlementService>();
