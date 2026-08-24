@@ -2,6 +2,8 @@
 @implements IDisposable
 @inject AuthState AuthState
 @inject IPushRegistrar PushRegistrar
+@inject IAdsRemovalService AdsRemoval
+@inject IInterstitialAdService InterstitialAds
 @inject NavigationManager Nav
 
 <div class="top-bar">
@@ -49,6 +51,13 @@
         {
             await PushRegistrar.RegisterAsync();
         }
+
+        await AdsRemoval.InitializeAsync();
+
+        // Fire-and-forget: MainLayout only ever initializes once per app session (it's the root
+        // layout), so this is the "on cold launch" hook - must not block first render waiting on
+        // an ad network round trip.
+        _ = InterstitialAds.ShowOnStartupAsync();
     }
 
     private void OnAuthChanged()

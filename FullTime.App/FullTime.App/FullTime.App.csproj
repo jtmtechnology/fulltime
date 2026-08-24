@@ -92,6 +92,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="$(MauiVersion)" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
     <PackageReference Include="Plugin.FirebasePushNotifications" Version="3.2.11" />
+    <PackageReference Include="Plugin.InAppBilling" Version="10.0.0" />
+    <PackageReference Include="Plugin.MauiMTAdmob" Version="2.4.0" />
   </ItemGroup>
 
   <ItemGroup>

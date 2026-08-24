@@ -45,5 +45,13 @@
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
+    <!-- Google's published TEST AdMob app ID - swap for the real one from the AdMob console before
+         releasing to the App Store. Real submission will also need an NSUserTrackingUsageDescription
+         (App Tracking Transparency prompt) and Google's SKAdNetworkItems list added - neither is
+         needed to build/test with the TEST ID, but both are required before going live with ads. -->
+    <key>GADApplicationIdentifier</key>
+    <string>ca-app-pub-3940256099942544~1458002511</string>
+    <key>GADIsAdManagerApp</key>
+    <true/>
 </dict>
 </plist>

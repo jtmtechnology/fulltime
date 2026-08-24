@@ -2,6 +2,7 @@
 using FullTime.App.Shared.Services;
 using FullTime.App.Services;
 using Plugin.FirebasePushNotifications;
+using Plugin.MauiMtAdmob;
 
 namespace FullTime.App;
 
@@ -13,6 +14,7 @@ public static class MauiProgram
         builder
             .UseMauiApp<App>()
             .UseFirebasePushNotifications()
+            .UseMauiMTAdmob()
             .ConfigureFonts(fonts =>
             {
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -24,6 +26,8 @@ public static class MauiProgram
         builder.Services.AddScoped<ISlipStore, MauiSlipStore>();
         builder.Services.AddScoped<IActiveContextStore, MauiActiveContextStore>();
         builder.Services.AddScoped<IPushRegistrar, MauiPushRegistrar>();
+        builder.Services.AddSingleton<IAdsRemovalService, MauiAdsRemovalService>();
+        builder.Services.AddSingleton<IInterstitialAdService, MauiInterstitialAdService>();
         builder.Services.AddScoped<IMatchLeaguePreferenceStore, MauiMatchLeaguePreferenceStore>();
         builder.Services.AddScoped<AuthState>();
         builder.Services.AddScoped<BetSlipState>();

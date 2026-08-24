@@ -4,6 +4,7 @@
 @inject AuthState AuthState
 @inject NavigationManager Nav
 @inject MatchLeaguePreferences LeaguePrefs
+@inject IAdsRemovalService AdsRemoval
 
 <PageTitle>FullTime — Profile</PageTitle>
 
@@ -59,6 +60,19 @@
                 </label>
             }
         </div>
+
+        <h2>Ads</h2>
+        @if (AdsRemoval.AdsRemoved)
+        {
+            <p class="hint live">Ads removed — thanks for supporting FullTime!</p>
+        }
+        else
+        {
+            <p class="hint">Remove the ads shown on startup and after placing a bet with a one-off purchase.</p>
+            <button type="button" disabled="@_purchasing" @onclick="PurchaseRemoveAdsAsync">Remove ads</button>
+            <button type="button" class="cancel-btn" disabled="@_purchasing" @onclick="RestorePurchasesAsync">Restore purchase</button>
+            <div class="status @(_adsError ? "error" : "")">@_adsStatus</div>
+        }
     </div>
 }
 
@@ -74,6 +88,9 @@
     private string _status = "";
     private bool _error;
     private List<LeagueSummaryDto>? _myLeagues;
+    private bool _purchasing;
+    private string _adsStatus = "";
+    private bool _adsError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -144,5 +161,51 @@
     private async Task ToggleLeagueAsync(long leagueId, bool enabled)
     {
         await LeaguePrefs.SetEnabledAsync(leagueId, enabled);
+    }
+
+    private async Task PurchaseRemoveAdsAsync()
+    {
+        _purchasing = true;
+        _adsStatus = "Processing…";
+        _adsError = false;
+
+        try
+        {
+            var bought = await AdsRemoval.PurchaseRemoveAdsAsync();
+            _adsStatus = bought ? "" : "Purchase didn't complete — try again.";
+            _adsError = !bought;
+        }
+        catch (Exception ex)
+        {
+            _adsStatus = $"Error: {ex.Message}";
+            _adsError = true;
+        }
+        finally
+        {
+            _purchasing = false;
+        }
+    }
+
+    private async Task RestorePurchasesAsync()
+    {
+        _purchasing = true;
+        _adsStatus = "Checking for a previous purchase…";
+        _adsError = false;
+
+        try
+        {
+            var owned = await AdsRemoval.RestorePurchasesAsync();
+            _adsStatus = owned ? "" : "No previous purchase found on this account.";
+            _adsError = false;
+        }
+        catch (Exception ex)
+        {
+            _adsStatus = $"Error: {ex.Message}";
+            _adsError = true;
+        }
+        finally
+        {
+            _purchasing = false;
+        }
     }
 }

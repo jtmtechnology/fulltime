@@ -5,6 +5,7 @@
 @inject ActiveContextState ContextState
 @inject ApiClient Api
 @inject NavigationManager Nav
+@inject IInterstitialAdService InterstitialAds
 
 @if (Slip.Legs.Count > 0 || Slip.IsOpen)
 {
@@ -169,6 +170,7 @@
             _slipStatus = "Bet placed! See My Bets for details.";
             _slipError = false;
             await ContextState.RefreshBalanceAsync();
+            _ = InterstitialAds.ShowAfterBetPlacedAsync();
         }
         catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
         {
