@@ -26,23 +26,25 @@ else if (!string.IsNullOrEmpty(_status))
 {
     @if (_worldwide is { Count: > 0 })
     {
-        <table class="simple-table">
-            <thead>
-                <tr><th>#</th><th>Name</th><th>Balance</th><th>Profit</th></tr>
-            </thead>
-            <tbody>
-                @for (var i = 0; i < _worldwide.Count; i++)
-                {
-                    var entry = _worldwide[i];
-                    <tr>
-                        <td>@(i + 1)</td>
-                        <td>@entry.Name</td>
-                        <td>£@entry.Balance.ToString("0.00")</td>
-                        <td class="@(entry.Profit >= 0 ? "live" : "error")">@(entry.Profit >= 0 ? "+£" : "-£")@Math.Abs(entry.Profit).ToString("0.00")</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+        <div class="table-scroll">
+            <table class="simple-table">
+                <thead>
+                    <tr><th>#</th><th>Name</th><th>Balance</th><th>Profit</th></tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < _worldwide.Count; i++)
+                    {
+                        var entry = _worldwide[i];
+                        <tr>
+                            <td>@(i + 1)</td>
+                            <td>@entry.Name</td>
+                            <td>£@entry.Balance.ToString("0.00")</td>
+                            <td class="@(entry.Profit >= 0 ? "live" : "error")">@(entry.Profit >= 0 ? "+£" : "-£")@Math.Abs(entry.Profit).ToString("0.00")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     }
 }
 else
@@ -66,31 +68,33 @@ else
                         ? pendingBets.GroupBy(b => b.UserName).ToDictionary(g => g.Key, g => g.Sum(b => b.Stake))
                         : [];
 
-                    <table class="simple-table">
-                        <thead><tr><th>#</th><th>Name</th><th>Balance</th><th>Profit</th><th>Bets Placed</th></tr></thead>
-                        <tbody>
-                            @for (var i = 0; i < entries.Count; i++)
-                            {
-                                var entry = entries[i];
-                                <tr>
-                                    <td>@(i + 1)</td>
-                                    <td>@entry.Name</td>
-                                    <td>£@entry.Balance.ToString("0.00")</td>
-                                    <td class="@(entry.Profit >= 0 ? "live" : "error")">@(entry.Profit >= 0 ? "+£" : "-£")@Math.Abs(entry.Profit).ToString("0.00")</td>
-                                    <td>
-                                        @if (pendingStakeByUser.TryGetValue(entry.Name, out var stake))
-                                        {
-                                            <span class="live">£@stake.ToString("0.00")</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="muted">—</span>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                    <div class="table-scroll">
+                        <table class="simple-table">
+                            <thead><tr><th>#</th><th>Name</th><th>Balance</th><th>Profit</th><th>Bets Placed</th></tr></thead>
+                            <tbody>
+                                @for (var i = 0; i < entries.Count; i++)
+                                {
+                                    var entry = entries[i];
+                                    <tr>
+                                        <td>@(i + 1)</td>
+                                        <td>@entry.Name</td>
+                                        <td>£@entry.Balance.ToString("0.00")</td>
+                                        <td class="@(entry.Profit >= 0 ? "live" : "error")">@(entry.Profit >= 0 ? "+£" : "-£")@Math.Abs(entry.Profit).ToString("0.00")</td>
+                                        <td>
+                                            @if (pendingStakeByUser.TryGetValue(entry.Name, out var stake))
+                                            {
+                                                <span class="live">£@stake.ToString("0.00")</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="muted">—</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 }
 
                 @if (_confirmingLeaveLeagueId == league.Id)
