@@ -1,5 +1,9 @@
 using FullTime.App.Shared.Services;
 using Plugin.MauiMtAdmob;
+using Plugin.MauiMtAdmob.Extra;
+#if ANDROID
+using Microsoft.Maui.ApplicationModel;
+#endif
 
 namespace FullTime.App.Services;
 
@@ -8,17 +12,28 @@ namespace FullTime.App.Services;
 // while developing, but MUST be swapped for real ad unit IDs from the AdMob console before this
 // goes to the App Store / Play Store, or no real ad (and no real revenue) will ever show.
 //
-// IMTAdmob's public surface is poll-based, not event-based (confirmed against the installed 2.4.0
-// package - it exposes LoadInterstitial/IsInterstitialLoaded/ShowInterstitial only), so readiness
-// is checked by polling IsInterstitialLoaded() rather than awaiting a load-completed event. The
-// plugin can only hold one loaded interstitial at a time (multi-load is a licensed-version
-// feature), so this preloads the next ad right after showing one, rather than loading fresh on
-// every call - keeps the post-bet ad from making the user wait on a cold load most of the time.
+// Confirmed on both a real iPhone (ad-hoc build) and the Android emulator: no ad ever showed. Root
+// cause - .UseMauiMTAdmob() in MauiProgram only registers the plugin's DI wiring, it does NOT
+// initialize it. IMTAdmob.IsPluginInitialised stays false, and Load/Show silently no-op, until
+// Init(...) is called explicitly - and Android's and iOS's Init overloads take genuinely different
+// parameters (confirmed via reflection against the installed 2.4.0 package: Android's takes a
+// MauiAppCompatActivity + explicit appId; iOS's takes neither, since the App ID there already comes
+// from Info.plist's GADApplicationIdentifier). handleTrackingAuthorization: true on iOS means the
+// plugin's Init call handles the App Tracking Transparency prompt itself, so AppDelegate no longer
+// needs to request it separately.
+//
+// IMTAdmob's readiness check is poll-based (IsInterstitialLoaded()), not event-based, despite the
+// interface exposing OnInterstitialLoaded/OnInterstitialFailedToLoad events - polling is simpler and
+// avoids a second place needing to track load state. The plugin can only hold one loaded
+// interstitial at a time (multi-load is a licensed-version feature), so this preloads the next ad
+// right after showing one, rather than loading fresh on every call.
 public class MauiInterstitialAdService(IAdsRemovalService adsRemoval) : IInterstitialAdService
 {
     private static string AdUnitId => DeviceInfo.Platform == DevicePlatform.iOS
         ? "ca-app-pub-3940256099942544/4411468910"  // Google TEST interstitial ad unit (iOS)
         : "ca-app-pub-3940256099942544/1033173712"; // Google TEST interstitial ad unit (Android)
+
+    private static bool _initialized;
 
     public Task ShowOnStartupAsync() => ShowAsync();
 
@@ -30,6 +45,8 @@ public class MauiInterstitialAdService(IAdsRemovalService adsRemoval) : IInterst
         {
             return;
         }
+
+        EnsureInitialized();
 
         if (!CrossMauiMTAdmob.Current.IsInterstitialLoaded())
         {
@@ -49,6 +66,30 @@ public class MauiInterstitialAdService(IAdsRemovalService adsRemoval) : IInterst
         {
             CrossMauiMTAdmob.Current.LoadInterstitial(AdUnitId);
         }
+    }
+
+    private static void EnsureInitialized()
+    {
+        if (_initialized)
+        {
+            return;
+        }
+        _initialized = true;
+
+#if ANDROID
+        const string appId = "ca-app-pub-3940256099942544~3347511713"; // Google TEST AdMob app ID (Android)
+        var activity = Platform.CurrentActivity as Microsoft.Maui.MauiAppCompatActivity;
+        CrossMauiMTAdmob.Current.Init(
+            activity!, appId, license: null!, nativeAdsId: null!, openAdsId: null!,
+            enableOpenAds: false, tagForUnderAgeOfConsent: false, testDeviceId: null!,
+            forceTesting: false, geography: DebugGeography.DEBUG_GEOGRAPHY_DISABLED,
+            initialiseConsentAtStartup: false, debugMode: true);
+#elif IOS
+        CrossMauiMTAdmob.Current.Init(
+            license: null!, nativeAdsId: null!, openAdsId: null!, enableOpenAds: false,
+            tagForUnderAgeOfConsent: false, testDeviceIds: [], geography: DebugGeography.DEBUG_GEOGRAPHY_DISABLED,
+            initialiseConsentAtStartup: false, debugMode: true, handleTrackingAuthorization: true);
+#endif
     }
 
     private static async Task LoadAndWaitAsync()
