@@ -18,6 +18,11 @@ public class ActiveContextState(IActiveContextStore store, ApiClient api)
     public decimal? Balance { get; private set; }
     public List<LeagueSummaryDto> MyLeagues { get; private set; } = [];
 
+    // Every LeagueSummaryDto is about the current user's own membership, so any of them carries the
+    // same CurrencySymbol - falls back to £ before the first league loads, same default the API
+    // itself uses for a user with no country set.
+    public string CurrencySymbol => MyLeagues.FirstOrDefault()?.CurrencySymbol ?? "£";
+
     // UI-only, but this is the service the trigger button and the sheet both already share —
     // same reasoning as BetSlipState.IsOpen.
     public bool IsSheetOpen { get; private set; }

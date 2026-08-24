@@ -11,6 +11,7 @@ builder.Services.AddRazorComponents()
 // Add device-specific services used by the FullTime.App.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
 builder.Services.AddScoped<IJwtStore, WebJwtStore>();
+builder.Services.AddScoped<ILocaleProvider, WebLocaleProvider>();
 builder.Services.AddScoped<ISlipStore, WebSlipStore>();
 builder.Services.AddScoped<IActiveContextStore, WebActiveContextStore>();
 builder.Services.AddScoped<IPushRegistrar, WebPushRegistrar>();

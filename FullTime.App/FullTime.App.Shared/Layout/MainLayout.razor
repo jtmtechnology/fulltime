@@ -4,6 +4,8 @@
 @inject IPushRegistrar PushRegistrar
 @inject IAdsRemovalService AdsRemoval
 @inject IInterstitialAdService InterstitialAds
+@inject ILocaleProvider LocaleProvider
+@inject ApiClient Api
 @inject NavigationManager Nav
 
 <div class="top-bar">
@@ -50,6 +52,7 @@
         if (AuthState.IsLoggedIn)
         {
             await PushRegistrar.RegisterAsync();
+            _ = SetCountryFromLocaleIfUnsetAsync();
         }
 
         await AdsRemoval.InitializeAsync();
@@ -65,6 +68,33 @@
         if (AuthState.IsLoggedIn)
         {
             _ = PushRegistrar.RegisterAsync();
+            _ = SetCountryFromLocaleIfUnsetAsync();
+        }
+    }
+
+    // No picker — the user's currency symbol is meant to just work, detected from their device/
+    // browser locale the first time they're seen with no Country set. Best-effort: a failed detection
+    // or save just leaves Country null for now (falls back to £ everywhere), retried next time
+    // AuthState changes or the app cold-starts, rather than surfacing an error for a cosmetic detail.
+    private async Task SetCountryFromLocaleIfUnsetAsync()
+    {
+        try
+        {
+            var me = await Api.GetMeAsync();
+            if (me.Country is not null)
+            {
+                return;
+            }
+
+            var countryCode = await LocaleProvider.GetCountryCodeAsync();
+            if (countryCode is not null)
+            {
+                await Api.UpdateProfileAsync(me.Name, countryCode);
+            }
+        }
+        catch
+        {
+            // best-effort, see comment above
         }
     }
 

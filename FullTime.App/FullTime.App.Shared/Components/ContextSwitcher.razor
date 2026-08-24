@@ -5,7 +5,7 @@
 @if (AuthState.IsLoggedIn)
 {
     <button type="button" class="balance-chip" @onclick="() => ContextState.ToggleSheetOpen()">
-        @ContextState.Current.Name@(ContextState.Balance is not null ? $" £{ContextState.Balance:0.00}" : "")
+        @ContextState.Current.Name@(ContextState.Balance is not null ? $" {ContextState.CurrencySymbol}{ContextState.Balance:0.00}" : "")
     </button>
 }
 

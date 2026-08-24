@@ -1,11 +1,12 @@
 using FullTime.Api.Data;
+using FullTime.Api.Localization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullTime.Api.Controllers;
 
-public record LeaderboardEntryDto(Guid UserId, string Name, decimal Balance, decimal Profit);
+public record LeaderboardEntryDto(Guid UserId, string Name, decimal Balance, decimal Profit, string CurrencySymbol);
 
 [ApiController]
 [Route("api/leaderboard")]
@@ -23,18 +24,21 @@ public class LeaderboardController(AppDbContext db) : ControllerBase
         // re-read *current* StartingBalance config broke this exactly like the per-league
         // leaderboard did (confirmed happening: a global StartingBalance change retroactively
         // inflated everyone's profit, or masked a real loss as a fake profit).
-        var entries = await db.LeagueMemberships
-            .GroupBy(m => new { m.UserId, m.User!.Name })
+        var rows = await db.LeagueMemberships
+            .GroupBy(m => new { m.UserId, m.User!.Name, m.User!.Country })
             .Select(g => new
             {
-                g.Key.UserId, g.Key.Name,
+                g.Key.UserId, g.Key.Name, g.Key.Country,
                 AverageBalance = g.Average(m => m.Balance),
                 AverageStartingBalance = g.Average(m => m.StartingBalance),
             })
             .OrderByDescending(e => e.AverageBalance)
             .Take(50)
-            .Select(e => new LeaderboardEntryDto(e.UserId, e.Name, e.AverageBalance, e.AverageBalance - e.AverageStartingBalance))
             .ToListAsync(ct);
+
+        var entries = rows.Select(r => new LeaderboardEntryDto(
+            r.UserId, r.Name, r.AverageBalance, r.AverageBalance - r.AverageStartingBalance,
+            CurrencyCatalog.SymbolFor(r.Country))).ToList();
 
         return Ok(entries);
     }

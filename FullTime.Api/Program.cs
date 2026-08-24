@@ -71,6 +71,8 @@ builder.Services.AddHostedService<GoalScorerResolutionBackgroundService>();
 builder.Services.AddScoped<BetService>();
 builder.Services.AddScoped<SettlementService>();
 builder.Services.AddHostedService<SettlementSweepService>();
+builder.Services.AddScoped<WeeklyTopUpService>();
+builder.Services.AddHostedService<WeeklyTopUpBackgroundService>();
 
 builder.Services.AddScoped<LeagueService>();
 

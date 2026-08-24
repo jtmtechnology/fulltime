@@ -23,6 +23,7 @@ public static class MauiProgram
         // Add device-specific services used by the FullTime.App.Shared project
         builder.Services.AddSingleton<IFormFactor, FormFactor>();
         builder.Services.AddScoped<IJwtStore, MauiJwtStore>();
+        builder.Services.AddScoped<ILocaleProvider, MauiLocaleProvider>();
         builder.Services.AddScoped<ISlipStore, MauiSlipStore>();
         builder.Services.AddScoped<IActiveContextStore, MauiActiveContextStore>();
         builder.Services.AddScoped<IPushRegistrar, MauiPushRegistrar>();

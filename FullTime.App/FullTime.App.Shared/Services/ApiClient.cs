@@ -97,10 +97,10 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         return (await res.Content.ReadFromJsonAsync<MeDto>())!;
     }
 
-    public async Task<MeDto> UpdateProfileAsync(string name)
+    public async Task<MeDto> UpdateProfileAsync(string name, string? country)
     {
         Authorize();
-        var res = await httpClient.PutAsJsonAsync("api/users/me", new UpdateProfileRequest(name));
+        var res = await httpClient.PutAsJsonAsync("api/users/me", new UpdateProfileRequest(name, country));
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
         return (await res.Content.ReadFromJsonAsync<MeDto>())!;
     }

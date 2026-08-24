@@ -17,6 +17,9 @@
 <body>
     <Routes @rendermode="InteractiveServer" />
     <ReconnectModal />
+    <script>
+        window.fullTimeGetLocale = () => navigator.language;
+    </script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>
 

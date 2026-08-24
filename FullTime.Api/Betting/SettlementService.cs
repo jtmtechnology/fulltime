@@ -213,7 +213,8 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
 
         foreach (var bet in wonBets)
         {
-            await push.SendToUserAsync(bet.UserId, "Bet won!", $"{DescribeBet(bet)} — +£{bet.PotentialReturn:0.00}", ct);
+            var symbol = Localization.CurrencyCatalog.SymbolFor(bet.User?.Country);
+            await push.SendToUserAsync(bet.UserId, "Bet won!", $"{DescribeBet(bet)} — +{symbol}{bet.PotentialReturn:0.00}", ct);
         }
 
         foreach (var bet in lostBets)

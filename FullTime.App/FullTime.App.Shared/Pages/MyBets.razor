@@ -1,6 +1,7 @@
 @page "/mybets"
 @inject ApiClient Api
 @inject AuthState AuthState
+@inject ActiveContextState ContextState
 @inject NavigationManager Nav
 
 <PageTitle>FullTime — My Bets</PageTitle>
@@ -24,9 +25,9 @@ else if (!string.IsNullOrEmpty(_status))
             <div>
                 <span class="context-badge">@(bet.LeagueName ?? "Worldwide")</span>
                 <strong>@bet.PlacedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong> —
-                Stake £@bet.Stake.ToString("0.00") ·
+                Stake @ContextState.CurrencySymbol@bet.Stake.ToString("0.00") ·
                 Combined odds @bet.CombinedOdds.ToString("0.00") ·
-                Potential return £@bet.PotentialReturn.ToString("0.00") ·
+                Potential return @ContextState.CurrencySymbol@bet.PotentialReturn.ToString("0.00") ·
                 <span class="@BetDisplay.StatusClass(bet.Status)">@bet.Status</span>
             </div>
             <ul>

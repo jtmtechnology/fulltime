@@ -14,8 +14,9 @@ public record ResendVerificationRequest(string Email);
 public record ForgotPasswordRequest(string Email);
 public record ResetPasswordRequest(string Token, string NewPassword);
 
-public record MeDto(Guid Id, string Name, string Email, bool EmailVerified, decimal Balance, DateTime CreatedAt);
-public record UpdateProfileRequest(string Name);
+public record MeDto(Guid Id, string Name, string Email, bool EmailVerified, decimal Balance, DateTime CreatedAt,
+    string? Country, string CurrencySymbol);
+public record UpdateProfileRequest(string Name, string? Country);
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
 public record MessageResponse(string? Message, string? Error, string? Reason);
@@ -61,10 +62,10 @@ public record PendingBetDto(Guid BetId, string UserName, decimal Stake);
 public record BetBuilderMarketDto(string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore, decimal Price);
 public record BetBuilderMarketsResponse(bool Available, List<BetBuilderMarketDto> Markets, string? Bookmaker, string? BookmakerLogoUrl);
 
-public record LeaderboardEntryDto(Guid UserId, string Name, decimal Balance, decimal Profit);
+public record LeaderboardEntryDto(Guid UserId, string Name, decimal Balance, decimal Profit, string CurrencySymbol);
 
 public record CreateLeagueRequest(string Name);
 public record JoinLeagueRequest(string InviteCode);
 public record LeagueSummaryDto(
     Guid Id, string Name, string InviteCode, int MemberCount, DateTime CreatedAt, bool IsOwner,
-    decimal Balance, decimal Profit);
+    decimal Balance, decimal Profit, string CurrencySymbol);

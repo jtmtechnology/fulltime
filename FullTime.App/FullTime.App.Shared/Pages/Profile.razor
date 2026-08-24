@@ -133,7 +133,7 @@
 
         try
         {
-            _me = await Api.UpdateProfileAsync(_name);
+            _me = await Api.UpdateProfileAsync(_name, _me?.Country);
             _nameStatus = "Saved.";
         }
         catch (Exception ex)

@@ -13,4 +13,9 @@ public class User
     public DateTime? PasswordResetTokenExpiresAt { get; set; }
     public decimal Balance { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    // ISO 3166-1 alpha-2 (e.g. "GB", "US") - drives which currency symbol this user's own amounts
+    // are shown with (see Localization.CurrencyCatalog). Null means "never set", which falls back to
+    // £ - the symbol every user's amounts were hardcoded to before this field existed.
+    public string? Country { get; set; }
 }

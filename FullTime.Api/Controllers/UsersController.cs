@@ -1,14 +1,16 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using FullTime.Api.Data;
+using FullTime.Api.Localization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullTime.Api.Controllers;
 
-public record MeDto(Guid Id, string Name, string Email, bool EmailVerified, decimal Balance, DateTime CreatedAt);
-public record UpdateProfileRequest(string Name);
+public record MeDto(Guid Id, string Name, string Email, bool EmailVerified, decimal Balance, DateTime CreatedAt,
+    string? Country, string CurrencySymbol);
+public record UpdateProfileRequest(string Name, string? Country);
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
 [ApiController]
@@ -22,7 +24,7 @@ public class UsersController(AppDbContext db) : ControllerBase
         var user = await db.Users.FindAsync([CurrentUserId], ct);
         if (user is null) return NotFound();
 
-        return Ok(new MeDto(user.Id, user.Name, user.Email, user.EmailVerified, user.Balance, user.CreatedAt));
+        return Ok(ToMeDto(user));
     }
 
     [HttpPut("me")]
@@ -37,10 +39,15 @@ public class UsersController(AppDbContext db) : ControllerBase
         if (user is null) return NotFound();
 
         user.Name = request.Name;
+        user.Country = request.Country;
         await db.SaveChangesAsync(ct);
 
-        return Ok(new MeDto(user.Id, user.Name, user.Email, user.EmailVerified, user.Balance, user.CreatedAt));
+        return Ok(ToMeDto(user));
     }
+
+    private static MeDto ToMeDto(FullTime.Api.Models.User user) => new(
+        user.Id, user.Name, user.Email, user.EmailVerified, user.Balance, user.CreatedAt,
+        user.Country, CurrencyCatalog.SymbolFor(user.Country));
 
     [HttpPost("me/change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, CancellationToken ct)

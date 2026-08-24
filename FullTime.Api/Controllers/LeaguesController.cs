@@ -3,6 +3,7 @@ using System.Security.Claims;
 using FullTime.Api.Betting;
 using FullTime.Api.Data;
 using FullTime.Api.Leagues;
+using FullTime.Api.Localization;
 using FullTime.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,7 +16,7 @@ public record CreateLeagueRequest(string Name);
 public record JoinLeagueRequest(string InviteCode);
 public record LeagueSummaryDto(
     Guid Id, string Name, string InviteCode, int MemberCount, DateTime CreatedAt, bool IsOwner,
-    decimal Balance, decimal Profit);
+    decimal Balance, decimal Profit, string CurrencySymbol);
 public record PendingBetDto(Guid BetId, string UserName, decimal Stake);
 
 [ApiController]
@@ -33,9 +34,10 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
 
         var startingBalance = options.Value.StartingBalance;
         var league = await leagueService.CreateAsync(CurrentUserId, request.Name.Trim(), ct);
+        var currencySymbol = await CurrentUserCurrencySymbolAsync(ct);
 
         return Created(string.Empty, new LeagueSummaryDto(
-            league.Id, league.Name, league.InviteCode, 1, league.CreatedAt, true, startingBalance, 0));
+            league.Id, league.Name, league.InviteCode, 1, league.CreatedAt, true, startingBalance, 0, currencySymbol));
     }
 
     [HttpGet("mine")]
@@ -57,9 +59,11 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
             })
             .ToListAsync(ct);
 
+        var currencySymbol = await CurrentUserCurrencySymbolAsync(ct);
+
         return Ok(leagues.Select(l => new LeagueSummaryDto(
             l.Id, l.Name, l.InviteCode, l.MemberCount, l.CreatedAt, l.CreatedByUserId == userId,
-            l.MyMembership.Balance, l.MyMembership.Balance - l.MyMembership.StartingBalance)));
+            l.MyMembership.Balance, l.MyMembership.Balance - l.MyMembership.StartingBalance, currencySymbol)));
     }
 
     [HttpPost("join")]
@@ -86,10 +90,11 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
 
         var league = result.League!;
         var memberCount = await db.LeagueMemberships.CountAsync(m => m.LeagueId == league.Id, ct);
+        var currencySymbol = await CurrentUserCurrencySymbolAsync(ct);
 
         return Ok(new LeagueSummaryDto(
             league.Id, league.Name, league.InviteCode, memberCount, league.CreatedAt,
-            league.CreatedByUserId == CurrentUserId, startingBalance, 0));
+            league.CreatedByUserId == CurrentUserId, startingBalance, 0, currencySymbol));
     }
 
     [HttpGet("{id:guid}/leaderboard")]
@@ -101,12 +106,17 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
             return NotFound(new { error = "League not found." });
         }
 
-        var entries = await db.LeagueMemberships
+        // CurrencyCatalog.SymbolFor can't be translated to SQL, so project the raw country first and
+        // resolve the symbol afterwards, in memory.
+        var rows = await db.LeagueMemberships
             .Where(m => m.LeagueId == id)
             .Include(m => m.User)
             .OrderByDescending(m => m.Balance)
-            .Select(m => new LeaderboardEntryDto(m.UserId, m.User!.Name, m.Balance, m.Balance - m.StartingBalance))
+            .Select(m => new { m.UserId, m.User!.Name, m.Balance, Profit = m.Balance - m.StartingBalance, m.User!.Country })
             .ToListAsync(ct);
+
+        var entries = rows.Select(r => new LeaderboardEntryDto(
+            r.UserId, r.Name, r.Balance, r.Profit, CurrencyCatalog.SymbolFor(r.Country))).ToList();
 
         return Ok(entries);
     }
@@ -155,6 +165,12 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
         await db.SaveChangesAsync(ct);
 
         return NoContent();
+    }
+
+    private async Task<string> CurrentUserCurrencySymbolAsync(CancellationToken ct)
+    {
+        var country = await db.Users.Where(u => u.Id == CurrentUserId).Select(u => u.Country).FirstOrDefaultAsync(ct);
+        return CurrencyCatalog.SymbolFor(country);
     }
 
     private Guid CurrentUserId =>
