@@ -16,7 +16,7 @@ public record JoinLeagueRequest(string InviteCode);
 public record LeagueSummaryDto(
     Guid Id, string Name, string InviteCode, int MemberCount, DateTime CreatedAt, bool IsOwner,
     decimal Balance, decimal Profit);
-public record LiveBetDto(Guid BetId, string UserName, decimal Stake);
+public record PendingBetDto(Guid BetId, string UserName, decimal Stake);
 
 [ApiController]
 [Route("api/leagues")]
@@ -114,10 +114,11 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
         return Ok(entries);
     }
 
-    // Every league member's pending bets on a match that's currently live - shown at the top of the
-    // league's card on the leaderboard so friends can see what's in play, not just settled standings.
-    [HttpGet("{id:guid}/live-bets")]
-    public async Task<ActionResult<List<LiveBetDto>>> GetLiveBets(Guid id, CancellationToken ct)
+    // Every league member's currently-pending bets (any match state, not just in-progress) - shown
+    // in a "Bets Placed" column on the leaderboard so friends can see what's riding on the table,
+    // not just settled standings.
+    [HttpGet("{id:guid}/pending-bets")]
+    public async Task<ActionResult<List<PendingBetDto>>> GetPendingBets(Guid id, CancellationToken ct)
     {
         var isMember = await db.LeagueMemberships.AnyAsync(m => m.LeagueId == id && m.UserId == CurrentUserId, ct);
         if (!isMember)
@@ -127,12 +128,11 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
 
         var bets = await db.Bets
             .Include(b => b.User)
-            .Where(b => b.LeagueId == id && b.Status == BetStatus.Pending
-                && b.Legs.Any(l => l.Match!.Status == MatchStatus.InProgress))
+            .Where(b => b.LeagueId == id && b.Status == BetStatus.Pending)
             .OrderByDescending(b => b.PlacedAt)
             .ToListAsync(ct);
 
-        return Ok(bets.Select(b => new LiveBetDto(b.Id, b.User!.Name, b.Stake)).ToList());
+        return Ok(bets.Select(b => new PendingBetDto(b.Id, b.User!.Name, b.Stake)).ToList());
     }
 
     [HttpDelete("{id:guid}/membership")]
