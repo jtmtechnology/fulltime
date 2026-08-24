@@ -5,10 +5,20 @@ namespace FullTime.Api.BetBuilder;
 
 public class HighlightlyClient(HttpClient httpClient, ILogger<HighlightlyClient> logger)
 {
-    private const int MaxRetries = 4;
     private static readonly TimeSpan MinRequestInterval = TimeSpan.FromMilliseconds(300);
+    private static readonly TimeSpan QuotaCooldown = TimeSpan.FromMinutes(15);
     private readonly SemaphoreSlim _throttleGate = new(1, 1);
     private DateTime _lastRequestUtc = DateTime.MinValue;
+
+    // Static and shared across every HighlightlyClient instance - AddHttpClient<HighlightlyClient>
+    // makes this a transient typed client, so each background loop (live-score sync, fixture
+    // discovery, odds sync, goal-scorer resolution) injects its own instance. A 429 here is
+    // RapidAPI's daily/monthly quota cap, not a per-second burst limit (requests are already
+    // serialized to one every 300ms below), so it won't clear in seconds. Without this shared gate,
+    // every independent loop rediscovers the same exhaustion on its own schedule and retries it away
+    // with its own attempts, multiplying the wasted calls instead of sharing the "account is cooling
+    // down" fact - this is what pushed usage from 85% to 100% within minutes.
+    private static DateTime _quotaExhaustedUntilUtc = DateTime.MinValue;
 
     public async Task<List<MatchDto>> GetMatchesAsync(int leagueId, int season, DateOnly date, CancellationToken ct = default)
     {
@@ -40,26 +50,31 @@ public class HighlightlyClient(HttpClient httpClient, ILogger<HighlightlyClient>
 
     private async Task<T?> GetWithRetryAsync<T>(string requestUri, CancellationToken ct)
     {
-        for (var attempt = 1; ; attempt++)
+        var cooldownRemaining = _quotaExhaustedUntilUtc - DateTime.UtcNow;
+        if (cooldownRemaining > TimeSpan.Zero)
         {
-            await WaitForThrottleSlotAsync(ct);
-            using var response = await httpClient.GetAsync(requestUri, ct);
-            var isThrottled = response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.Forbidden;
-            if (!isThrottled)
-            {
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
-            }
-
-            if (attempt >= MaxRetries)
-            {
-                response.EnsureSuccessStatusCode();
-            }
-
-            var delay = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(attempt * 3);
-            logger.LogInformation("Throttled ({StatusCode}) on {RequestUri}, retrying in {Delay}", response.StatusCode, requestUri, delay);
-            await Task.Delay(delay, ct);
+            throw new HttpRequestException(
+                $"Highlightly quota cooling down for another {cooldownRemaining.TotalSeconds:F0}s, skipping {requestUri}");
         }
+
+        await WaitForThrottleSlotAsync(ct);
+        using var response = await httpClient.GetAsync(requestUri, ct);
+        var isThrottled = response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.Forbidden;
+        if (!isThrottled)
+        {
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
+        }
+
+        var cooldown = response.Headers.RetryAfter?.Delta is { } retryAfter && retryAfter > QuotaCooldown
+            ? retryAfter
+            : QuotaCooldown;
+        _quotaExhaustedUntilUtc = DateTime.UtcNow.Add(cooldown);
+        logger.LogWarning(
+            "Throttled ({StatusCode}) on {RequestUri} - treating as quota exhaustion, cooling down all Highlightly calls until {Until:O}",
+            response.StatusCode, requestUri, _quotaExhaustedUntilUtc);
+        response.EnsureSuccessStatusCode();
+        return default;
     }
 
     private async Task WaitForThrottleSlotAsync(CancellationToken ct)

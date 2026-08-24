@@ -57,63 +57,75 @@ public class BetBuilderSyncService(
 
         foreach (var (leagueId, date) in oddsKeys)
         {
-            var offset = 0;
-            while (true)
+            // One league's failure (e.g. the provider throttling us) must not abort the whole tick —
+            // it used to propagate straight out of RefreshAsync, which made BetBuilderSyncBackgroundService
+            // treat the tick as "no matches found" and retry in 2 minutes instead of the intended
+            // SyncIntervalMinutes, re-triggering the same failure over and over (confirmed in
+            // production: a single throttle turned into indefinite 2-minute-interval hammering).
+            try
             {
-                // Fetched unfiltered (every bookmaker) in one call — cheaper than a second
-                // bookmaker-filtered call just for the 1X2 price, and SnapshotOneXTwoIfChangedAsync
-                // needs to see every bookmaker anyway.
-                var page = await client.GetOddsAsync(leagueId, date, offset, ct: ct);
-                if (page is null || page.Data.Count == 0)
+                var offset = 0;
+                while (true)
                 {
-                    break;
-                }
-
-                foreach (var matchOdds in page.Data)
-                {
-                    if (!matchByHighlightlyId.TryGetValue(matchOdds.MatchId, out var match))
+                    // Fetched unfiltered (every bookmaker) in one call — cheaper than a second
+                    // bookmaker-filtered call just for the 1X2 price, and SnapshotOneXTwoIfChangedAsync
+                    // needs to see every bookmaker anyway.
+                    var page = await client.GetOddsAsync(leagueId, date, offset, ct: ct);
+                    if (page is null || page.Data.Count == 0)
                     {
-                        continue;
+                        break;
                     }
 
-                    // 1X2: whichever bookmaker's "Full Time Result" entry appears first for this
-                    // match, restricted to BookmakerLogos' confirmed set so every displayed price
-                    // also has a logo — deliberately not pinned to a single opts.BookmakerName like
-                    // the other markets, so the price shown still varies by match (confirmed via a
-                    // real odds page that the first-listed bookmaker varies match to match).
-                    var fullTimeResult = matchOdds.Odds.FirstOrDefault(o =>
-                        o.Market == "Full Time Result" && BookmakerLogos.HasLogo(o.BookmakerName));
-                    if (fullTimeResult is not null)
+                    foreach (var matchOdds in page.Data)
                     {
-                        await SnapshotOneXTwoIfChangedAsync(match, fullTimeResult, fetchedAt, ct);
-                    }
-
-                    foreach (var entry in matchOdds.Odds)
-                    {
-                        if (!string.Equals(entry.BookmakerName, opts.BookmakerName, StringComparison.OrdinalIgnoreCase))
+                        if (!matchByHighlightlyId.TryGetValue(matchOdds.MatchId, out var match))
                         {
                             continue;
                         }
 
-                        foreach (var value in entry.Values)
+                        // 1X2: whichever bookmaker's "Full Time Result" entry appears first for this
+                        // match, restricted to BookmakerLogos' confirmed set so every displayed price
+                        // also has a logo — deliberately not pinned to a single opts.BookmakerName like
+                        // the other markets, so the price shown still varies by match (confirmed via a
+                        // real odds page that the first-listed bookmaker varies match to match).
+                        var fullTimeResult = matchOdds.Odds.FirstOrDefault(o =>
+                            o.Market == "Full Time Result" && BookmakerLogos.HasLogo(o.BookmakerName));
+                        if (fullTimeResult is not null)
                         {
-                            var outcome = ParseOutcome(entry.Market, value.Value);
-                            if (outcome is null)
+                            await SnapshotOneXTwoIfChangedAsync(match, fullTimeResult, fetchedAt, ct);
+                        }
+
+                        foreach (var entry in matchOdds.Odds)
+                        {
+                            if (!string.Equals(entry.BookmakerName, opts.BookmakerName, StringComparison.OrdinalIgnoreCase))
                             {
                                 continue;
                             }
 
-                            await UpsertMarketAsync(match.Id, outcome, value.Odd, fetchedAt, ct);
-                            storedCount++;
+                            foreach (var value in entry.Values)
+                            {
+                                var outcome = ParseOutcome(entry.Market, value.Value);
+                                if (outcome is null)
+                                {
+                                    continue;
+                                }
+
+                                await UpsertMarketAsync(match.Id, outcome, value.Odd, fetchedAt, ct);
+                                storedCount++;
+                            }
                         }
                     }
-                }
 
-                offset += page.Data.Count;
-                if (page.Pagination is null || offset >= page.Pagination.TotalCount)
-                {
-                    break;
+                    offset += page.Data.Count;
+                    if (page.Pagination is null || offset >= page.Pagination.TotalCount)
+                    {
+                        break;
+                    }
                 }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Failed to fetch odds for league {LeagueId} on {Date}", leagueId, date);
             }
         }
 
