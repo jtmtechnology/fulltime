@@ -17,6 +17,7 @@ public enum CreateLeagueOutcome
     Success,
     MaxLeaguesReached,
     ProfaneName,
+    NameTaken,
 }
 
 public record CreateLeagueResult(CreateLeagueOutcome Outcome, League? League = null);

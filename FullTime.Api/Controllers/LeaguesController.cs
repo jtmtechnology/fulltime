@@ -38,6 +38,7 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
             var error = result.Outcome switch
             {
                 CreateLeagueOutcome.ProfaneName => "That league name isn't allowed — please choose another.",
+                CreateLeagueOutcome.NameTaken => "That league name is already taken — please choose another.",
                 CreateLeagueOutcome.MaxLeaguesReached => $"You can only be in up to {LeagueService.MaxLeaguesPerUser} leagues.",
                 _ => "Could not create league.",
             };

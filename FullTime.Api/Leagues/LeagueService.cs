@@ -31,6 +31,15 @@ public class LeagueService(AppDbContext db, PushNotificationService push, IOptio
             return new CreateLeagueResult(CreateLeagueOutcome.MaxLeaguesReached);
         }
 
+        // Case-insensitive - otherwise "The Brownes" and "the brownes" would both show up on the
+        // worldwide leaderboard's League column looking like the same league, which is exactly the
+        // confusion this check exists to avoid.
+        var nameTaken = await db.Leagues.AnyAsync(l => l.Name.ToLower() == name.ToLower(), ct);
+        if (nameTaken)
+        {
+            return new CreateLeagueResult(CreateLeagueOutcome.NameTaken);
+        }
+
         var league = new League
         {
             Id = Guid.NewGuid(),
