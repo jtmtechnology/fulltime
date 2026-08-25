@@ -44,13 +44,14 @@ public class HighlightlyOptions
 
     // ...and switches to this cadence whenever at least one tracked match is in progress. Costs a
     // fixed ~14 calls/tick (one call per tracked league, not a paginated worldwide fetch — see
-    // HighlightlyMatchSyncService), confirmed via real production logs once the earlier
-    // future-fixture-date bug (see HighlightlyMatchSyncService.RefreshLiveAsync) was fixed. At 15s
-    // that's ~3,360 calls/hour of live coverage; with SyncIntervalMinutes moved to 4h (~900-1,500/day
-    // instead of ~6,000/day) the daily budget left for live ticks is ~23,250-23,900, i.e. ~6.9h/day —
-    // tight on the heaviest ~8-10h Saturdays (staggered EFL kickoffs through a Saturday-evening
-    // European night game), so re-check real usage after a genuinely heavy matchday.
-    public int LiveRefreshIntervalSeconds { get; set; } = 15;
+    // HighlightlyMatchSyncService). At 15s that was ~3,360 calls/hour of live coverage, which on its
+    // own exceeds the confirmed 25,000/day RapidAPI cap within an 8h heavy Saturday (staggered EFL
+    // kickoffs through a Saturday-evening European night game) - a real risk, not just a tight
+    // budget, once actually run through the numbers. 30s halves that to ~1,680 calls/hour, so even a
+    // 10h heavy Saturday (~16,800) plus the ~1,100-1,700/day baseline (fixture discovery + odds sync
+    // + goal-scorer resolution) lands around ~18,500 - comfortably under the cap with headroom to
+    // spare. Score/status freshness at 30s vs 15s is not noticeable for a casual family app.
+    public int LiveRefreshIntervalSeconds { get; set; } = 30;
 
     // How often BetBuilderSyncService.ResolveFirstGoalScorersAsync runs, independent of
     // SyncIntervalMinutes — this used to share the odds-sync cadence, which meant a
