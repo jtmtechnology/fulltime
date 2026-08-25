@@ -45,10 +45,9 @@
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
-    <!-- Google's published TEST AdMob app ID - temporarily swapped back in while real ads aren't
-         filling yet. Swap back to the real ID (see git history) once that's sorted. -->
+    <!-- Real AdMob app ID (FullTime's own AdMob account). -->
     <key>GADApplicationIdentifier</key>
-    <string>ca-app-pub-3940256099942544~1458002511</string>
+    <string>ca-app-pub-8873351312647846~5712277040</string>
     <key>GADIsAdManagerApp</key>
     <true/>
     <!-- Confirmed missing on a real ad-hoc build: no ads ever showed. Both of these are required by

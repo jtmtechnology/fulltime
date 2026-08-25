@@ -8,12 +8,9 @@ using Microsoft.Maui.ApplicationModel;
 namespace FullTime.App.Services;
 
 // Real implementation of IInterstitialAdService for MAUI, backed by Plugin.MauiMtAdmob
-// (CrossMauiMTAdmob.Current). Ad unit IDs below are Google's published TEST IDs, temporarily
-// swapped back in after real ads showed 0 fill post-launch (new ad account/units still warming up,
-// or the missing UMP consent flow blocking real fill for a UK user - Google enforces a consent
-// requirement for UK/EEA users that test ads bypass but real ones may not without it wired up).
-// Swap back to FullTime's real IDs (see git history, commit c95785b) once that's sorted - test IDs
-// MUST NOT ship to the App Store / Play Store, they earn no real revenue.
+// (CrossMauiMTAdmob.Current). Ad unit IDs below are FullTime's real AdMob IDs - confirmed working
+// with Google's TEST IDs first (see git history), then swapped once the real AdMob account/app/ad
+// units were created.
 //
 // Confirmed on both a real iPhone (ad-hoc build) and the Android emulator: no ad ever showed. Root
 // cause - .UseMauiMTAdmob() in MauiProgram only registers the plugin's DI wiring, it does NOT
@@ -33,8 +30,8 @@ namespace FullTime.App.Services;
 public class MauiInterstitialAdService(IAdsRemovalService adsRemoval) : IInterstitialAdService
 {
     private static string AdUnitId => DeviceInfo.Platform == DevicePlatform.iOS
-        ? "ca-app-pub-3940256099942544/4411468910"  // Google TEST interstitial ad unit (iOS)
-        : "ca-app-pub-3940256099942544/1033173712"; // Google TEST interstitial ad unit (Android)
+        ? "ca-app-pub-8873351312647846/8091028374"  // FullTime interstitial ad unit (iOS)
+        : "ca-app-pub-8873351312647846/9075922506"; // FullTime interstitial ad unit (Android)
 
     private static bool _initialized;
 
@@ -80,18 +77,18 @@ public class MauiInterstitialAdService(IAdsRemovalService adsRemoval) : IInterst
         _initialized = true;
 
 #if ANDROID
-        const string appId = "ca-app-pub-3940256099942544~3347511713"; // Google TEST AdMob app ID (Android)
+        const string appId = "ca-app-pub-8873351312647846~5927014987"; // FullTime AdMob app ID (Android)
         var activity = Platform.CurrentActivity as Microsoft.Maui.MauiAppCompatActivity;
         CrossMauiMTAdmob.Current.Init(
             activity!, appId, license: null!, nativeAdsId: null!, openAdsId: null!,
             enableOpenAds: false, tagForUnderAgeOfConsent: false, testDeviceId: null!,
             forceTesting: false, geography: DebugGeography.DEBUG_GEOGRAPHY_DISABLED,
-            initialiseConsentAtStartup: false, debugMode: true);
+            initialiseConsentAtStartup: false, debugMode: false);
 #elif IOS
         CrossMauiMTAdmob.Current.Init(
             license: null!, nativeAdsId: null!, openAdsId: null!, enableOpenAds: false,
             tagForUnderAgeOfConsent: false, testDeviceIds: [], geography: DebugGeography.DEBUG_GEOGRAPHY_DISABLED,
-            initialiseConsentAtStartup: false, debugMode: true, handleTrackingAuthorization: true);
+            initialiseConsentAtStartup: false, debugMode: false, handleTrackingAuthorization: true);
 #endif
     }
 

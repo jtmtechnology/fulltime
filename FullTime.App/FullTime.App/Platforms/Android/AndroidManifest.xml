@@ -8,11 +8,8 @@
          though the app's regular HttpClient doesn't hit it). Confirmed via a real "Cleartext HTTP
          traffic to 10.0.2.2 not permitted" failure without this. -->
     <application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true" android:usesCleartextTraffic="true">
-        <!-- Google's published TEST AdMob app ID - temporarily swapped back in while real ads
-             aren't filling yet (new ad account/units still warming up, or the missing UMP consent
-             flow blocking real fill for a UK user - see MauiInterstitialAdService's comment). Swap
-             back to the real ID (see git history) once that's sorted. -->
-        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713" />
+        <!-- Real AdMob app ID (FullTime's own AdMob account). -->
+        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-8873351312647846~5927014987" />
     </application>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
