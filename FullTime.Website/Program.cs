@@ -44,8 +44,11 @@ app.MapPost("/api/contact", async (ContactRequest request, ILogger<Program> logg
         // Replying to the notification email goes straight back to whoever submitted the form,
         // not to the website's own From address.
         message.ReplyTo.Add(new MailboxAddress(request.Name, request.Email));
-        message.Subject = $"FullTime contact form — {request.Name}";
-        message.Body = new TextPart("plain") { Text = $"From: {request.Name} <{request.Email}>\n\n{request.Message}" };
+        message.Subject = $"FullTime contact form — {request.Name} ({request.Email})";
+        message.Body = new TextPart("plain")
+        {
+            Text = $"Name: {request.Name}\nEmail: {request.Email}\n\nMessage:\n{request.Message}",
+        };
 
         using var client = new SmtpClient();
         await client.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.StartTls);
