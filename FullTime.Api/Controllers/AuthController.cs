@@ -31,6 +31,7 @@ public class AuthController(AuthService authService) : ControllerBase
         return result.Outcome switch
         {
             RegisterOutcome.EmailTaken => Conflict(new { error = "That email is already registered." }),
+            RegisterOutcome.ProfaneName => BadRequest(new { error = "That name isn't allowed — please choose another." }),
             _ => Created(string.Empty, new { userId = result.UserId }),
         };
     }

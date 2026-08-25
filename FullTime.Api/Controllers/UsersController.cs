@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using FullTime.Api.Data;
 using FullTime.Api.Localization;
+using FullTime.Api.Moderation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -33,6 +34,11 @@ public class UsersController(AppDbContext db) : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             return BadRequest(new { error = "Name is required." });
+        }
+
+        if (ProfanityFilter.ContainsProfanity(request.Name))
+        {
+            return BadRequest(new { error = "That name isn't allowed — please choose another." });
         }
 
         var user = await db.Users.FindAsync([CurrentUserId], ct);

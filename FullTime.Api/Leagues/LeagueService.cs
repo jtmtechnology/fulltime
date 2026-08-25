@@ -1,6 +1,7 @@
 using FullTime.Api.Betting;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
+using FullTime.Api.Moderation;
 using FullTime.Api.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;

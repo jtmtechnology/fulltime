@@ -5,6 +5,7 @@ using System.Text;
 using FullTime.Api.Betting;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
+using FullTime.Api.Moderation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -23,6 +24,11 @@ public class AuthService(
 
     public async Task<RegisterResult> RegisterAsync(string name, string email, string password, string baseUrl, CancellationToken ct = default)
     {
+        if (ProfanityFilter.ContainsProfanity(name))
+        {
+            return new RegisterResult(RegisterOutcome.ProfaneName);
+        }
+
         var normalizedEmail = Normalize(email);
 
         if (await db.Users.AnyAsync(u => u.Email == normalizedEmail, ct))

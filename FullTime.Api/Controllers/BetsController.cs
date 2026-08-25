@@ -95,6 +95,7 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
             .Include(b => b.Legs).ThenInclude(l => l.Picks)
             .Where(b => b.UserId == CurrentUserId)
             .OrderByDescending(b => b.PlacedAt)
+            .Take(20)
             .ToListAsync(ct);
 
         return Ok(bets.Select(ToBetDto).ToList());

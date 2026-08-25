@@ -4,6 +4,7 @@ public enum RegisterOutcome
 {
     Success,
     EmailTaken,
+    ProfaneName,
 }
 
 public enum LoginOutcome
