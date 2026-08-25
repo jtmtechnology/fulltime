@@ -12,5 +12,8 @@ public class BettingOptions
     // comment on why Profit = Balance - StartingBalance must never move for a reason other than
     // actual betting outcomes).
     public decimal WeeklyTopUpAmount { get; set; } = 10;
-    public int WeeklyTopUpCheckIntervalMinutes { get; set; } = 60;
+
+    // Checked often enough that the top-up lands close to its 9pm UTC target (see
+    // WeeklyTopUpService.TopUpHourUtc) rather than up to an hour late.
+    public int WeeklyTopUpCheckIntervalMinutes { get; set; } = 15;
 }

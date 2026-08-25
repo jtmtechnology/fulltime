@@ -14,11 +14,25 @@ public class WeeklyTopUpService(
     IOptions<BettingOptions> options,
     ILogger<WeeklyTopUpService> logger)
 {
+    // The Sunday evening cutoff, in UTC, before which that week's top-up isn't due yet.
+    private const int TopUpHourUtc = 21;
+
     public async Task RunAsync(CancellationToken ct = default)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var now = DateTime.UtcNow;
+        var today = DateOnly.FromDateTime(now);
         var daysSinceSunday = ((int)today.DayOfWeek - (int)DayOfWeek.Sunday + 7) % 7;
         var mostRecentSunday = today.AddDays(-daysSinceSunday);
+
+        // If today IS that Sunday but we haven't reached the cutoff hour yet, the most recently
+        // *completed* cutoff is last week's instead - otherwise the top-up would fire at midnight
+        // rather than waiting for the actual 9pm UTC target.
+        var cutoff = new DateTime(mostRecentSunday.Year, mostRecentSunday.Month, mostRecentSunday.Day, TopUpHourUtc, 0, 0, DateTimeKind.Utc);
+        if (now < cutoff)
+        {
+            mostRecentSunday = mostRecentSunday.AddDays(-7);
+        }
+
         var amount = options.Value.WeeklyTopUpAmount;
 
         var due = await db.LeagueMemberships
