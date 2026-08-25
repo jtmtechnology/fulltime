@@ -13,8 +13,23 @@ public class LeagueService(AppDbContext db, PushNotificationService push, IOptio
     private const string CodeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private const int CodeLength = 6;
 
-    public async Task<League> CreateAsync(Guid userId, string name, CancellationToken ct = default)
+    // Keeps the My Leagues list and the worldwide per-membership leaderboard from growing unbounded
+    // for one person - 5 is generous for a casual friends-and-family app while still being a real cap.
+    public const int MaxLeaguesPerUser = 5;
+
+    public async Task<CreateLeagueResult> CreateAsync(Guid userId, string name, CancellationToken ct = default)
     {
+        if (ProfanityFilter.ContainsProfanity(name))
+        {
+            return new CreateLeagueResult(CreateLeagueOutcome.ProfaneName);
+        }
+
+        var membershipCount = await db.LeagueMemberships.CountAsync(m => m.UserId == userId, ct);
+        if (membershipCount >= MaxLeaguesPerUser)
+        {
+            return new CreateLeagueResult(CreateLeagueOutcome.MaxLeaguesReached);
+        }
+
         var league = new League
         {
             Id = Guid.NewGuid(),
@@ -37,7 +52,7 @@ public class LeagueService(AppDbContext db, PushNotificationService push, IOptio
         db.Leagues.Add(league);
         await db.SaveChangesAsync(ct);
 
-        return league;
+        return new CreateLeagueResult(CreateLeagueOutcome.Success, league);
     }
 
     public async Task<JoinLeagueResult> JoinAsync(Guid userId, string inviteCode, CancellationToken ct = default)
@@ -54,6 +69,12 @@ public class LeagueService(AppDbContext db, PushNotificationService push, IOptio
         if (alreadyMember)
         {
             return new JoinLeagueResult(JoinLeagueOutcome.AlreadyMember);
+        }
+
+        var membershipCount = await db.LeagueMemberships.CountAsync(m => m.UserId == userId, ct);
+        if (membershipCount >= MaxLeaguesPerUser)
+        {
+            return new JoinLeagueResult(JoinLeagueOutcome.MaxLeaguesReached);
         }
 
         db.LeagueMemberships.Add(new LeagueMembership

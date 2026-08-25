@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullTime.Api.Controllers;
 
-public record LeaderboardEntryDto(Guid UserId, string Name, decimal Balance, decimal Profit, string CurrencySymbol);
+public record LeaderboardEntryDto(Guid UserId, string Name, string LeagueName, decimal Balance, decimal Profit, string CurrencySymbol);
 
 [ApiController]
 [Route("api/leaderboard")]
@@ -14,31 +14,25 @@ public record LeaderboardEntryDto(Guid UserId, string Name, decimal Balance, dec
 public class LeaderboardController(AppDbContext db) : ControllerBase
 {
     // "Worldwide" isn't its own bankroll — every bet is placed in a specific league now, so this is
-    // a computed average of a user's balance across whichever leagues they're in (not a sum, so
-    // being in more leagues doesn't just inflate the number). A user with no leagues has nothing to
-    // average and simply doesn't appear until they join one.
+    // every membership across every league, ranked by that membership's own profit. Deliberately not
+    // collapsed to one row per user any more - a member of three leagues shows up three times, once
+    // per league, since a league's own name and profit are what's being ranked, not an average that
+    // hides which league actually produced the result.
     [HttpGet]
     public async Task<ActionResult<List<LeaderboardEntryDto>>> GetLeaderboard(CancellationToken ct)
     {
-        // Both averages must come from the same group - averaging balance against a separately
-        // re-read *current* StartingBalance config broke this exactly like the per-league
-        // leaderboard did (confirmed happening: a global StartingBalance change retroactively
-        // inflated everyone's profit, or masked a real loss as a fake profit).
         var rows = await db.LeagueMemberships
-            .GroupBy(m => new { m.UserId, m.User!.Name, m.User!.Country })
-            .Select(g => new
-            {
-                g.Key.UserId, g.Key.Name, g.Key.Country,
-                AverageBalance = g.Average(m => m.Balance),
-                AverageStartingBalance = g.Average(m => m.StartingBalance),
-            })
-            .OrderByDescending(e => e.AverageBalance)
+            .OrderByDescending(m => m.Balance - m.StartingBalance)
             .Take(50)
+            .Select(m => new
+            {
+                m.UserId, m.User!.Name, m.User!.Country, LeagueName = m.League!.Name,
+                m.Balance, Profit = m.Balance - m.StartingBalance,
+            })
             .ToListAsync(ct);
 
         var entries = rows.Select(r => new LeaderboardEntryDto(
-            r.UserId, r.Name, r.AverageBalance, r.AverageBalance - r.AverageStartingBalance,
-            CurrencyCatalog.SymbolFor(r.Country))).ToList();
+            r.UserId, r.Name, r.LeagueName, r.Balance, r.Profit, CurrencyCatalog.SymbolFor(r.Country))).ToList();
 
         return Ok(entries);
     }

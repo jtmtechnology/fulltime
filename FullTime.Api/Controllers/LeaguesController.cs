@@ -32,8 +32,20 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
             return BadRequest(new { error = "League name is required." });
         }
 
+        var result = await leagueService.CreateAsync(CurrentUserId, request.Name.Trim(), ct);
+        if (result.Outcome != CreateLeagueOutcome.Success)
+        {
+            var error = result.Outcome switch
+            {
+                CreateLeagueOutcome.ProfaneName => "That league name isn't allowed — please choose another.",
+                CreateLeagueOutcome.MaxLeaguesReached => $"You can only be in up to {LeagueService.MaxLeaguesPerUser} leagues.",
+                _ => "Could not create league.",
+            };
+            return BadRequest(new { error });
+        }
+
         var startingBalance = options.Value.StartingBalance;
-        var league = await leagueService.CreateAsync(CurrentUserId, request.Name.Trim(), ct);
+        var league = result.League!;
         var currencySymbol = await CurrentUserCurrencySymbolAsync(ct);
 
         return Created(string.Empty, new LeagueSummaryDto(
@@ -83,6 +95,7 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
             {
                 JoinLeagueOutcome.InvalidCode => "That invite code doesn't match any league.",
                 JoinLeagueOutcome.AlreadyMember => "You're already in this league.",
+                JoinLeagueOutcome.MaxLeaguesReached => $"You can only be in up to {LeagueService.MaxLeaguesPerUser} leagues.",
                 _ => "Could not join league.",
             };
             return BadRequest(new { error });
@@ -111,12 +124,17 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
         var rows = await db.LeagueMemberships
             .Where(m => m.LeagueId == id)
             .Include(m => m.User)
+            .Include(m => m.League)
             .OrderByDescending(m => m.Balance)
-            .Select(m => new { m.UserId, m.User!.Name, m.Balance, Profit = m.Balance - m.StartingBalance, m.User!.Country })
+            .Select(m => new
+            {
+                m.UserId, m.User!.Name, m.Balance, Profit = m.Balance - m.StartingBalance,
+                m.User!.Country, LeagueName = m.League!.Name,
+            })
             .ToListAsync(ct);
 
         var entries = rows.Select(r => new LeaderboardEntryDto(
-            r.UserId, r.Name, r.Balance, r.Profit, CurrencyCatalog.SymbolFor(r.Country))).ToList();
+            r.UserId, r.Name, r.LeagueName, r.Balance, r.Profit, CurrencyCatalog.SymbolFor(r.Country))).ToList();
 
         return Ok(entries);
     }

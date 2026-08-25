@@ -29,7 +29,7 @@ else if (!string.IsNullOrEmpty(_status))
         <div class="table-scroll">
             <table class="simple-table">
                 <thead>
-                    <tr><th>#</th><th>Name</th><th>Balance</th><th>Profit</th></tr>
+                    <tr><th>#</th><th>Name</th><th>League</th><th>Profit</th></tr>
                 </thead>
                 <tbody>
                     @for (var i = 0; i < _worldwide.Count; i++)
@@ -38,7 +38,7 @@ else if (!string.IsNullOrEmpty(_status))
                         <tr>
                             <td>@(i + 1)</td>
                             <td>@entry.Name</td>
-                            <td>@entry.CurrencySymbol@entry.Balance.ToString("0.00")</td>
+                            <td>@entry.LeagueName</td>
                             <td class="@(entry.Profit >= 0 ? "live" : "error")">@(entry.Profit >= 0 ? "+" : "-")@entry.CurrencySymbol@Math.Abs(entry.Profit).ToString("0.00")</td>
                         </tr>
                     }

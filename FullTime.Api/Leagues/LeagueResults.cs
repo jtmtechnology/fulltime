@@ -7,6 +7,16 @@ public enum JoinLeagueOutcome
     Success,
     InvalidCode,
     AlreadyMember,
+    MaxLeaguesReached,
 }
 
 public record JoinLeagueResult(JoinLeagueOutcome Outcome, League? League = null);
+
+public enum CreateLeagueOutcome
+{
+    Success,
+    MaxLeaguesReached,
+    ProfaneName,
+}
+
+public record CreateLeagueResult(CreateLeagueOutcome Outcome, League? League = null);
