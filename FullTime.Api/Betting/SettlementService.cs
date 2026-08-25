@@ -214,12 +214,12 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
         foreach (var bet in wonBets)
         {
             var symbol = Localization.CurrencyCatalog.SymbolFor(bet.User?.Country);
-            await push.SendToUserAsync(bet.UserId, "Bet won!", $"{DescribeBet(bet)} — +{symbol}{bet.PotentialReturn:0.00}", ct);
+            await push.SendToUserAsync(bet.UserId, "Bet Won", $"{DescribeBet(bet)} — +{symbol}{bet.PotentialReturn:0.00}", ct);
         }
 
         foreach (var bet in lostBets)
         {
-            await push.SendToUserAsync(bet.UserId, "Bet settled", $"{DescribeBet(bet)} didn't come in.", ct);
+            await push.SendToUserAsync(bet.UserId, "Bet Lost", $"{DescribeBet(bet)} didn't come in.", ct);
         }
     }
 
@@ -228,5 +228,5 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
     // every team, which could otherwise make the notification unreadably long.
     private static string DescribeBet(Bet bet) => bet.Legs.Count == 1
         ? $"{bet.Legs[0].Match!.HomeTeam} v {bet.Legs[0].Match!.AwayTeam}"
-        : $"{bet.Legs.Count}-leg bet";
+        : $"{bet.Legs.Count} leg acca";
 }
