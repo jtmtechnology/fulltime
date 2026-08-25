@@ -173,7 +173,7 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
 .context-option.selected { border-color: var(--accent); color: var(--accent); font-weight: 700; }
 
 .brand-logo { display: flex; align-items: center; gap: 0.55rem; text-decoration: none; }
-.brand-crest { width: 42px; height: 42px; flex-shrink: 0; object-fit: contain; }
+.brand-crest { width: 40px; height: 45px; flex-shrink: 0; }
 
 .wordmark {
     display: flex; align-items: center;
