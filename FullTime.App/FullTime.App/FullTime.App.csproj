@@ -69,8 +69,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- App Icon -->
-    <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#39FF88" />
+    <!-- App Icon - a single flat design (football/coin/trend shield), not meant to be split into
+         Android-adaptive-icon background/foreground layers, so no ForegroundFile here. -->
+    <MauiIcon Include="Resources\AppIcon\appicon.png" />
 
     <!-- Splash Screen -->
     <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#0D1117" BaseSize="220,251" />
