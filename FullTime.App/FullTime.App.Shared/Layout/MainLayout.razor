@@ -1,4 +1,5 @@
-﻿@inherits LayoutComponentBase
+﻿@using System.Globalization
+@inherits LayoutComponentBase
 @implements IDisposable
 @inject AuthState AuthState
 @inject IPushRegistrar PushRegistrar
@@ -72,29 +73,49 @@
         try
         {
             var bets = await Api.GetMyBetsAsync();
-            var latestWin = bets
-                .Where(b => b.Status == "Won" && b.SettledAt is not null)
-                .OrderByDescending(b => b.SettledAt)
-                .FirstOrDefault();
+            var lastCelebratedRaw = await CelebratedWinStore.GetAsync();
 
-            if (latestWin is null)
+            if (string.IsNullOrEmpty(lastCelebratedRaw))
+            {
+                // First time this device has ever checked - establish a baseline instead of
+                // replaying the account's entire win history at once (e.g. an existing user
+                // updating to this app version for the first time). Only wins settled from here
+                // on get celebrated.
+                await CelebratedWinStore.SetAsync(DateTime.UtcNow.ToString("O"));
+                return;
+            }
+
+            var lastCelebratedAt = DateTime.Parse(lastCelebratedRaw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+
+            // Every win settled since the last time this device celebrated one - not just the
+            // most recent - so a busy matchday's worth of wins each get their own card instead
+            // of only the latest one showing.
+            var newWins = bets
+                .Where(b => b.Status == "Won" && b.SettledAt is not null && b.SettledAt > lastCelebratedAt)
+                .OrderBy(b => b.SettledAt)
+                .ToList();
+
+            if (newWins.Count == 0)
             {
                 return;
             }
 
-            var lastCelebratedId = await CelebratedWinStore.GetAsync();
-            if (lastCelebratedId == latestWin.Id.ToString())
-            {
-                return;
-            }
-
-            await CelebratedWinStore.SetAsync(latestWin.Id.ToString());
             await ContextState.InitializeAsync();
-            _celebrationBet = latestWin;
-            await InvokeAsync(StateHasChanged);
 
-            await Task.Delay(TimeSpan.FromSeconds(5));
-            await InvokeAsync(DismissCelebration);
+            foreach (var win in newWins)
+            {
+                // Marked as celebrated before it's shown, not after - so if the app gets closed
+                // mid-queue, whichever cards already appeared don't replay next launch.
+                await CelebratedWinStore.SetAsync(win.SettledAt!.Value.ToString("O"));
+                _celebrationBet = win;
+                await InvokeAsync(StateHasChanged);
+
+                await Task.Delay(TimeSpan.FromSeconds(4));
+                await InvokeAsync(DismissCelebration);
+
+                // Brief gap so consecutive wins read as separate cards, not one flickering one.
+                await Task.Delay(TimeSpan.FromMilliseconds(400));
+            }
         }
         catch
         {
