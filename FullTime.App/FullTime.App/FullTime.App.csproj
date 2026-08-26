@@ -69,8 +69,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- App Icon -->
-    <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#39FF88" />
+    <!-- App Icon - genuinely transparent PNG this time (confirmed alpha=0 outside the shield), so
+         Color correctly shows through as the adaptive-icon backdrop instead of being fully hidden
+         behind an opaque foreground like the previous attempt. -->
+    <MauiIcon Include="Resources\AppIcon\appicon.png" Color="#0D1117" />
 
     <!-- Splash Screen -->
     <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#0D1117" BaseSize="220,251" />
