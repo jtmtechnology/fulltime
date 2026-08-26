@@ -42,7 +42,7 @@ h1, h2, h3 { line-height: 1.15; }
 }
 .wordmark .full { color: var(--text); }
 .wordmark .dot { color: var(--accent); margin: 0 0.14rem; }
-.wordmark .time { color: transparent; -webkit-text-stroke: 1.2px var(--accent); }
+.wordmark .time { color: var(--accent); }
 
 .top-nav { grid-column: 3; justify-self: end; display: flex; gap: 1.25rem; }
 .top-nav a { color: var(--text-muted); font-weight: 600; font-size: 0.9rem; }
