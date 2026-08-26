@@ -80,7 +80,7 @@
     <!-- iOS doesn't crop/mask app icons the way Android's adaptive icons do, so the padded source
          above shows up as a dark square framing the shield. This is a tighter, edge-to-edge crop
          of the same artwork so it fills the icon like every other app on the home screen. -->
-    <MauiIcon Include="Resources\AppIcon\appicon-ios.png" Color="#0D1117" />
+    <MauiIcon Include="Resources\AppIcon\appicon_ios.png" Color="#0D1117" />
   </ItemGroup>
 
   <ItemGroup>
