@@ -11,6 +11,14 @@
 @inject ApiClient Api
 @inject NavigationManager Nav
 
+@if (_showAppSplash)
+{
+    <div class="app-splash @(_appSplashHiding ? "hiding" : "")">
+        <img src="_content/FullTime.App.Shared/logo.png" alt="FullTime" width="120" height="120" />
+        <span class="wordmark"><span class="full">FULL</span><span class="dot">&bull;</span><span class="time">TIME</span></span>
+    </div>
+}
+
 <div class="top-bar">
     <a class="brand-logo" href="">
         <img class="brand-crest" src="_content/FullTime.App.Shared/logo.png" alt="FullTime" width="56" height="56" />
@@ -40,9 +48,18 @@
 
 @code {
     private BetDto? _celebrationBet;
+    private bool _showAppSplash = true;
+    private bool _appSplashHiding;
 
     protected override async Task OnInitializedAsync()
     {
+        // iOS hands off from its native launch screen the instant the app's first frame is ready
+        // to render - there's no supported way to hold that screen open longer, so the branding
+        // was disappearing almost immediately. This in-app overlay takes over from there and holds
+        // for a fixed, consistent duration on every platform instead of being at the mercy of each
+        // OS's own launch-screen timing.
+        _ = DismissAppSplashAsync();
+
         AuthState.Changed += OnAuthChanged;
         if (AuthState.IsLoggedIn)
         {
@@ -56,6 +73,17 @@
         // layout), so this is the "on cold launch" hook - must not block first render waiting on
         // an ad network round trip.
         _ = ShowStartupAdThenMaybeCelebrateAsync();
+    }
+
+    private async Task DismissAppSplashAsync()
+    {
+        await Task.Delay(TimeSpan.FromMilliseconds(1200));
+        _appSplashHiding = true;
+        await InvokeAsync(StateHasChanged);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        _showAppSplash = false;
+        await InvokeAsync(StateHasChanged);
     }
 
     // Runs after the startup interstitial (if any) has actually been dismissed - ShowOnStartupAsync
