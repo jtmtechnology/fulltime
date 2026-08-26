@@ -82,7 +82,7 @@
          of the same artwork so it fills the icon like every other app on the home screen. Link
          keeps the generated asset-catalog icon set named "appicon" (iOS's project setup expects
          that exact name) even though the physical source file is different from Android's. -->
-    <MauiIcon Include="Resources\AppIcon\appicon_ios.png" Link="Resources\AppIcon\appicon.png" Color="#0D1117" />
+    <MauiIcon Include="Resources\AppIcon\appicon_ios.png" Link="Resources\AppIcon\appicon.png" Color="#2FAE4F" />
   </ItemGroup>
 
   <ItemGroup>
