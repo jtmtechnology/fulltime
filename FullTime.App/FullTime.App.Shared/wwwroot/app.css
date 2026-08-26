@@ -153,6 +153,11 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
 .app-splash.hiding { opacity: 0; pointer-events: none; }
 .app-splash img { width: 120px; height: 120px; object-fit: contain; }
 .app-splash .wordmark { font-size: 1.8rem; }
+/* The header's dot deliberately blinks as an ambient scoreboard effect - fine when it's a
+   persistent element, but reused here it reads as a jarring flicker since it's the only thing on
+   screen for the splash's short duration. The native splash.svg never blinked (a static image
+   can't animate), so this keeps the in-app splash matching that. */
+.app-splash .wordmark .dot { animation: none; opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
     .app-splash { transition: none; }
 }
