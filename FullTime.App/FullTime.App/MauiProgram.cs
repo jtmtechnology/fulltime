@@ -30,6 +30,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<IAdsRemovalService, MauiAdsRemovalService>();
         builder.Services.AddSingleton<IInterstitialAdService, MauiInterstitialAdService>();
         builder.Services.AddScoped<IMatchLeaguePreferenceStore, MauiMatchLeaguePreferenceStore>();
+        builder.Services.AddScoped<ICelebratedWinStore, MauiCelebratedWinStore>();
+        builder.Services.AddSingleton<FullTime.App.Shared.Services.IHapticFeedback, MauiHapticFeedback>();
         builder.Services.AddScoped<AuthState>();
         builder.Services.AddScoped<BetSlipState>();
         builder.Services.AddScoped<ActiveContextState>();

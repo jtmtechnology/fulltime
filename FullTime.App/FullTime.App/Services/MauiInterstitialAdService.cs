@@ -58,7 +58,10 @@ public class MauiInterstitialAdService(IAdsRemovalService adsRemoval) : IInterst
 
         if (CrossMauiMTAdmob.Current.IsInterstitialLoaded())
         {
-            CrossMauiMTAdmob.Current.ShowInterstitial();
+            // Callers (e.g. the startup win-celebration check) need to know the ad has actually
+            // been dismissed, not just that ShowInterstitial() was called - it displays natively
+            // and returns immediately, well before the user has closed it.
+            await ShowAndWaitForCloseAsync();
         }
         // Otherwise: no ad ready in time (slow/no connection) - skip silently rather than block
         // the user's flow waiting for one.
@@ -68,6 +71,28 @@ public class MauiInterstitialAdService(IAdsRemovalService adsRemoval) : IInterst
         if (!CrossMauiMTAdmob.Current.IsInterstitialLoaded())
         {
             CrossMauiMTAdmob.Current.LoadInterstitial(AdUnitId);
+        }
+    }
+
+    private static async Task ShowAndWaitForCloseAsync()
+    {
+        var tcs = new TaskCompletionSource();
+        EventHandler? onClosed = null;
+        onClosed = (_, _) =>
+        {
+            CrossMauiMTAdmob.Current.OnInterstitialClosed -= onClosed;
+            tcs.TrySetResult();
+        };
+        CrossMauiMTAdmob.Current.OnInterstitialClosed += onClosed;
+
+        CrossMauiMTAdmob.Current.ShowInterstitial();
+
+        // Safety net in case the close event never fires for some reason - don't block whatever
+        // is waiting on this (e.g. the win-celebration check) forever.
+        var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(30)));
+        if (completed != tcs.Task)
+        {
+            CrossMauiMTAdmob.Current.OnInterstitialClosed -= onClosed;
         }
     }
 

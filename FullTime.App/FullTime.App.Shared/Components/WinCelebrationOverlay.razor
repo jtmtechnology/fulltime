@@ -1,0 +1,19 @@
+@if (Bet is not null)
+{
+    <button type="button" class="win-overlay" @onclick="Dismiss" aria-label="Dismiss"></button>
+    <div class="win-card">
+        <div class="win-badge">🏆</div>
+        <h2>You won!</h2>
+        <p class="win-amount">@CurrencySymbol@Bet.PotentialReturn.ToString("0.00")</p>
+        <p class="win-detail">@string.Join(" · ", Bet.Legs.Select(l => $"{l.HomeTeam} v {l.AwayTeam}"))</p>
+        <button type="button" class="primary-btn win-dismiss-btn" @onclick="Dismiss">Nice one!</button>
+    </div>
+}
+
+@code {
+    [Parameter] public BetDto? Bet { get; set; }
+    [Parameter] public string CurrencySymbol { get; set; } = "£";
+    [Parameter] public EventCallback OnDismiss { get; set; }
+
+    private async Task Dismiss() => await OnDismiss.InvokeAsync();
+}

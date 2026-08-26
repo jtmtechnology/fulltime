@@ -5,6 +5,8 @@
 @inject IAdsRemovalService AdsRemoval
 @inject IInterstitialAdService InterstitialAds
 @inject ILocaleProvider LocaleProvider
+@inject ICelebratedWinStore CelebratedWinStore
+@inject ActiveContextState ContextState
 @inject ApiClient Api
 @inject NavigationManager Nav
 
@@ -27,6 +29,7 @@
 <BetSlipSheet />
 <ContextSwitcherSheet />
 <BottomTabBar />
+<WinCelebrationOverlay Bet="_celebrationBet" CurrencySymbol="@ContextState.CurrencySymbol" OnDismiss="DismissCelebration" />
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
@@ -35,6 +38,8 @@
 </div>
 
 @code {
+    private BetDto? _celebrationBet;
+
     protected override async Task OnInitializedAsync()
     {
         AuthState.Changed += OnAuthChanged;
@@ -49,7 +54,59 @@
         // Fire-and-forget: MainLayout only ever initializes once per app session (it's the root
         // layout), so this is the "on cold launch" hook - must not block first render waiting on
         // an ad network round trip.
-        _ = InterstitialAds.ShowOnStartupAsync();
+        _ = ShowStartupAdThenMaybeCelebrateAsync();
+    }
+
+    // Runs after the startup interstitial (if any) has actually been dismissed - ShowOnStartupAsync
+    // now awaits the ad's own close event rather than just the (near-instant) call that displays it,
+    // so the celebration never pops up underneath/behind an ad still on screen.
+    private async Task ShowStartupAdThenMaybeCelebrateAsync()
+    {
+        await InterstitialAds.ShowOnStartupAsync();
+
+        if (!AuthState.IsLoggedIn)
+        {
+            return;
+        }
+
+        try
+        {
+            var bets = await Api.GetMyBetsAsync();
+            var latestWin = bets
+                .Where(b => b.Status == "Won" && b.SettledAt is not null)
+                .OrderByDescending(b => b.SettledAt)
+                .FirstOrDefault();
+
+            if (latestWin is null)
+            {
+                return;
+            }
+
+            var lastCelebratedId = await CelebratedWinStore.GetAsync();
+            if (lastCelebratedId == latestWin.Id.ToString())
+            {
+                return;
+            }
+
+            await CelebratedWinStore.SetAsync(latestWin.Id.ToString());
+            await ContextState.InitializeAsync();
+            _celebrationBet = latestWin;
+            await InvokeAsync(StateHasChanged);
+
+            await Task.Delay(TimeSpan.FromSeconds(5));
+            await InvokeAsync(DismissCelebration);
+        }
+        catch
+        {
+            // Best-effort, same reasoning as SetCountryFromLocaleIfUnsetAsync below - a missed
+            // celebration on this particular launch isn't worth surfacing an error for.
+        }
+    }
+
+    private void DismissCelebration()
+    {
+        _celebrationBet = null;
+        StateHasChanged();
     }
 
     private void OnAuthChanged()

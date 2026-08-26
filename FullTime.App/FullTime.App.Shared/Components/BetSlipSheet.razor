@@ -6,6 +6,7 @@
 @inject ApiClient Api
 @inject NavigationManager Nav
 @inject IInterstitialAdService InterstitialAds
+@inject IHapticFeedback Haptics
 
 @if (Slip.Legs.Count > 0 || Slip.IsOpen)
 {
@@ -21,56 +22,68 @@
         <button type="button" class="slip-overlay" @onclick="() => Slip.SetOpen(false)" aria-label="Close bet slip"></button>
         <div class="slip-sheet">
             <div class="sheet-handle"></div>
-            <h2>Bet slip</h2>
 
-            @if (Slip.Legs.Count == 0)
+            @if (_justPlaced)
             {
-                <div class="muted">No selections yet — tap an odds pill to add one.</div>
+                <div class="bet-success">
+                    <div class="bet-success-check">✓</div>
+                    <h2>Bet placed!</h2>
+                    <p class="bet-success-return">Potential return: @ContextState.CurrencySymbol@_placedReturn.ToString("0.00")</p>
+                </div>
             }
             else
             {
-                <ul>
-                    @foreach (var entry in Slip.Legs)
-                    {
-                        var matchId = entry.Key;
-                        var leg = entry.Value;
-                        <li>
-                            <span>@leg.HomeTeam v @leg.AwayTeam — @string.Join(" + ", leg.Picks.Select(p => PickLabel(p, leg.HomeTeam, leg.AwayTeam))) (@OddsCell.FormatOdds(leg.CombinedOdds))</span>
-                            <button type="button" class="remove-btn" title="Remove" @onclick="() => RemoveSelectionAsync(matchId)">×</button>
-                        </li>
-                    }
-                </ul>
-                <div>Combined odds: <strong>@Slip.CombinedOdds.ToString("0.00")</strong></div>
-                <div class="field">
-                    <label for="slip-stake">Stake (@ContextState.CurrencySymbol)</label>
-                    <input type="number" id="slip-stake" min="0.01" step="0.01" @bind="_stake" @bind:event="oninput" />
-                </div>
-                <div>Potential return: <strong>@ContextState.CurrencySymbol@((_stake * Slip.CombinedOdds).ToString("0.00"))</strong></div>
+                <h2>Bet slip</h2>
 
-                @if (!AuthState.IsLoggedIn)
+                @if (Slip.Legs.Count == 0)
                 {
-                    <div class="muted"><a href="login">Log in</a> to place this bet.</div>
-                }
-                else if (ContextState.Current.LeagueId is null)
-                {
-                    <div class="muted">Join or create a league on the Leaderboard tab before placing a bet.</div>
+                    <div class="muted">No selections yet — tap an odds pill to add one.</div>
                 }
                 else
                 {
-                    <div class="muted">
-                        Betting in: <strong>@ContextState.Current.Name</strong>
-                        @if (ContextState.Balance is not null)
+                    <ul>
+                        @foreach (var entry in Slip.Legs)
                         {
-                            <text> — Balance: @ContextState.CurrencySymbol@ContextState.Balance.Value.ToString("0.00")</text>
+                            var matchId = entry.Key;
+                            var leg = entry.Value;
+                            <li>
+                                <span>@leg.HomeTeam v @leg.AwayTeam — @string.Join(" + ", leg.Picks.Select(p => PickLabel(p, leg.HomeTeam, leg.AwayTeam))) (@OddsCell.FormatOdds(leg.CombinedOdds))</span>
+                                <button type="button" class="remove-btn" title="Remove" @onclick="() => RemoveSelectionAsync(matchId)">×</button>
+                            </li>
                         }
+                    </ul>
+                    <div>Combined odds: <strong>@Slip.CombinedOdds.ToString("0.00")</strong></div>
+                    <div class="field">
+                        <label for="slip-stake">Stake (@ContextState.CurrencySymbol)</label>
+                        <input type="number" id="slip-stake" min="0.01" step="0.01" @bind="_stake" @bind:event="oninput" />
                     </div>
-                    <button type="button" class="place-bet-btn" @onclick="PlaceBetAsync" disabled="@_placing">Place bet</button>
-                }
-            }
+                    <div>Potential return: <strong>@ContextState.CurrencySymbol@((_stake * Slip.CombinedOdds).ToString("0.00"))</strong></div>
 
-            @if (!string.IsNullOrEmpty(_slipStatus))
-            {
-                <div class="status @(_slipError ? "error" : "")">@_slipStatus</div>
+                    @if (!AuthState.IsLoggedIn)
+                    {
+                        <div class="muted"><a href="login">Log in</a> to place this bet.</div>
+                    }
+                    else if (ContextState.Current.LeagueId is null)
+                    {
+                        <div class="muted">Join or create a league on the Leaderboard tab before placing a bet.</div>
+                    }
+                    else
+                    {
+                        <div class="muted">
+                            Betting in: <strong>@ContextState.Current.Name</strong>
+                            @if (ContextState.Balance is not null)
+                            {
+                                <text> — Balance: @ContextState.CurrencySymbol@ContextState.Balance.Value.ToString("0.00")</text>
+                            }
+                        </div>
+                        <button type="button" class="place-bet-btn" @onclick="PlaceBetAsync" disabled="@_placing">Place bet</button>
+                    }
+                }
+
+                @if (!string.IsNullOrEmpty(_slipStatus))
+                {
+                    <div class="status @(_slipError ? "error" : "")">@_slipStatus</div>
+                }
             }
         </div>
     }
@@ -82,6 +95,8 @@
     private string _slipStatus = "";
     private bool _slipError;
     private bool _wasOpen;
+    private bool _justPlaced;
+    private decimal _placedReturn;
 
     protected override async Task OnInitializedAsync()
     {
@@ -116,6 +131,7 @@
         {
             _slipStatus = "";
             _slipError = false;
+            _justPlaced = false;
         }
 
         _wasOpen = Slip.IsOpen;
@@ -163,13 +179,26 @@
             var legs = Slip.Legs.Select(kv => new LegRequest(
                 kv.Key, kv.Value.Picks.Select(p => new PickRequest(
                     p.MarketType, p.Line, p.Side, p.PredictedHomeScore, p.PredictedAwayScore)).ToList())).ToList();
-            await Api.PlaceBetAsync(_stake, legs, ContextState.Current.LeagueId);
+            var placedBet = await Api.PlaceBetAsync(_stake, legs, ContextState.Current.LeagueId);
 
             await Slip.ClearAsync();
-            Slip.SetOpen(false);
-            _slipStatus = "Bet placed! See My Bets for details.";
-            _slipError = false;
             await ContextState.RefreshBalanceAsync();
+
+            // Hold the sheet open on a brief success view instead of closing instantly - gives the
+            // placement a moment of its own instead of just silently vanishing. The interstitial ad
+            // is deliberately triggered AFTER this finishes, not concurrently with it - MAUI's
+            // BlazorWebView doesn't reliably resume its own pending renders once a native ad
+            // Activity has taken the foreground and been dismissed, which left this view stuck
+            // on-screen forever when the two overlapped.
+            _placedReturn = placedBet.PotentialReturn;
+            _justPlaced = true;
+            Haptics.Tap();
+            StateHasChanged();
+
+            await Task.Delay(TimeSpan.FromMilliseconds(1300));
+            _justPlaced = false;
+            Slip.SetOpen(false);
+
             _ = InterstitialAds.ShowAfterBetPlacedAsync();
         }
         catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
