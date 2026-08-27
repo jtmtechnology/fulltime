@@ -13,10 +13,11 @@
 
 @if (_showAppSplash)
 {
-    <div class="app-splash @(_appSplashHiding ? "hiding" : "")">
-        <img src="_content/FullTime.App.Shared/logo.png" alt="FullTime" width="280" height="280" />
-        <span class="wordmark"><span class="full">FULL</span><span class="dot">&bull;</span><span class="time">TIME</span></span>
-    </div>
+    @* No logo here on purpose - the native launch screen already shows one (splash.svg), and a
+       second independently-sized rendering of the same logo is exactly what caused it to visibly
+       jump size at the handoff before. This is just a plain, same-colour bridge so the transition
+       from native to real content reads as one continuous moment. *@
+    <div class="app-splash @(_appSplashHiding ? "hiding" : "")"></div>
 }
 
 <div class="top-bar">
@@ -50,14 +51,18 @@
     private BetDto? _celebrationBet;
     private bool _showAppSplash = true;
     private bool _appSplashHiding;
+    // Created eagerly (before OnInitialized/OnAfterRender run) so ShowStartupAdThenMaybeCelebrateAsync
+    // can safely await it regardless of which of those two fires first - no race on a field that'd
+    // otherwise only get assigned once rendering actually happens.
+    private readonly TaskCompletionSource _splashDismissed = new();
 
     protected override void OnInitialized()
     {
         // Deliberately synchronous, with everything below fire-and-forget - this method running
-        // for even a second or two before returning was the real cause of the "blank screen before
-        // the splash appears" gap. BlazorWebView doesn't paint anything, including the splash,
-        // until initialization completes, so awaiting push registration/ads-removal/an ad network
-        // round trip here was delaying the very first paint by however long those happened to take.
+        // for even a second or two before returning was a real cause of a "blank screen before the
+        // splash appears" gap. BlazorWebView doesn't paint anything, including the splash, until
+        // initialization completes, so awaiting push registration/ads-removal/an ad network round
+        // trip here was delaying the very first paint by however long those happened to take.
         AuthState.Changed += OnAuthChanged;
         if (AuthState.IsLoggedIn)
         {
@@ -77,24 +82,35 @@
 
         // Deliberately started here, not in OnInitialized - a Task.Delay started before the first
         // render ticks down regardless of whether the splash is visible yet. Starting it only once
-        // this component has genuinely rendered guarantees the full hold time is actually seen.
+        // this component has genuinely rendered guarantees the hold time is actually seen.
         _ = DismissAppSplashAsync();
     }
 
     private async Task DismissAppSplashAsync()
     {
-        await Task.Delay(TimeSpan.FromMilliseconds(2000));
+        // Branding duration is now carried by the native launch screen (splash.svg has the logo
+        // again) - this in-app overlay is just a brief bridge so the handoff from native to real
+        // content reads as one continuous moment instead of an abrupt cut, not a second deliberate
+        // wait stacked on top of however long the native/WebView boot phase already took.
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
         _appSplashHiding = true;
         await InvokeAsync(StateHasChanged);
 
         await Task.Delay(TimeSpan.FromMilliseconds(200));
         _showAppSplash = false;
         await InvokeAsync(StateHasChanged);
+        _splashDismissed.TrySetResult();
     }
 
     private async Task ShowStartupAdThenMaybeCelebrateAsync()
     {
         await AdsRemoval.InitializeAsync();
+
+        // The test ad in particular can load and show almost instantly - without this, it was
+        // covering the splash before it was ever actually seen, which looked identical to the
+        // splash itself being broken/too-brief from the outside.
+        await _splashDismissed.Task;
+
         await InterstitialAds.ShowOnStartupAsync();
 
         if (!AuthState.IsLoggedIn)
