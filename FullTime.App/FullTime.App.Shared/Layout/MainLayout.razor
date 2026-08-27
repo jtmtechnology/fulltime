@@ -14,7 +14,7 @@
 @if (_showAppSplash)
 {
     <div class="app-splash @(_appSplashHiding ? "hiding" : "")">
-        <img src="_content/FullTime.App.Shared/logo.png" alt="FullTime" width="120" height="120" />
+        <img src="_content/FullTime.App.Shared/logo.png" alt="FullTime" width="280" height="280" />
         <span class="wordmark"><span class="full">FULL</span><span class="dot">&bull;</span><span class="time">TIME</span></span>
     </div>
 }
@@ -50,17 +50,9 @@
     private BetDto? _celebrationBet;
     private bool _showAppSplash = true;
     private bool _appSplashHiding;
-    private Task? _splashTask;
 
     protected override async Task OnInitializedAsync()
     {
-        // iOS hands off from its native launch screen the instant the app's first frame is ready
-        // to render - there's no supported way to hold that screen open longer, so the branding
-        // was disappearing almost immediately. This in-app overlay takes over from there and holds
-        // for a fixed, consistent duration on every platform instead of being at the mercy of each
-        // OS's own launch-screen timing.
-        _splashTask = DismissAppSplashAsync();
-
         AuthState.Changed += OnAuthChanged;
         if (AuthState.IsLoggedIn)
         {
@@ -76,32 +68,35 @@
         _ = ShowStartupAdThenMaybeCelebrateAsync();
     }
 
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        // Deliberately started here, not in OnInitializedAsync - that method can run for a while
+        // (awaiting push registration, ads setup) before the browser has actually painted anything
+        // to the screen, and a Task.Delay started there ticks down the whole time regardless of
+        // whether the splash is visible yet. Starting it only once this component has genuinely
+        // rendered guarantees the full hold time is actually seen, not silently eaten by whatever
+        // else happened to be slow on this particular launch.
+        _ = DismissAppSplashAsync();
+    }
+
     private async Task DismissAppSplashAsync()
     {
-        await Task.Delay(TimeSpan.FromMilliseconds(2200));
+        await Task.Delay(TimeSpan.FromMilliseconds(2000));
         _appSplashHiding = true;
         await InvokeAsync(StateHasChanged);
 
-        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        await Task.Delay(TimeSpan.FromMilliseconds(200));
         _showAppSplash = false;
         await InvokeAsync(StateHasChanged);
     }
 
-    // Runs after the startup interstitial (if any) has actually been dismissed - ShowOnStartupAsync
-    // now awaits the ad's own close event rather than just the (near-instant) call that displays it,
-    // so the celebration never pops up underneath/behind an ad still on screen.
     private async Task ShowStartupAdThenMaybeCelebrateAsync()
     {
-        // Wait for the in-app splash to fully finish first. The ad SDK's first call on iOS triggers
-        // the native App Tracking Transparency permission prompt (see MauiInterstitialAdService),
-        // and that system dialog animating in over the WebView while the splash is still showing is
-        // a much likelier explanation for a device-only flicker than anything in the splash's own
-        // CSS - it can't reproduce in the Android emulator, which has no ATT prompt to trigger.
-        if (_splashTask is not null)
-        {
-            await _splashTask;
-        }
-
         await InterstitialAds.ShowOnStartupAsync();
 
         if (!AuthState.IsLoggedIn)
