@@ -50,6 +50,7 @@
     private BetDto? _celebrationBet;
     private bool _showAppSplash = true;
     private bool _appSplashHiding;
+    private Task? _splashTask;
 
     protected override async Task OnInitializedAsync()
     {
@@ -58,7 +59,7 @@
         // was disappearing almost immediately. This in-app overlay takes over from there and holds
         // for a fixed, consistent duration on every platform instead of being at the mercy of each
         // OS's own launch-screen timing.
-        _ = DismissAppSplashAsync();
+        _splashTask = DismissAppSplashAsync();
 
         AuthState.Changed += OnAuthChanged;
         if (AuthState.IsLoggedIn)
@@ -91,6 +92,16 @@
     // so the celebration never pops up underneath/behind an ad still on screen.
     private async Task ShowStartupAdThenMaybeCelebrateAsync()
     {
+        // Wait for the in-app splash to fully finish first. The ad SDK's first call on iOS triggers
+        // the native App Tracking Transparency permission prompt (see MauiInterstitialAdService),
+        // and that system dialog animating in over the WebView while the splash is still showing is
+        // a much likelier explanation for a device-only flicker than anything in the splash's own
+        // CSS - it can't reproduce in the Android emulator, which has no ATT prompt to trigger.
+        if (_splashTask is not null)
+        {
+            await _splashTask;
+        }
+
         await InterstitialAds.ShowOnStartupAsync();
 
         if (!AuthState.IsLoggedIn)
