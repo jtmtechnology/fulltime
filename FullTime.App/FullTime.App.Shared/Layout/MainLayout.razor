@@ -51,20 +51,20 @@
     private bool _showAppSplash = true;
     private bool _appSplashHiding;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
+        // Deliberately synchronous, with everything below fire-and-forget - this method running
+        // for even a second or two before returning was the real cause of the "blank screen before
+        // the splash appears" gap. BlazorWebView doesn't paint anything, including the splash,
+        // until initialization completes, so awaiting push registration/ads-removal/an ad network
+        // round trip here was delaying the very first paint by however long those happened to take.
         AuthState.Changed += OnAuthChanged;
         if (AuthState.IsLoggedIn)
         {
-            await PushRegistrar.RegisterAsync();
+            _ = PushRegistrar.RegisterAsync();
             _ = SetCountryFromLocaleIfUnsetAsync();
         }
 
-        await AdsRemoval.InitializeAsync();
-
-        // Fire-and-forget: MainLayout only ever initializes once per app session (it's the root
-        // layout), so this is the "on cold launch" hook - must not block first render waiting on
-        // an ad network round trip.
         _ = ShowStartupAdThenMaybeCelebrateAsync();
     }
 
@@ -75,12 +75,9 @@
             return;
         }
 
-        // Deliberately started here, not in OnInitializedAsync - that method can run for a while
-        // (awaiting push registration, ads setup) before the browser has actually painted anything
-        // to the screen, and a Task.Delay started there ticks down the whole time regardless of
-        // whether the splash is visible yet. Starting it only once this component has genuinely
-        // rendered guarantees the full hold time is actually seen, not silently eaten by whatever
-        // else happened to be slow on this particular launch.
+        // Deliberately started here, not in OnInitialized - a Task.Delay started before the first
+        // render ticks down regardless of whether the splash is visible yet. Starting it only once
+        // this component has genuinely rendered guarantees the full hold time is actually seen.
         _ = DismissAppSplashAsync();
     }
 
@@ -97,6 +94,7 @@
 
     private async Task ShowStartupAdThenMaybeCelebrateAsync()
     {
+        await AdsRemoval.InitializeAsync();
         await InterstitialAds.ShowOnStartupAsync();
 
         if (!AuthState.IsLoggedIn)
