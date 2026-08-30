@@ -1,0 +1,223 @@
+@page "/daily-spinner"
+@implements IDisposable
+@inject IDailySpinStore SpinStore
+@inject ActiveContextState ContextState
+@inject NavigationManager Nav
+
+<PageTitle>FullTime — Daily Spinner</PageTitle>
+
+<div class="page-header-row">
+    <button type="button" class="back-btn" @onclick='() => Nav.NavigateTo("/")' aria-label="Back">‹</button>
+    <h1>Daily Spinner</h1>
+</div>
+<div class="muted">Spin once every day to win rewards</div>
+
+<div class="spinner-wheel-wrap">
+    <div class="spinner-pointer"></div>
+    <div class="spinner-wheel" style="transform: rotate(@(_rotationDeg.ToString(System.Globalization.CultureInfo.InvariantCulture))deg)">
+        @for (var i = 0; i < SpinSegments.All.Length; i++)
+        {
+            var segment = SpinSegments.All[i];
+            var (primary, accent) = SplitLabel(segment.Label);
+            <div class="wheel-segment" style="--segment-angle: @(i * SegmentAngle)deg">
+                <div class="wheel-segment-content">
+                    <span class="wheel-segment-icon @(segment.Icon == "2x" ? "wheel-icon-badge" : "")">@segment.Icon</span>
+                    <span class="wheel-segment-label">
+                        <span class="wheel-segment-label-primary">@primary</span>
+                        <span class="wheel-segment-label-accent">@accent</span>
+                    </span>
+                </div>
+            </div>
+        }
+        <div class="wheel-center">
+            <img src="_content/FullTime.App.Shared/football.png" alt="" class="wheel-center-ball" />
+        </div>
+    </div>
+</div>
+
+<button type="button" class="primary-btn spin-btn" disabled="@(!CanSpin || _isSpinning)" @onclick="SpinAsync">
+    @(_isSpinning ? "Spinning…" : "SPIN NOW")
+</button>
+
+@if (!CanSpin)
+{
+    <div class="spin-countdown">
+        <span>⏱</span> <span class="muted">Next free spin in</span> <span class="spin-countdown-time">@_countdownText</span>
+    </div>
+}
+
+<div class="streak-card">
+    <div class="streak-card-header">
+        <div>
+            <div class="streak-title">🔥 @(_streak)-Day Streak</div>
+            <div class="muted streak-sub">Spin every day to build your streak</div>
+        </div>
+    </div>
+    <div class="streak-track">
+        @for (var day = 1; day <= 7; day++)
+        {
+            <div class="streak-day @(day <= _streak ? "done" : "")">
+                <div class="streak-dot">@(day <= _streak ? "✓" : day.ToString())</div>
+            </div>
+        }
+    </div>
+    <div class="streak-note muted"><span>ℹ</span> Miss a day and your streak will reset</div>
+</div>
+
+@if (_result is not null)
+{
+    var isTryAgain = _result.Label == "Try Again Tomorrow";
+    <button type="button" class="win-overlay" @onclick="DismissResult" aria-label="Dismiss"></button>
+    <div class="win-card">
+        <div class="win-badge">@_result.Icon</div>
+        @if (isTryAgain)
+        {
+            <h2>So close!</h2>
+            <p class="win-amount">@_result.Label</p>
+        }
+        else if (_mysteryAmount is { } amount)
+        {
+            <h2>You won!</h2>
+            <p class="win-amount">@ContextState.CurrencySymbol@amount</p>
+            <p class="win-detail">@_result.Label</p>
+        }
+        else
+        {
+            <h2>You won!</h2>
+            <p class="win-amount">@_result.Label</p>
+        }
+        <button type="button" class="primary-btn win-dismiss-btn" @onclick="DismissResult">@(isTryAgain ? "OK" : "Nice one!")</button>
+    </div>
+}
+
+@code {
+    private const double SegmentAngle = 360.0 / 8;
+
+    private double _rotationDeg;
+    private bool _isSpinning;
+    private int _streak;
+    private DateOnly? _lastSpinDate;
+    private SpinSegment? _result;
+    private int? _mysteryAmount;
+    private string _countdownText = "";
+    private PeriodicTimer? _countdownTimer;
+    private CancellationTokenSource? _countdownCts;
+
+    private bool CanSpin => _lastSpinDate != DateOnly.FromDateTime(DateTime.Now);
+
+    // Splits "Bet Boost 25%" into ("Bet Boost", "25%") etc. so the wheel can render the last word
+    // in accent green under the rest in white, matching the reference wheel graphic's two-tone look.
+    private static (string Primary, string Accent) SplitLabel(string label)
+    {
+        var spaceIndex = label.LastIndexOf(' ');
+        return spaceIndex < 0 ? (label, "") : (label[..spaceIndex], label[(spaceIndex + 1)..]);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var raw = await SpinStore.GetAsync();
+        if (!string.IsNullOrEmpty(raw))
+        {
+            var parts = raw.Split('|');
+            if (parts.Length == 2 && DateOnly.TryParse(parts[0], out var date) && int.TryParse(parts[1], out var streak))
+            {
+                _lastSpinDate = date;
+                _streak = streak;
+            }
+        }
+
+        if (!CanSpin)
+        {
+            StartCountdown();
+        }
+    }
+
+    private async Task SpinAsync()
+    {
+        if (!CanSpin || _isSpinning)
+        {
+            return;
+        }
+
+        _isSpinning = true;
+        var winningIndex = Random.Shared.Next(SpinSegments.All.Length);
+
+        // Pointer is fixed at the top (angle 0). Rotating the wheel by R clockwise moves the point
+        // that was originally at angle θ to (θ + R) mod 360, so landing segment i under the pointer
+        // needs R mod 360 == (360 - i*SegmentAngle) mod 360. `delta` is however much extra rotation
+        // (on top of whatever the wheel is already at) gets there; a few full turns are added purely
+        // so the spin is visible rather than a tiny nudge.
+        var targetMod = (360 - winningIndex * SegmentAngle) % 360;
+        var currentMod = _rotationDeg % 360;
+        var delta = ((targetMod - currentMod) % 360 + 360) % 360;
+        _rotationDeg += 6 * 360 + delta;
+        StateHasChanged();
+
+        await Task.Delay(TimeSpan.FromSeconds(4));
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        _streak = _lastSpinDate == today.AddDays(-1) ? Math.Min(_streak + 1, 7) : 1;
+        _lastSpinDate = today;
+        await SpinStore.SetAsync($"{today:yyyy-MM-dd}|{_streak}");
+
+        _result = SpinSegments.All[winningIndex];
+        // Placeholder only - no real economy behind this yet, just a number to show the user.
+        _mysteryAmount = _result.Label == "Mystery Cash" ? Random.Shared.Next(1, 21) * 5 : null;
+        _isSpinning = false;
+        StateHasChanged();
+        StartCountdown();
+    }
+
+    private async Task DismissResult()
+    {
+        _result = null;
+        _mysteryAmount = null;
+
+        // TEMP for testing only - clears the just-recorded spin so the daily gate doesn't block
+        // the next one, letting the same session spin repeatedly instead of waiting a day. Remove
+        // this SetAsync call (keep the Nav.NavigateTo) once testing is done.
+        await SpinStore.SetAsync("");
+
+        Nav.NavigateTo("/");
+    }
+
+    private void StartCountdown()
+    {
+        _countdownCts?.Cancel();
+        _countdownCts = new CancellationTokenSource();
+        _ = RunCountdownAsync(_countdownCts.Token);
+    }
+
+    private async Task RunCountdownAsync(CancellationToken ct)
+    {
+        _countdownTimer?.Dispose();
+        _countdownTimer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        try
+        {
+            do
+            {
+                var remaining = DateTime.Now.Date.AddDays(1) - DateTime.Now;
+                if (remaining <= TimeSpan.Zero)
+                {
+                    _countdownText = "00:00:00";
+                    await InvokeAsync(StateHasChanged);
+                    return;
+                }
+
+                _countdownText = remaining.ToString(@"hh\:mm\:ss");
+                await InvokeAsync(StateHasChanged);
+            }
+            while (await _countdownTimer.WaitForNextTickAsync(ct));
+        }
+        catch (OperationCanceledException)
+        {
+            // expected when Dispose/StartCountdown cancels the previous countdown
+        }
+    }
+
+    public void Dispose()
+    {
+        _countdownCts?.Cancel();
+        _countdownTimer?.Dispose();
+    }
+}

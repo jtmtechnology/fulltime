@@ -19,6 +19,7 @@ builder.Services.AddScoped<IAdsRemovalService, WebAdsRemovalService>();
 builder.Services.AddScoped<IInterstitialAdService, WebInterstitialAdService>();
 builder.Services.AddScoped<IMatchLeaguePreferenceStore, WebMatchLeaguePreferenceStore>();
 builder.Services.AddScoped<ICelebratedWinStore, WebCelebratedWinStore>();
+builder.Services.AddScoped<IDailySpinStore, WebDailySpinStore>();
 builder.Services.AddSingleton<IHapticFeedback, WebHapticFeedback>();
 builder.Services.AddScoped<AuthState>();
 builder.Services.AddScoped<BetSlipState>();

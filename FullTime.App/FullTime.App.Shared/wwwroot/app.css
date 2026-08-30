@@ -525,3 +525,209 @@ button[type="submit"] {
     65% { transform: translateY(-5px); }
     80% { transform: translateY(0); }
 }
+
+/* ===== Free spin banner (Matches page entry point into the daily spinner) ===== */
+.spin-banner {
+    position: relative; overflow: hidden;
+    display: flex; align-items: center; gap: 0.75rem; width: 100%; text-align: left;
+    background: linear-gradient(135deg, var(--bg-elevated) 40%, rgba(57,255,136,0.1));
+    border: 1px solid var(--accent); border-radius: 999px;
+    padding: 0.5rem 1.25rem; margin: 0 0 1rem; cursor: pointer;
+    animation: spin-banner-glow 2.4s ease-in-out infinite;
+}
+/* Diagonal light sweep, like a "claim reward" prompt - purely decorative, clipped to the pill by
+   the parent's overflow:hidden. */
+.spin-banner::after {
+    content: ""; position: absolute; top: 0; left: -60%; width: 35%; height: 100%;
+    background: linear-gradient(115deg, transparent, rgba(255,255,255,0.16), transparent);
+    transform: skewX(-20deg);
+    animation: spin-banner-shine 3.6s ease-in-out infinite;
+}
+@keyframes spin-banner-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(57,255,136,0.18); }
+    50% { box-shadow: 0 0 34px rgba(57,255,136,0.4); }
+}
+@keyframes spin-banner-shine {
+    0% { left: -60%; }
+    55% { left: 130%; }
+    100% { left: 130%; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .spin-banner, .spin-banner::after, .spin-banner-badge { animation: none; }
+}
+/* Live mini preview of the real wheel (same icon set, same conic-gradient divider styling as
+   .spinner-wheel) rather than a static graphic, so it can't drift out of sync with the actual
+   prize catalogue. */
+.spin-banner-wheel { position: relative; width: 72px; height: 72px; flex-shrink: 0; margin-left: 0.4rem; }
+.spin-banner-pointer {
+    position: absolute; top: -7px; left: 50%; transform: translateX(-50%); z-index: 5;
+    width: 0; height: 0;
+    border-left: 6px solid transparent; border-right: 6px solid transparent;
+    border-top: 9px solid var(--accent);
+}
+.spin-banner-wheel-disc {
+    position: absolute; inset: 0; border-radius: 50%; overflow: hidden; clip-path: circle(50%);
+    border: 2px solid var(--accent);
+    background-image: repeating-conic-gradient(from -22.5deg, var(--bg) 0deg 44deg, rgba(57,255,136,0.3) 44deg 45deg);
+    box-shadow: 0 0 10px rgba(57,255,136,0.35);
+}
+.spin-banner-segment {
+    position: absolute; inset: 0;
+    display: flex; justify-content: center; align-items: flex-start;
+    transform: rotate(var(--segment-angle));
+}
+.spin-banner-segment-icon {
+    display: block; margin-top: 5px; font-size: 0.72rem; line-height: 1; white-space: nowrap;
+    transform: rotate(calc(-1 * var(--segment-angle)));
+}
+/* Plain "2x" text reads much weaker than the emoji icons around it - a circled badge (matching
+   the reference wheel graphic) gives it the same visual weight. */
+.spin-banner-icon-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--accent);
+    font-size: 0.5rem; font-weight: 800; color: var(--accent);
+}
+.spin-banner-wheel-center {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 22px; height: 22px; border-radius: 50%; z-index: 2;
+    background: var(--bg-elevated); border: 1.5px solid var(--accent);
+    display: flex; align-items: center; justify-content: center;
+}
+.spin-banner-wheel-center-ball { width: 80%; height: 80%; object-fit: contain; }
+.spin-banner-text { flex: 1; min-width: 0; text-align: center; }
+.spin-banner-title {
+    color: var(--text); font-weight: 800; font-size: 1.1rem; letter-spacing: 0.05em;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+.spin-banner-accent { color: var(--accent); text-shadow: 0 0 14px rgba(57,255,136,0.75); }
+.spin-banner-badge {
+    display: inline-flex; align-items: center; gap: 0.3rem; margin-top: 0.4rem;
+    background: linear-gradient(180deg, #6dffb3, var(--accent));
+    color: var(--accent-ink); font-weight: 700; font-size: 0.78rem;
+    padding: 0.2rem 0.65rem; border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.4);
+    animation: spin-banner-badge-pulse 1.8s ease-in-out infinite;
+}
+@keyframes spin-banner-badge-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.07); }
+}
+.spin-banner-arrow {
+    width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%;
+    background: var(--accent); color: var(--accent-ink);
+    display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: 700;
+}
+
+/* ===== Daily spinner page ===== */
+.spinner-wheel-wrap {
+    position: relative; width: min(340px, 90vw); height: min(340px, 90vw);
+    margin: 1.5rem auto 1.25rem;
+}
+.spinner-pointer {
+    position: absolute; top: -17px; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0; z-index: 5;
+    border-left: 17px solid transparent; border-right: 17px solid transparent;
+    border-top: 24px solid var(--accent);
+    filter: drop-shadow(0 0 6px rgba(57,255,136,0.6));
+}
+.spinner-wheel {
+    position: absolute; inset: 0; border-radius: 50%; overflow: hidden; clip-path: circle(50%);
+    border: 3px solid var(--accent);
+    background-image: repeating-conic-gradient(from -22.5deg, var(--bg-elevated) 0deg 44deg, rgba(57,255,136,0.3) 44deg 45deg);
+    box-shadow: 0 0 24px rgba(57,255,136,0.25), inset 0 0 24px rgba(0,0,0,0.4);
+    transition: transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+}
+@media (prefers-reduced-motion: reduce) {
+    .spinner-wheel { transition: none; }
+}
+.wheel-segment {
+    position: absolute; inset: 0;
+    display: flex; justify-content: center; align-items: flex-start;
+    transform: rotate(var(--segment-angle));
+}
+/* No counter-rotation here on purpose - the label reads along the spoke (upside-down at the
+   bottom, sideways at 90/270) rather than staying screen-upright, matching the reference wheel. */
+.wheel-segment-content {
+    margin-top: 18px;
+    display: flex; flex-direction: column; align-items: center; gap: 0.45rem;
+    width: 5.2rem;
+}
+.wheel-segment-icon { font-size: 1.4rem; line-height: 1; }
+.wheel-icon-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--accent);
+    font-size: 0.85rem; font-weight: 800; color: var(--accent);
+}
+.wheel-segment-label {
+    display: flex; flex-direction: column; align-items: center;
+    font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.01em;
+    text-align: center; line-height: 1.2;
+}
+.wheel-segment-label-primary { color: var(--text); }
+.wheel-segment-label-accent { color: var(--accent); }
+.wheel-center {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 86px; height: 86px; border-radius: 50%; z-index: 2;
+    background: radial-gradient(circle, rgba(57,255,136,0.4) 0%, var(--bg-elevated) 68%);
+    border: 2px solid var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow:
+        0 0 22px 4px rgba(57,255,136,0.55),
+        0 0 44px 12px rgba(57,255,136,0.35),
+        0 0 76px 22px rgba(57,255,136,0.2);
+    animation: wheel-center-pulse 2.2s ease-in-out infinite;
+}
+.wheel-center-ball { width: 72%; height: 72%; object-fit: contain; }
+@keyframes wheel-center-pulse {
+    0%, 100% {
+        box-shadow:
+            0 0 22px 4px rgba(57,255,136,0.55),
+            0 0 44px 12px rgba(57,255,136,0.35),
+            0 0 76px 22px rgba(57,255,136,0.2);
+    }
+    50% {
+        box-shadow:
+            0 0 30px 6px rgba(57,255,136,0.7),
+            0 0 60px 16px rgba(57,255,136,0.45),
+            0 0 96px 28px rgba(57,255,136,0.28);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .wheel-center { animation: none; }
+}
+
+.spin-btn { width: 100%; padding: 1rem; font-size: 1.05rem; margin-bottom: 0.75rem; }
+
+.spin-countdown {
+    display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+    text-align: center; font-size: 0.85rem; margin-bottom: 1.25rem;
+}
+.spin-countdown-time { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.streak-card {
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1rem;
+}
+.streak-title { font-weight: 700; }
+.streak-sub { font-size: 0.8rem; margin-top: 0.15rem; }
+.streak-track { display: flex; align-items: flex-start; margin: 1rem 0 0.75rem; }
+.streak-day {
+    flex: 1; position: relative;
+    display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
+    font-size: 0.7rem; color: var(--text-muted);
+}
+.streak-day:not(:last-child)::after {
+    content: ""; position: absolute; top: 11px; left: calc(50% + 15px); right: calc(-50% + 15px);
+    height: 1px; background: var(--border); z-index: 0;
+}
+.streak-day.done:not(:last-child)::after { background: var(--accent); }
+.streak-dot {
+    width: 22px; height: 22px; border-radius: 50%; position: relative; z-index: 1;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center; font-size: 0.7rem;
+}
+.streak-day.done .streak-dot { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.streak-note {
+    display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem;
+    padding-top: 0.6rem; border-top: 1px solid var(--border);
+}

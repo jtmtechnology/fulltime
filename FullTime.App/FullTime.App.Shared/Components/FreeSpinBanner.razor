@@ -1,0 +1,50 @@
+@inject IDailySpinStore SpinStore
+@inject NavigationManager Nav
+
+@if (_available)
+{
+    <button type="button" class="spin-banner" @onclick='() => Nav.NavigateTo("/daily-spinner")'>
+        <div class="spin-banner-wheel">
+            <div class="spin-banner-pointer"></div>
+            <div class="spin-banner-wheel-disc">
+                @for (var i = 0; i < SpinSegments.All.Length; i++)
+                {
+                    var segment = SpinSegments.All[i];
+                    <div class="spin-banner-segment" style="--segment-angle: @(i * (360.0 / SpinSegments.All.Length))deg">
+                        <span class="spin-banner-segment-icon @(segment.Icon == "2x" ? "spin-banner-icon-badge" : "")">@segment.Icon</span>
+                    </div>
+                }
+                <div class="spin-banner-wheel-center">
+                    <img src="_content/FullTime.App.Shared/football.png" alt="" class="spin-banner-wheel-center-ball" />
+                </div>
+            </div>
+        </div>
+        <div class="spin-banner-text">
+            <div class="spin-banner-title">FREE <span class="spin-banner-accent">SPIN</span></div>
+            <div class="spin-banner-badge">🎁 Available</div>
+        </div>
+        <div class="spin-banner-arrow">›</div>
+    </button>
+}
+
+@code {
+    private bool _available;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var raw = await SpinStore.GetAsync();
+        var lastSpinDate = ParseLastSpinDate(raw);
+        _available = lastSpinDate != DateOnly.FromDateTime(DateTime.Now);
+    }
+
+    private static DateOnly? ParseLastSpinDate(string? raw)
+    {
+        if (string.IsNullOrEmpty(raw))
+        {
+            return null;
+        }
+
+        var parts = raw.Split('|');
+        return parts.Length == 2 && DateOnly.TryParse(parts[0], out var date) ? date : null;
+    }
+}
