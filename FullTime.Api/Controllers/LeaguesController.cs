@@ -14,6 +14,7 @@ namespace FullTime.Api.Controllers;
 
 public record CreateLeagueRequest(string Name);
 public record JoinLeagueRequest(string InviteCode);
+public record InviteToLeagueRequest(string Email);
 public record LeagueSummaryDto(
     Guid Id, string Name, string InviteCode, int MemberCount, DateTime CreatedAt, bool IsOwner,
     decimal Balance, decimal Profit, string CurrencySymbol);
@@ -109,6 +110,29 @@ public class LeaguesController(AppDbContext db, LeagueService leagueService, IOp
         return Ok(new LeagueSummaryDto(
             league.Id, league.Name, league.InviteCode, memberCount, league.CreatedAt,
             league.CreatedByUserId == CurrentUserId, startingBalance, 0, currencySymbol));
+    }
+
+    [HttpPost("{id:guid}/invite")]
+    public async Task<IActionResult> InviteToLeague(Guid id, [FromBody] InviteToLeagueRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email))
+        {
+            return BadRequest(new { error = "Email is required." });
+        }
+
+        var outcome = await leagueService.SendInviteAsync(id, CurrentUserId, request.Email.Trim(), ct);
+        if (outcome != InviteOutcome.Success)
+        {
+            var error = outcome switch
+            {
+                InviteOutcome.LeagueNotFound => "League not found.",
+                InviteOutcome.NotMember => "You're not a member of this league.",
+                _ => "Could not send invite.",
+            };
+            return BadRequest(new { error });
+        }
+
+        return NoContent();
     }
 
     [HttpGet("{id:guid}/leaderboard")]

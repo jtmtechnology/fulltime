@@ -176,6 +176,13 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         return (await res.Content.ReadFromJsonAsync<LeagueSummaryDto>())!;
     }
 
+    public async Task SendLeagueInviteAsync(Guid leagueId, string email)
+    {
+        Authorize();
+        var res = await httpClient.PostAsJsonAsync($"api/leagues/{leagueId}/invite", new InviteToLeagueRequest(email));
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+    }
+
     public async Task<List<LeaderboardEntryDto>> GetLeagueLeaderboardAsync(Guid leagueId)
     {
         Authorize();

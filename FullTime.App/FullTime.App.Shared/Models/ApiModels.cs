@@ -66,6 +66,7 @@ public record LeaderboardEntryDto(Guid UserId, string Name, string LeagueName, d
 
 public record CreateLeagueRequest(string Name);
 public record JoinLeagueRequest(string InviteCode);
+public record InviteToLeagueRequest(string Email);
 public record LeagueSummaryDto(
     Guid Id, string Name, string InviteCode, int MemberCount, DateTime CreatedAt, bool IsOwner,
     decimal Balance, decimal Profit, string CurrencySymbol);

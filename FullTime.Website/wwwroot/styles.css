@@ -74,10 +74,13 @@ main { max-width: 960px; margin: 0 auto; padding: 0 1.25rem; }
 .features { padding: 2.5rem 0; text-align: center; }
 .features h2, .get-app h2, .contact h2 { font-size: 1.6rem; margin-bottom: 1.75rem; }
 
+/* Flex + justify-content:center rather than CSS grid - a grid track leaves a lone last-row card
+   pinned to the left edge, while flex-wrap centers every row (including a partial final one). */
 .feature-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem;
     text-align: left;
 }
+.feature-card { flex: 1 1 240px; max-width: 340px; }
 
 .page-card {
     background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px;

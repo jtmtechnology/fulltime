@@ -1,3 +1,5 @@
+using System.Net;
+using FullTime.Api.Auth;
 using FullTime.Api.Betting;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
@@ -8,11 +10,17 @@ using Microsoft.Extensions.Options;
 
 namespace FullTime.Api.Leagues;
 
-public class LeagueService(AppDbContext db, PushNotificationService push, IOptions<BettingOptions> options)
+public class LeagueService(
+    AppDbContext db, PushNotificationService push, IEmailSender emailSender, IOptions<BettingOptions> options)
 {
     // Avoids 0/O and 1/I, which look alike when a code is read aloud or typed from a text message.
     private const string CodeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private const int CodeLength = 6;
+
+    // The marketing site (FullTime.Website, separate app/domain from the API and the Blazor app) -
+    // its /invite page doesn't exist yet; the user is adding it later with App Store/Play Store
+    // links once those exist. Linking to it now is fine even though it 404s until then.
+    private const string WebsiteUrl = "https://fulltime.jtmtechnology.co.uk";
 
     // Keeps the My Leagues list and the worldwide per-membership leaderboard from growing unbounded
     // for one person - 5 is generous for a casual friends-and-family app while still being a real cap.
@@ -106,6 +114,53 @@ public class LeagueService(AppDbContext db, PushNotificationService push, IOptio
         await push.SendToUsersAsync(otherMemberIds, "New league member", $"{joiningUserName} joined {league.Name}", ct);
 
         return new JoinLeagueResult(JoinLeagueOutcome.Success, league);
+    }
+
+    public async Task<InviteOutcome> SendInviteAsync(Guid leagueId, Guid requestingUserId, string email, CancellationToken ct = default)
+    {
+        var league = await db.Leagues.FindAsync([leagueId], ct);
+        if (league is null)
+        {
+            return InviteOutcome.LeagueNotFound;
+        }
+
+        var isMember = await db.LeagueMemberships.AnyAsync(m => m.LeagueId == leagueId && m.UserId == requestingUserId, ct);
+        if (!isMember)
+        {
+            return InviteOutcome.NotMember;
+        }
+
+        var inviterName = await db.Users.Where(u => u.Id == requestingUserId).Select(u => u.Name).SingleAsync(ct);
+        var subject = $"{inviterName} invited you to join {league.Name} on FullTime";
+        var inviteLink = $"{WebsiteUrl}/invite?code={Uri.EscapeDataString(league.InviteCode)}&league={Uri.EscapeDataString(league.Name)}";
+
+        var html = $"""
+            <div style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: #0D1117; padding: 32px 16px;">
+              <div style="max-width: 480px; margin: 0 auto; background: #161B22; border-radius: 16px; padding: 32px 24px; text-align: center;">
+                <img src="{WebsiteUrl}/logo.png" alt="FullTime" width="56" height="56" style="margin-bottom: 16px;" />
+                <h1 style="color: #ffffff; font-size: 20px; margin: 0 0 8px;">{WebUtility.HtmlEncode(inviterName)} wants you on their team</h1>
+                <p style="color: #9CA3AF; font-size: 15px; margin: 0 0 24px;">
+                  You've been invited to join <strong style="color: #ffffff;">{WebUtility.HtmlEncode(league.Name)}</strong>
+                  on FullTime — no real money, just bragging rights.
+                </p>
+                <div style="background: #0D1117; border: 1px dashed #2FAE4F; border-radius: 10px; padding: 12px; margin: 0 0 24px;">
+                  <div style="color: #9CA3AF; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Invite code</div>
+                  <div style="color: #2FAE4F; font-size: 24px; font-weight: 700; letter-spacing: 0.1em;">{WebUtility.HtmlEncode(league.InviteCode)}</div>
+                </div>
+                <a href="{inviteLink}" style="display: inline-block; background: #2FAE4F; color: #0D1117; font-weight: 700; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 15px;">
+                  Join {WebUtility.HtmlEncode(league.Name)}
+                </a>
+              </div>
+            </div>
+            """;
+
+        var text = $"{inviterName} wants you to join their FullTime league \"{league.Name}\"!\n\n" +
+            $"Invite code: {league.InviteCode}\n" +
+            $"Join here: {inviteLink}";
+
+        await emailSender.SendHtmlAsync(email, subject, html, text, ct);
+
+        return InviteOutcome.Success;
     }
 
     private async Task<string> GenerateUniqueCodeAsync(CancellationToken ct)

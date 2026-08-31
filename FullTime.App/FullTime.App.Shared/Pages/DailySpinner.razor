@@ -1,8 +1,9 @@
 @page "/daily-spinner"
-@implements IDisposable
+@implements IAsyncDisposable
 @inject IDailySpinStore SpinStore
 @inject ActiveContextState ContextState
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>FullTime — Daily Spinner</PageTitle>
 
@@ -50,7 +51,7 @@
     <div class="streak-card-header">
         <div>
             <div class="streak-title">🔥 @(_streak)-Day Streak</div>
-            <div class="muted streak-sub">Spin every day to build your streak</div>
+            <div class="muted streak-sub">Spin every day to build your streak — bonus prize on day 7</div>
         </div>
     </div>
     <div class="streak-track">
@@ -61,12 +62,13 @@
             </div>
         }
     </div>
-    <div class="streak-note muted"><span>ℹ</span> Miss a day and your streak will reset</div>
+    <div class="streak-note muted"><span class="info-icon">i</span> Miss a day and your streak will reset</div>
 </div>
 
 @if (_result is not null)
 {
     var isTryAgain = _result.Label == "Try Again Tomorrow";
+    var isBoost = _result.Label.Contains("Boost");
     <button type="button" class="win-overlay" @onclick="DismissResult" aria-label="Dismiss"></button>
     <div class="win-card">
         <div class="win-badge">@_result.Icon</div>
@@ -86,12 +88,21 @@
             <h2>You won!</h2>
             <p class="win-amount">@_result.Label</p>
         }
+        @if (isBoost)
+        {
+            <p class="win-note"><span class="info-icon">i</span> Applies automatically to your next bet.</p>
+        }
+        @if (_streakBonusAmount is { } bonus)
+        {
+            <p class="win-streak-bonus">🔥 7-Day Streak Bonus: +@ContextState.CurrencySymbol@bonus!</p>
+        }
         <button type="button" class="primary-btn win-dismiss-btn" @onclick="DismissResult">@(isTryAgain ? "OK" : "Nice one!")</button>
     </div>
 }
 
 @code {
     private const double SegmentAngle = 360.0 / 8;
+    private static readonly TimeSpan SpinDuration = TimeSpan.FromSeconds(4);
 
     private double _rotationDeg;
     private bool _isSpinning;
@@ -99,9 +110,15 @@
     private DateOnly? _lastSpinDate;
     private SpinSegment? _result;
     private int? _mysteryAmount;
+    private int? _streakBonusAmount;
     private string _countdownText = "";
     private PeriodicTimer? _countdownTimer;
     private CancellationTokenSource? _countdownCts;
+    private IJSObjectReference? _soundModule;
+
+    // Placeholder cosmetic bonus - stacks on top of whatever segment was actually spun, same
+    // "no real economy yet" caveat as the Mystery Cash amount below.
+    private const int StreakBonusAmount = 50;
 
     private bool CanSpin => _lastSpinDate != DateOnly.FromDateTime(DateTime.Now);
 
@@ -132,6 +149,17 @@
         }
     }
 
+    // Not loaded from OnInitializedAsync: Blazor Server prerenders this page statically first,
+    // and JS interop (including dynamic import) throws if attempted during that static render -
+    // it's only safe once the interactive circuit is up, i.e. after first render.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _soundModule = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/FullTime.App.Shared/spinSound.js");
+        }
+    }
+
     private async Task SpinAsync()
     {
         if (!CanSpin || _isSpinning)
@@ -153,16 +181,26 @@
         _rotationDeg += 6 * 360 + delta;
         StateHasChanged();
 
-        await Task.Delay(TimeSpan.FromSeconds(4));
+        if (_soundModule is not null)
+        {
+            await _soundModule.InvokeVoidAsync("playSpinTicks", SpinDuration.TotalMilliseconds);
+        }
+
+        await Task.Delay(SpinDuration);
 
         var today = DateOnly.FromDateTime(DateTime.Now);
-        _streak = _lastSpinDate == today.AddDays(-1) ? Math.Min(_streak + 1, 7) : 1;
+        // Streak counts up to 7, awarding the bonus below on the day it gets there, then wraps
+        // back to 1 the following day rather than sitting at 7 forever.
+        var newStreak = _lastSpinDate == today.AddDays(-1) ? _streak + 1 : 1;
+        var streakBonusAwarded = newStreak >= 7;
+        _streak = newStreak;
         _lastSpinDate = today;
-        await SpinStore.SetAsync($"{today:yyyy-MM-dd}|{_streak}");
+        await SpinStore.SetAsync($"{today:yyyy-MM-dd}|{(streakBonusAwarded ? 0 : _streak)}");
 
         _result = SpinSegments.All[winningIndex];
         // Placeholder only - no real economy behind this yet, just a number to show the user.
-        _mysteryAmount = _result.Label == "Mystery Cash" ? Random.Shared.Next(1, 21) * 5 : null;
+        _mysteryAmount = _result.Label == "Mystery Cash" ? Random.Shared.Next(1, 11) * 5 : null;
+        _streakBonusAmount = streakBonusAwarded ? StreakBonusAmount : null;
         _isSpinning = false;
         StateHasChanged();
         StartCountdown();
@@ -172,13 +210,15 @@
     {
         _result = null;
         _mysteryAmount = null;
+        _streakBonusAmount = null;
 
-        // TEMP for testing only - clears the just-recorded spin so the daily gate doesn't block
-        // the next one, letting the same session spin repeatedly instead of waiting a day. Remove
-        // this SetAsync call (keep the Nav.NavigateTo) once testing is done.
+        // TEMP for testing only - clears the just-recorded spin, in the store AND locally, so the
+        // daily gate doesn't block the next one. Local clearing is needed now that dismiss no
+        // longer navigates away (that navigate-away used to force a remount that reloaded the
+        // now-cleared store; staying on the page - so the streak is still visible - means nothing
+        // else would reset this field). Remove this whole block once testing is done.
         await SpinStore.SetAsync("");
-
-        Nav.NavigateTo("/");
+        _lastSpinDate = null;
     }
 
     private void StartCountdown()
@@ -215,9 +255,21 @@
         }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         _countdownCts?.Cancel();
         _countdownTimer?.Dispose();
+
+        if (_soundModule is not null)
+        {
+            try
+            {
+                await _soundModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // expected when the circuit/WebView is already tearing down
+            }
+        }
     }
 }

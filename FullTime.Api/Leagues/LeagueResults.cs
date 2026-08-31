@@ -21,3 +21,10 @@ public enum CreateLeagueOutcome
 }
 
 public record CreateLeagueResult(CreateLeagueOutcome Outcome, League? League = null);
+
+public enum InviteOutcome
+{
+    Success,
+    LeagueNotFound,
+    NotMember,
+}

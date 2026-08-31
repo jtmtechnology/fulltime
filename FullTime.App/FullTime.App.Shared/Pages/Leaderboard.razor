@@ -62,6 +62,20 @@ else
                     <div class="stat-row"><span class="label">Invite code</span><span class="invite-code">@league.InviteCode</span></div>
                 </div>
 
+                @if (_invitingLeagueId == league.Id)
+                {
+                    <div class="send-invite-row">
+                        <input type="email" placeholder="friend@example.com" @bind="_inviteEmail" @bind:event="oninput" />
+                        <button type="button" disabled="@_sendingInvite" @onclick="() => SendInviteAsync(league.Id)">Send</button>
+                        <button type="button" class="cancel-btn" @onclick="() => _invitingLeagueId = null">Cancel</button>
+                    </div>
+                    <div class="status @(_inviteError ? "error" : "")">@_inviteStatus</div>
+                }
+                else
+                {
+                    <button type="button" class="send-invite-btn" @onclick="() => StartInvite(league.Id)">✉ Invite a friend by email</button>
+                }
+
                 @if (_leagueEntries.TryGetValue(league.Id, out var entries) && entries.Count > 0)
                 {
                     var pendingStakeByUser = _leaguePendingBets.TryGetValue(league.Id, out var pendingBets)
@@ -165,6 +179,12 @@ else
     private string _joinStatus = "";
     private bool _joinError;
     private bool _joining;
+
+    private Guid? _invitingLeagueId;
+    private string _inviteEmail = "";
+    private string _inviteStatus = "";
+    private bool _inviteError;
+    private bool _sendingInvite;
 
     protected override async Task OnInitializedAsync()
     {
@@ -276,6 +296,49 @@ else
         finally
         {
             _joining = false;
+        }
+    }
+
+    private void StartInvite(Guid leagueId)
+    {
+        _invitingLeagueId = leagueId;
+        _inviteEmail = "";
+        _inviteStatus = "";
+        _inviteError = false;
+    }
+
+    private async Task SendInviteAsync(Guid leagueId)
+    {
+        if (string.IsNullOrWhiteSpace(_inviteEmail))
+        {
+            _inviteStatus = "Enter an email address.";
+            _inviteError = true;
+            return;
+        }
+
+        _sendingInvite = true;
+        _inviteStatus = "Sending…";
+        _inviteError = false;
+
+        try
+        {
+            await Api.SendLeagueInviteAsync(leagueId, _inviteEmail.Trim());
+            _inviteStatus = "Invite sent!";
+            _inviteEmail = "";
+        }
+        catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await AuthState.LogoutAsync();
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            _inviteStatus = $"Error: {ex.Message}";
+            _inviteError = true;
+        }
+        finally
+        {
+            _sendingInvite = false;
         }
     }
 
