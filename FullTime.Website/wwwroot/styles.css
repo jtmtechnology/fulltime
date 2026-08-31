@@ -80,7 +80,9 @@ main { max-width: 960px; margin: 0 auto; padding: 0 1.25rem; }
     display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem;
     text-align: left;
 }
-.feature-card { flex: 1 1 240px; max-width: 340px; }
+/* flex-grow:0 - a grow factor would let a lone last-row card stretch to fill that whole row's
+   leftover width, making it visibly wider than the full rows above it. */
+.feature-card { flex: 0 1 296px; }
 
 .page-card {
     background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px;

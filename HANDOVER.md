@@ -25,9 +25,11 @@ re-explaining everything. Read this fully before touching code.
     Codemagic builds for TestFlight/Play Store.
   - `FullTime.App.Web/` — a Blazor Server web host of the same Shared UI, runs on the VM as
     `fulltime-web` (port 5200). Used for testing in a browser without needing a device/emulator.
+    Prerenders statically before going interactive — see the JS-interop gotcha in §5.
 - `FullTime.Website/` — separate standalone marketing site (own `wwwroot`, own `styles.css`, not
   related to FullTime.App.Shared). Runs on the VM as `fulltime-website` (port 5300, nginx reverse
-  proxy on port 80 for `fulltime.jtmtechnology.co.uk`).
+  proxy on port 80 for `fulltime.jtmtechnology.co.uk`). Public domain is proxied through
+  **Cloudflare** — see the caching gotcha in §5, it affects how CSS/JS deploys show up live.
 
 **Per-host service pattern** (important convention, used throughout): any capability that differs
 between MAUI and Web gets an interface in `FullTime.App.Shared/Services/`, with a `Maui*`
@@ -35,13 +37,15 @@ implementation in `FullTime.App/Services/` and a `Web*` implementation in
 `FullTime.App.Web/Services/`, registered in `MauiProgram.cs` / `Program.cs` respectively. Examples:
 `IJwtStore`, `ILocaleProvider`, `ISlipStore`, `IActiveContextStore`, `IPushRegistrar`,
 `IAdsRemovalService`, `IInterstitialAdService`, `IMatchLeaguePreferenceStore`, `ICelebratedWinStore`,
-`IHapticFeedback`, `IDailySpinStore` (new this session).
+`IHapticFeedback`, `IDailySpinStore`. (The Daily Spinner's ticking sound did *not* need this
+pattern — it's plain JS/Web Audio API run inside whichever WebView/browser is already hosting the
+Blazor UI, identical on both hosts, so no Maui/Web split was needed there.)
 
 **VM:** `fulltime-vm`, GCP zone `us-east1-b`, external IP `34.23.16.148`. `e2-micro` + 30GB
 pd-standard, GCP Always Free tier. Database: PostgreSQL, database name is **`friendsacca`** (not
 "fulltime").
 
-**Deployment pattern** (unchanged, works reliably):
+**Deployment pattern** (unchanged, works reliably — `X` = `api` / `web` / `website`):
 ```
 dotnet publish -c Release -r linux-x64 --self-contained false -o publish-X
 tar czf publish-X.tar.gz -C publish-X .
@@ -59,23 +63,43 @@ gcloud compute ssh fulltime-vm --zone=us-east1-b --command='
 ```
 Clean up local `publish-X/` and `publish-X.tar.gz` afterward — don't commit them.
 
-**⚠️ `fulltime-api` and `fulltime-web` on the VM are still stale** as of this handover — this
-session's Daily Spinner work (and the prior session's splash/win-celebration/bet-placement work)
-has only been pushed to git, never deployed to the VM. The Daily Spinner feature itself needs no
-API changes (it's 100% client-side/local-storage), but `fulltime-web` needs a redeploy for anyone
-to see any of this session's or the prior session's work in a browser. Check `git log` vs. what's
-actually running before assuming the VM is current.
+**⚠️ `fulltime-api` and `fulltime-web` are stale as of this handover.** Only `fulltime-website` was
+redeployed this session (three times, as changes landed). `fulltime-api` in particular now needs a
+redeploy before the new invite-by-email feature (§3) will actually work in production — the code is
+committed to `main` but the running VM instance predates it. Check `git log` vs. what's actually
+running before assuming the VM is current.
 
 **Android testing:** Two AVDs exist locally: `FullTime_GoogleAPIs_API35` and `FullTime_Pixel8_API35`.
-adb lives at `C:\Program Files (x86)\Android\android-sdk\platform-tools\adb.exe`. **Always use the
-PowerShell tool for `adb screencap`/`pull`/`input tap` with `/sdcard/...` paths or coordinates** —
-git-bash mangles `/sdcard/...` path arguments. When converting a screenshot's *displayed* coordinates
-to real device coordinates for `adb shell input tap`, multiply by `actual_width / displayed_width`
-(shown in the image attachment metadata) — mixing this up caused several missed taps this session
-even though it's a known, previously-documented gotcha. If a MAUI Android build fails with a
-file-lock error, run `dotnet build-server shutdown` first, then retry.
+adb lives at `C:\Program Files (x86)\Android\android-sdk\platform-tools\adb.exe`, emulator at
+`C:\Program Files (x86)\Android\android-sdk\emulator\emulator.exe`. **Always use the PowerShell
+tool for `adb screencap`/`pull`/`input tap` with `/sdcard/...` paths or coordinates** — git-bash
+mangles `/sdcard/...` path arguments. When converting a screenshot's *displayed* coordinates to
+real device coordinates for `adb shell input tap`, multiply by `actual_width / displayed_width`. If
+a MAUI Android build fails with a file-lock error, run `dotnet build-server shutdown` first, then
+retry; if a `dotnet build`/`dotnet run` background process is still holding a DLL lock afterward,
+find and kill it by PID (`Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'"` filtered by
+`CommandLine`, or just the PID printed in the MSB3026/MSB3027 error) rather than assuming
+`build-server shutdown` alone released it.
 
-**New this session — debugging via Chrome DevTools Protocol (CDP):** when a screenshot-based
+**⚠️ New this session — plain `adb install` crashes a Debug build on launch.** A plain
+`dotnet build -f net10.0-android -c Debug` followed by `adb install` produces an app that aborts
+immediately (`SIGABRT`, logcat shows `No assemblies found in '.../.__override__/...' ... Assuming
+this is part of Fast Deployment. Exiting...`). Debug builds use MAUI's "Fast Deploy", which expects
+the .NET assemblies to be pushed to the device *separately* from the APK by the IDE/deploy tooling
+— a bare `adb install` skips that step entirely. `dotnet build -t:Run -f net10.0-android` was tried
+as the "proper" fix but did **not** actually deploy or launch anything in this environment (build
+succeeded, no install/launch occurred, root cause not confirmed — possibly an adb-target-resolution
+issue specific to this CLI setup). **What actually worked:** build with
+`-p:EmbedAssembliesIntoApk=true` to embed the assemblies straight into the APK (sidesteps Fast
+Deploy entirely), then a fresh `adb uninstall com.companyname.fulltime.app` + `adb install
+<path>\com.companyname.fulltime.app-Signed.apk` (not `-r`), then
+`adb shell am start -n com.companyname.fulltime.app/<activity>` to launch — the crc64-prefixed
+activity class name can change between builds, so if `am start` says "Activity class does not
+exist", re-resolve it first with `adb shell cmd package resolve-activity --brief
+com.companyname.fulltime.app`. Confirm it's actually running (not silently crashed back to the
+launcher) via `adb shell dumpsys window | Select-String mCurrentFocus` before screenshotting.
+
+**New (prior session) — debugging via Chrome DevTools Protocol (CDP):** when a screenshot-based
 diagnosis is ambiguous (e.g. "is this element actually clipped, or does it just look that way?"),
 you can get exact DOM/layout truth from the *real* on-device Android WebView instead of guessing:
 ```
@@ -84,181 +108,210 @@ adb shell cat /proc/net/unix | grep devtools                 # confirm the debug
 adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>
 curl -s http://localhost:9222/json                            # lists the page + its ws:// URL
 ```
-Then open a WebSocket to that `webSocketDebuggerUrl` (Node 22+ has a native `WebSocket` global, no
-package install needed) and send `{"id":1,"method":"Runtime.evaluate","params":{"expression":"...","returnByValue":true}}`
-— e.g. `document.querySelector('.foo').getBoundingClientRect()` — to get real computed geometry.
-This is far more reliable than iterating on screenshots for CSS layout bugs; it caught that an
-"Android WebView won't clip rotated children" theory (below) was actually a misdiagnosis.
+Then open a WebSocket to that `webSocketDebuggerUrl` (Node 22+ has a native `WebSocket` global) and
+send `{"id":1,"method":"Runtime.evaluate","params":{"expression":"...","returnByValue":true}}` to
+get real computed geometry. Far more reliable than iterating on screenshots for CSS layout bugs.
 
 **iOS:** No Mac available in this environment — iOS changes are pushed and verified via Codemagic
-CI (ad-hoc IPA builds + TestFlight) and the user's own physical iPhone.
+CI (ad-hoc IPA builds + TestFlight) and the user's own physical iPhone. **Still not confirmed on a
+real iPhone as of this handover** — everything this session and last session was only verified via
+the Android emulator and the Blazor Server web host.
 
 ---
 
-## 2. Earlier session's work (stable, shipped to `main` before this session — see git log for detail)
+## 2. Earlier work (stable, shipped before this session — see git log for detail)
 
-Condensed from the previous handover; all of this was working and pushed before this session
-started, so treat it as background context, not open work:
-- In-app splash bridge + native splash fix (`MainLayout.razor`, `splash.svg`) — `OnInitialized` made
-  synchronous so BlazorWebView's first paint isn't blocked; splash bridge is a plain colour div, no
-  second logo render.
-- Win-celebration overlay (`WinCelebrationOverlay.razor`) — shows once per newly-settled `Won` bet,
-  tracked by `SettledAt` timestamp via `ICelebratedWinStore`, queues multiple wins in sequence.
-- Bet-placement confirmation in `BetSlipSheet.razor` (2.4s hold + haptic via `IHapticFeedback`).
-- Logo/branding: "football + banknotes shield" design (`logo.png`, `favicon.png`, `appicon.png` /
-  `appicon_ios.png` split, `splash.svg`).
-- **Known still-unresolved from that session** (not touched this session, still true unless the
-  user says otherwise): splash fix never confirmed on a real iPhone; TestFlight beta submission was
-  hitting a 422 (likely missing App Store Connect "Test Information"); real AdMob IDs still swapped
-  for test IDs; `fulltime-api`/`fulltime-web` stale on the VM; store-listing icon exports not done;
-  a stale plan exists at `C:\Users\alan.browne\.claude\plans\dazzling-giggling-engelbart.md` to
-  retire the old football-data provider in favour of Highlightly.
+Condensed background context, not open work:
+- In-app splash bridge + native splash fix, win-celebration overlay (`WinCelebrationOverlay.razor`,
+  once per newly-settled `Won` bet via `ICelebratedWinStore`), bet-placement confirmation in
+  `BetSlipSheet.razor`, logo/branding assets.
+- **Daily Spinner** (prize wheel) was originally built two sessions ago: `/daily-spinner` page, a
+  `FreeSpinBanner.razor` promo on the Matches page with a live mini-preview wheel, a shared
+  `SpinSegments.All` prize catalogue (placeholder only — no real economy/backend/redemption),
+  `IDailySpinStore` persistence (per-host pattern), pointer-landing rotation math, a real football
+  photo in a pulsing glow ring. This session (§3) substantially polished it — see below for current
+  behaviour, don't assume the original build description still matches.
+- **Known still-unresolved from before this session** (not touched, still true unless the user says
+  otherwise): TestFlight beta submission was hitting a 422 (likely missing App Store Connect "Test
+  Information"); real AdMob IDs still swapped for test IDs; store-listing icon exports not done; a
+  stale plan exists at `C:\Users\alan.browne\.claude\plans\dazzling-giggling-engelbart.md` to retire
+  the old football-data provider in favour of Highlightly (unverified, possibly stale — re-check
+  before resuming).
 
 ---
 
-## 3. This session: Daily Spinner feature (prize wheel)
+## 3. This session's work
 
-Built a "spin once a day for a prize" feature end-to-end: a promo banner on the Matches page and a
-full spinner page, per the user's explicit ask to build the **screen and spin mechanic first**,
-before designing the real prize economy. No real money/prize-granting logic exists yet — see §5.
+### 3.1 League invite by email (new feature)
+- New `POST api/leagues/{id}/invite` endpoint (`LeaguesController.cs` + `LeagueService.SendInviteAsync`
+  + a new `InviteOutcome` enum in `LeagueResults.cs`). Verifies the caller is a member of the league,
+  then emails the target address.
+- `IEmailSender` gained `SendHtmlAsync(toEmail, subject, htmlBody, textFallback, ct)` (MimeKit
+  `MultipartAlternative`) alongside the existing plain-text `SendAsync` (still used unchanged by
+  `AuthService` for verification/reset emails) — same Brevo SMTP relay (`SmtpEmailSender.cs`), no
+  new config needed.
+- The HTML email embeds the FullTime logo (`https://fulltime.jtmtechnology.co.uk/logo.png`), the
+  invite code, and a link to `https://fulltime.jtmtechnology.co.uk/invite?code=...&league=...`.
+  **That `/invite` page does not exist yet** — the user said they'll build it themselves later, once
+  they have real App Store/Play Store links to put on it. Linking to it now is intentional even
+  though it currently 404s.
+- `Leaderboard.razor`: each league card now has an "✉ Invite a friend by email" button that opens an
+  email field and posts via a new `ApiClient.SendLeagueInviteAsync`. New `InviteToLeagueRequest(string
+  Email)` DTO mirrored in both `FullTime.Api/Controllers/LeaguesController.cs` and
+  `FullTime.App.Shared/Models/ApiModels.cs`, per the project's existing mirrored-DTO convention.
+- **Not yet live in production** — `fulltime-api` hasn't been redeployed since this was written (see
+  §1's stale-VM warning).
 
-### 3.1 What's there
-- **`/daily-spinner` page** (`DailySpinner.razor`): an 8-segment CSS wheel (icon + two-tone
-  white/green uppercase label per segment), a fixed pointer, a "SPIN NOW" button, a result popup
-  styled like the existing win-celebration card, a 7-day streak tracker, and a live "next free spin"
-  countdown.
-- **`FreeSpinBanner.razor`**: a promo banner shown above the "Matches" heading on the home page,
-  linking to `/daily-spinner`. Renders a **live** mini-preview of the actual wheel (same
-  `SpinSegments.All` data, same conic-gradient styling as the main wheel) rather than a static
-  image, so it can never drift out of sync with the real prize catalogue. Auto-hides once today's
-  spin is used.
-- **Prize catalogue** (`Models/SpinSegment.cs`, `SpinSegments.All`) — a shared static array of 8
-  `(Icon, Label)` placeholders, currently: Mystery Cash ×3 (❓), Bet Boost 25%/50% ×2 (🚀), Try
-  Again Tomorrow ×2 (⏳), 2x Odds Boost ×1 ("2x" in a circle badge). Shared between the big wheel
-  and the banner's mini preview specifically so they can't disagree.
-- **Persistence**: `IDailySpinStore` (+ `MauiDailySpinStore` / `WebDailySpinStore`), same per-host
-  pattern as `IMatchLeaguePreferenceStore`. Stores a single string `"yyyy-MM-dd|streak"` — the local
-  date of the last spin and the streak count as of that spin.
-- **"Mystery Cash" result**: picks a random multiple of 5 between 5 and 100 (`Random.Shared.Next(1,
-  21) * 5`), shown in the user's currency via `ActiveContextState.CurrencySymbol` (already
-  initialized elsewhere by `ContextSwitcher.razor` on app load — no extra init needed). Purely
-  cosmetic; nothing is actually credited anywhere.
-- **"Try Again Tomorrow" result**: deliberately does **not** say "You won!" / "Nice one!" — shows
-  "So close!" and an "OK" button instead, since nothing was won.
-- **Wheel centre**: a real photo-real football image (`wwwroot/football.png`, transparent
-  background) inside a pulsing green radial-glow ring, used in both the big wheel and the banner's
-  mini wheel (replaced the plain ⚽ emoji, which couldn't be shaded/lit to match a supplied
-  reference image).
+### 3.2 Daily Spinner polish
+All in `DailySpinner.razor` / `FreeSpinBanner.razor` / `app.css` unless noted:
+- **Fixed a real bug**: dismissing a win used to `Nav.NavigateTo("/")` immediately, so the streak
+  update was never actually visible. Dismiss now just closes the popup and stays on the page. The
+  TEMP testing bypass (below) had to be adjusted to also clear the local `_lastSpinDate` field
+  directly, since it can no longer rely on the old navigate-away forcing a remount that reloaded
+  from the (cleared) store.
+- **7-day streak now cycles instead of capping**: previously `Math.Min(_streak+1,7)` sat at 7
+  forever; now it increments and wraps — hitting 7 awards a flat **£50** placeholder bonus
+  (`StreakBonusAmount` const, shown on the win card) and resets the persisted streak to 0, so the
+  next day starts a fresh 1..7 cycle.
+- **Mystery Cash range**: £5–£100 → **£5–£50** (`Random.Shared.Next(1, 11) * 5`), per explicit ask.
+- **Boost results** ("Bet Boost 25%/50%", "2x Odds Boost") now show "Applies automatically to your
+  next bet." — copy only, no real bet-integration exists (the whole wheel is still 100%
+  placeholder/cosmetic, no backend prize-granting).
+- Streak card subtitle: "Spin every day to build your streak — bonus prize on day 7".
+- `FreeSpinBanner`'s badge text: "Available" → "**Available now**"; its pulse animation amplitude
+  increased (scale peak 1.07 → 1.18, more noticeable).
+- The big wheel's pulsing center football image enlarged (`.wheel-center` 86px → 108px, ball scales
+  proportionally via its 72%/`object-fit:contain`).
+- **Spin ticking sound added**: new `FullTime.App.Shared/wwwroot/spinSound.js`, a small Web Audio
+  API module (`playSpinTicks(durationMs)`) synthesizing ~28 short oscillator clicks with an ease-out
+  spacing curve (mimics a wheel-of-fortune ratchet slowing down) — deliberately not a shipped audio
+  asset, nothing to bundle or license. Loaded via dynamic `import()` through `IJSRuntime`.
+  **Real bug caught and fixed**: importing it from `OnInitializedAsync` threw
+  `InvalidOperationException` under Blazor Server's static prerendering (JS interop isn't allowed
+  until the interactive circuit exists) — moved to `OnAfterRenderAsync(firstRender)` instead. Watch
+  for this on any *other* future JS-interop addition to a page rendered by `FullTime.App.Web`.
+- **Icon fix**: the `ℹ` (U+2139) and `🎯` emoji rendered inconsistently (wrong/broken glyph on the
+  Android emulator; emoji also ignore CSS `color` so couldn't be made green on request). Replaced
+  both with a new reusable `.info-icon` CSS class — a small bordered circle with a plain "i",
+  colored `var(--accent)` (green) — matching the existing `.wheel-icon-badge`/
+  `.spin-banner-icon-badge` "2x"-badge visual language. Used in the streak card's "Miss a day..."
+  note and the win card's boost note. **If any other emoji ever looks visually "off" or need a
+  specific brand color, check whether it should become a plain-glyph-in-a-badge like this instead
+  of fighting emoji-font rendering.**
+- **TEMP once-a-day bypass is still in place** (`DismissResult()` clears the spin record on every
+  dismiss). This was flagged as unexpected mid-session; asked to be removed, then the user said to
+  leave it in for now. Still marked `// TEMP for testing only` in code — still must be removed
+  before real shipping (carried over from before, unchanged).
 
-### 3.2 Key decisions and why
-1. **Pointer-landing rotation math** (`SpinAsync` in `DailySpinner.razor`): pointer is fixed at the
-   top; the wheel rotates by `R` degrees clockwise, so landing segment `i` under the pointer needs
-   `R mod 360 == (360 - i*45) mod 360`. `_rotationDeg` only ever *increases* (adds `6*360 + delta`
-   each spin, `delta` always in `[0,360)`), which is also what guarantees the wheel always spins the
-   same direction (clockwise), never backward, across repeated spins in a session.
-2. **Segment labels read along the spoke, not screen-upright** (`.wheel-segment-content` has no
-   counter-rotation) — deliberately matches a reference wheel graphic where the bottom segment's
-   text renders upside-down. This is a stylistic choice specific to the *big* wheel; the *banner's*
-   mini-wheel icons **do** counter-rotate to stay upright (`.spin-banner-segment-icon`), since a
-   tiny preview icon reads better the normal way up.
-3. **A rotated CSS square escapes a circular `overflow:hidden` clip** — real bug, not a
-   misdiagnosis: `.wheel-segment`/`.spin-banner-segment` are full-square `position:absolute;inset:0`
-   elements rotated to a fixed angle; an un-clipped rotated square's corners project past a
-   circle inscribed in it. Fixed by adding `overflow: hidden` (plus `clip-path: circle(50%)` as a
-   belt-and-braces second clip) to the wheel disc elements. Without this, a wedge's invisible
-   corner could sit on top of controls below the wheel and swallow clicks — this is exactly what
-   broke the Spin button once during testing.
-4. **The "Android WebView won't clip rotated children" theory was a misdiagnosis** — worth
-   remembering so it doesn't get "fixed" again unnecessarily. Mid-session, the banner's CSS
-   mini-wheel appeared to render icons outside its circle on-device (but not in desktop
-   Edge/Playwright), which was blamed on a WebView compositing bug and "solved" by swapping in a
-   static PNG image instead. Later, CDP inspection of the *actual* running WebView (see §1) proved
-   the DOM geometry was correct all along — nothing was really escaping the circle. The banner was
-   later switched back to a live CSS mini-wheel (per user request, so it can't drift from the real
-   prize list) using the exact same technique, and it renders correctly on-device. **If a rotated
-   wheel element ever again appears to visually escape its circle on Android but not desktop, check
-   real geometry via CDP before assuming it's an engine bug** — it's more likely a genuinely
-   low-contrast/small element (this happened with the "2x" badge, which was actually rendering
-   correctly but was hard to see as plain text — fixed by wrapping it in a small circular badge to
-   match the other icons' visual weight, not by touching its position).
-5. **`SpinSegments.All` is a shared static model**, not duplicated between the big wheel and the
-   banner, specifically so a future change to the real prize catalogue only needs to happen in one
-   place.
-6. **⚠️ TEMP: the once-a-day gate is currently bypassed on dismiss.** `DismissResult()` in
-   `DailySpinner.razor` calls `await SpinStore.SetAsync("")` right after recording the streak, which
-   erases the "already spun today" flag — explicitly requested by the user so they could keep
-   spinning repeatedly during iPhone/emulator testing instead of asking to reset it by hand each
-   time. **This must be removed before the feature ships for real** — it's marked with a `// TEMP
-   for testing only` comment at the call site; removing just that one `await SpinStore.SetAsync("")`
-   line (keep the `Nav.NavigateTo("/")` after it) restores the real once-a-day behaviour.
-7. **Resetting the daily-spin flag by hand on the emulator** (used constantly this session to
-   re-test without waiting for the temp bypass, and still useful once that bypass is reverted):
-   ```
-   adb shell am force-stop com.companyname.fulltime.app
-   adb shell run-as com.companyname.fulltime.app sed -i '/fulltime_daily_spin/d' shared_prefs/com.companyname.fulltime.app_preferences.xml
-   adb shell monkey -p com.companyname.fulltime.app -c android.intent.category.LAUNCHER 1
-   ```
-   This edits only the one SharedPreferences key, leaving login session/streak-adjacent keys alone.
-   Full `pm clear`/uninstall also works but wipes the login session and forces re-auth — prefer the
-   targeted `sed` unless a clean-slate install is actually wanted.
+### 3.3 Cosmetic
+- `.back-btn` (‹, used across all pages) font-size 1.4rem → 1.8rem.
+- `.spin-banner-arrow` (›, on the home-page Free Spin banner) font-size 1.3rem → 1.7rem.
+- iOS app icon backdrop color changed from accent green (`#2FAE4F`) to the same dark navy Android
+  and the splash screen already use (`#0D1117`), in `FullTime.App/FullTime.App/FullTime.App.csproj`.
 
-### 3.3 Files changed this session
-- **New:** `FullTime.App.Shared/Models/SpinSegment.cs`, `FullTime.App.Shared/Services/IDailySpinStore.cs`,
-  `FullTime.App/Services/MauiDailySpinStore.cs`, `FullTime.App.Web/Services/WebDailySpinStore.cs`,
-  `FullTime.App.Shared/Pages/DailySpinner.razor`, `FullTime.App.Shared/Components/FreeSpinBanner.razor`,
-  `FullTime.App.Shared/wwwroot/football.png`.
-- **Modified:** `FullTime.App/MauiProgram.cs` / `FullTime.App.Web/Program.cs` (DI registration for
-  `IDailySpinStore`), `FullTime.App.Shared/Pages/Matches.razor` (banner placed above the `<h1>`),
-  `FullTime.App.Shared/wwwroot/app.css` (all wheel/banner/streak styling).
-- Committed as `7cf5fd5` ("Add Daily Spinner: prize wheel screen and spin mechanic") and pushed to
-  `main`.
+### 3.4 Website (`FullTime.Website`)
+- Feature grid content refreshed to match currently-shipped app features: added a "Daily Spinner"
+  card; updated "Private leagues" copy to mention email invites; updated "Live scores" copy to
+  mention win celebrations.
+- **Fixed layout bug**: a lone last-row card (7 cards, 3-column layout) sat pinned to the left
+  instead of centering. Switched `.feature-grid` from CSS Grid to Flexbox
+  (`display:flex; flex-wrap:wrap; justify-content:center`) — flexbox centers every wrapped row
+  *including* a partial final one, which CSS Grid does not do for leftover items. Then had to fix a
+  second-order issue: `.feature-card`'s original `flex:1 1 240px` let a *lone* last-row card grow to
+  fill its entire row, making it visibly wider than cards in full rows above — changed to
+  `flex:0 1 296px` (fixed width, no grow) so every card is the same width regardless of row
+  completeness.
+- **⚠️ Discovered mid-session — the site is proxied through Cloudflare, and it edge-caches static
+  assets independent of origin deploys.** `index.html` responses come back `cf-cache-status:
+  DYNAMIC` (never cached), but `styles.css` came back `cf-cache-status: HIT` with `Cache-Control:
+  max-age=14400` (4h) — a CSS-only redeploy did not show up live even though the file was correctly
+  updated on the VM (confirmed via SSH). No Cloudflare dashboard/API access is configured in this
+  environment, so purging isn't possible directly. **Workaround in place:** the stylesheet
+  `<link>` in `index.html` uses a cache-busting query string, `styles.css?v=N` — bump `N` on every
+  CSS-only deploy so Cloudflare treats it as a new URL and fetches fresh from origin immediately.
+  Currently at **`v=3`**. If real Cloudflare purge access ever gets configured, this workaround can
+  be dropped in favour of an actual purge-on-deploy step.
+- Deployed to the VM (`fulltime-website` service) three times this session as changes landed; the
+  live site at https://fulltime.jtmtechnology.co.uk reflects all of §3.4 as of this handover.
 
-### 3.4 Verification done this session
-- Built and ran in a real browser (Playwright against `FullTime.App.Web`) and repeatedly on the
-  `FullTime_Pixel8_API35` emulator (native MAUI build) — spin animation, correct segment-to-popup
-  matching, streak increment/persistence, disabled state after spinning, live countdown, banner
-  auto-hide, and the Mystery Cash currency amount all confirmed working.
-- **Not yet verified on a real iPhone** — that's the reason this was just pushed to `main`; next
-  step is a Codemagic build for the user to test on their physical device.
+### 3.5 Files changed this session
+- **New:** `FullTime.App.Shared/wwwroot/spinSound.js`.
+- **Modified (App/API):** `FullTime.Api/Auth/IEmailSender.cs`, `FullTime.Api/Auth/SmtpEmailSender.cs`,
+  `FullTime.Api/Controllers/LeaguesController.cs`, `FullTime.Api/Leagues/LeagueResults.cs`,
+  `FullTime.Api/Leagues/LeagueService.cs`, `FullTime.App.Shared/Components/FreeSpinBanner.razor`,
+  `FullTime.App.Shared/Models/ApiModels.cs`, `FullTime.App.Shared/Pages/DailySpinner.razor`,
+  `FullTime.App.Shared/Pages/Leaderboard.razor`, `FullTime.App.Shared/Services/ApiClient.cs`,
+  `FullTime.App.Shared/wwwroot/app.css`, `FullTime.App/FullTime.App/FullTime.App.csproj`.
+- **Modified (Website):** `FullTime.Website/wwwroot/index.html`, `FullTime.Website/wwwroot/styles.css`.
+- Committed as `55d3e44` ("Add league email invites, tune Daily Spinner, update marketing site") and
+  a follow-up website-only commit for the card-width fix + `v=3` cache-bust (see git log for the
+  exact hash — created and pushed alongside this handover update).
+
+### 3.6 Verification done this session
+- League invite email: backend builds clean; **not actually verified end-to-end** (no real SMTP
+  send was triggered/observed — credentials live only in VM config, and `fulltime-api` is stale
+  anyway, see §1).
+- Daily Spinner + cosmetic changes: built and installed to `FullTime_Pixel8_API35` repeatedly
+  (working around the Fast Deploy issue in §1), confirmed launching and rendering; user did their
+  own hands-on testing on the emulator and gave several rounds of live feedback (icon color, pulse
+  size, badge text, streak copy) that are all incorporated above.
+- Website: verified live via `curl` against the public domain (including the `?v=N` cache-bust
+  check) after each of the three deploys.
+- **Not verified on a real iPhone or against a freshly-deployed `fulltime-api`/`fulltime-web`.**
 
 ---
 
 ## 4. Outstanding tasks (merged: carried-over + new)
 
-1. **Confirm the Daily Spinner works on a real iPhone** (this session's main open item) — trigger/
-   wait for a Codemagic build off the latest `main` push.
-2. **Revert the TEMP once-a-day bypass** in `DailySpinner.razor`'s `DismissResult()` once iPhone
-   testing is done (§3.2 point 6) — do not ship with it in place.
-3. **Design the real prize economy** — the wheel/catalogue is currently 100% placeholder UI with no
-   backend, no real currency awarded, no redemption flow. Was explicitly deferred by the user
-   ("just for now") — needs a real design pass before this is a genuine feature.
-4. Real store-listing icon exports (1024×1024 no-alpha Apple / 512×512 with-alpha Google) still not
+1. **Redeploy `fulltime-api`** — the invite-by-email backend code is committed but not live; the
+   feature won't actually work for real users until this happens.
+2. **Redeploy `fulltime-web`** — stale relative to `main`, includes everything from §3.2/§3.3 plus
+   the prior session's Daily Spinner build.
+3. **Confirm everything works on a real iPhone** (Daily Spinner, league invites, all cosmetic
+   changes) — still only verified via Android emulator + Blazor Server web host across two
+   sessions now.
+4. **Revert the TEMP once-a-day spin bypass** in `DailySpinner.razor`'s `DismissResult()` — flagged
+   again this session, user asked for removal then explicitly said to leave it in for now. Do not
+   ship with it in place; the one-line removal is documented in a comment at the call site.
+5. **Design the real prize economy** — wheel/catalogue is still 100% placeholder UI, explicitly
+   deferred by the user, unchanged since it was first flagged.
+6. **Build the `/invite` website page** — the invite email already links to it
+   (`fulltime.jtmtechnology.co.uk/invite?code=...&league=...`); user said they'll do this themselves
+   once they have real App Store/Play Store links to include.
+7. Real store-listing icon exports (1024×1024 no-alpha Apple / 512×512 with-alpha Google) — not
    produced.
-5. Redeploy `fulltime-api` and `fulltime-web` to the VM — stale since before this session, now more
-   so.
-6. Real AdMob IDs still need swapping back in before any store submission (test IDs currently in
+8. Real AdMob IDs still need swapping back in before any store submission (test IDs currently in
    `MauiInterstitialAdService.cs` / `AndroidManifest.xml`).
-7. TestFlight beta review 422 (likely missing App Store Connect "Test Information") — not confirmed
-   resolved, not touched this session.
-8. The stale `free-api-live-football-data`-retirement plan at
-   `C:\Users\alan.browne\.claude\plans\dazzling-giggling-engelbart.md` still exists, untouched,
-   possibly stale — re-verify before resuming if picked up.
+9. TestFlight beta review 422 — not confirmed resolved, not touched.
+10. The stale `free-api-live-football-data`-retirement plan at
+    `C:\Users\alan.browne\.claude\plans\dazzling-giggling-engelbart.md` — untouched, possibly stale,
+    re-verify before resuming if picked up.
+11. If Cloudflare dashboard/API access ever gets configured, replace the `styles.css?v=N`
+    cache-busting workaround (§3.4) with a real purge-on-deploy step.
 
 ---
 
 ## 5. Conventions reconfirmed/added this session
 
-- **Per-host service pattern** (§1) — still the rule for any new platform-different capability.
+- **Per-host service pattern** (§1) — still the rule for any new platform-different capability; note
+  that plain browser-standard JS interop (no platform difference) doesn't need it, as with the spin
+  sound.
 - **No comments explaining "what"**, only non-obvious "why" — followed throughout.
-- **Confirm before pushing to the VM or production DB.** Pushing to `main`/GitHub was explicitly
-  requested this session ("commit and push so i can test in iphone") and done directly — that
-  authorization was for this specific push, not standing approval for future ones.
+- **Confirm before pushing to the VM.** Every VM deploy this session (website × 3) was explicitly
+  requested in the moment ("push the website to the vm", "then deploy to vm") — treat each as
+  one-time authorization, not standing approval for future deploys including `fulltime-api`/`-web`.
 - **Git**: commit messages explain *why*, not *what*; always end with `Co-Authored-By: Claude Sonnet
-  5 <noreply@anthropic.com>`; never `--amend`; never force-push.
-- **adb screenshot coordinates**: always multiply *displayed* image coordinates by
-  `actual_width / displayed_width` before passing to `input tap` — got this wrong at least twice
-  this session despite it being a known gotcha; double-check every time, especially right after a
-  layout change shifts button positions (e.g. the wheel getting bigger moved the Spin button down).
+  5 <noreply@anthropic.com>`; never `--amend`; never force-push. When staging, name files
+  explicitly rather than `git add -A`/`.` — this session had several unrelated untracked files
+  sitting in the working tree (a stray `CLAUDE.md`, `new 1.txt`, `splash-check.png`, a local
+  `scratch/` screenshot folder) that were deliberately left out of both commits.
+- **Blazor Server prerendering blocks JS interop until after first render** (§3.2) — any
+  `IJSRuntime` call (including dynamic `import()`) must happen in `OnAfterRenderAsync(firstRender)`
+  or later, never `OnInitializedAsync`, on any page also served by `FullTime.App.Web`.
+- **MAUI Debug builds need `-p:EmbedAssembliesIntoApk=true` for a plain `adb install` to work in
+  this environment** (§1) — otherwise the app crashes on launch with a Fast Deploy assembly error.
+- **The live website is behind Cloudflare and edge-caches static assets** (§3.4) — a CSS/JS-only
+  change needs the `styles.css?v=N` cache-bust bumped, or it won't show up live for up to 4 hours
+  even though the origin VM is already updated.
 - **When a screenshot makes an on-device CSS bug look ambiguous, reach for CDP (§1) rather than
-  iterating blindly on screenshots** — saved a lot of time once actually used, should have reached
-  for it sooner in this session's debugging back-and-forth over the banner wheel.
+  iterating blindly on screenshots.**
