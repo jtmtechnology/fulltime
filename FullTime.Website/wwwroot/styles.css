@@ -121,13 +121,15 @@ main { max-width: 960px; margin: 0 auto; padding: 0 1.25rem; }
 .invite-hero .hint { color: var(--text-muted); margin-top: 1.5rem; }
 
 .invite-code-card {
-    display: inline-block; margin: 0 auto; padding: 1.5rem 2.5rem;
+    display: inline-block; margin: 0 auto; padding: 1.5rem 2.5rem; text-align: center;
+    border-color: var(--accent); box-shadow: 0 0 32px rgba(57, 255, 136, 0.15);
 }
 .invite-code-card .label {
     font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);
 }
 .invite-code-big {
-    font-size: 2rem; font-weight: 800; letter-spacing: 0.15em; color: var(--accent); margin-top: 0.3rem;
+    font-size: 3rem; font-weight: 800; letter-spacing: 0.2em; color: var(--accent); margin-top: 0.4rem;
+    text-shadow: 0 0 24px rgba(57, 255, 136, 0.5);
 }
 
 .contact { padding: 2.5rem 0 3.5rem; text-align: center; }
