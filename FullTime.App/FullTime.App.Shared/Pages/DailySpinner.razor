@@ -1,9 +1,8 @@
 @page "/daily-spinner"
-@implements IAsyncDisposable
+@implements IDisposable
 @inject IDailySpinStore SpinStore
 @inject ActiveContextState ContextState
 @inject NavigationManager Nav
-@inject IJSRuntime JS
 
 <PageTitle>FullTime — Daily Spinner</PageTitle>
 
@@ -114,7 +113,6 @@
     private string _countdownText = "";
     private PeriodicTimer? _countdownTimer;
     private CancellationTokenSource? _countdownCts;
-    private IJSObjectReference? _soundModule;
 
     // Placeholder cosmetic bonus - stacks on top of whatever segment was actually spun, same
     // "no real economy yet" caveat as the Mystery Cash amount below.
@@ -149,17 +147,6 @@
         }
     }
 
-    // Not loaded from OnInitializedAsync: Blazor Server prerenders this page statically first,
-    // and JS interop (including dynamic import) throws if attempted during that static render -
-    // it's only safe once the interactive circuit is up, i.e. after first render.
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            _soundModule = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/FullTime.App.Shared/spinSound.js");
-        }
-    }
-
     private async Task SpinAsync()
     {
         if (!CanSpin || _isSpinning)
@@ -180,11 +167,6 @@
         var delta = ((targetMod - currentMod) % 360 + 360) % 360;
         _rotationDeg += 6 * 360 + delta;
         StateHasChanged();
-
-        if (_soundModule is not null)
-        {
-            await _soundModule.InvokeVoidAsync("playSpinTicks", SpinDuration.TotalMilliseconds);
-        }
 
         await Task.Delay(SpinDuration);
 
@@ -255,21 +237,9 @@
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public void Dispose()
     {
         _countdownCts?.Cancel();
         _countdownTimer?.Dispose();
-
-        if (_soundModule is not null)
-        {
-            try
-            {
-                await _soundModule.DisposeAsync();
-            }
-            catch (JSDisconnectedException)
-            {
-                // expected when the circuit/WebView is already tearing down
-            }
-        }
     }
 }
