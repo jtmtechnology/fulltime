@@ -17,23 +17,38 @@ workflows:
         script: |
           $DOTNET workload install maui-android
 
+      - name: Restore just the Android target
+        script: |
+          # FullTime.App.csproj multi-targets android/ios/maccatalyst/windows, and only the
+          # maui-android workload is installed on this runner - letting build/InstallAndroidDependencies
+          # do their own implicit restore evaluates the full TargetFrameworks list and fails with
+          # NETSDK1147 over the missing ios workload. -p:TargetFramework (NOT -f, which for
+          # `dotnet restore` specifically means --force, not --framework like it does for
+          # build/publish/run/test, and silently swallows "net10.0-android" as a bogus positional
+          # project-path argument instead) correctly narrows it to just this one TFM up front, so
+          # every later step here uses --no-restore against this.
+          cd FullTime.App/FullTime.App
+          $DOTNET restore -p:TargetFramework=net10.0-android
+
+      - name: Install Android SDK platform
+        script: |
+          # The maui-android workload only brings the build tooling, not the actual Android SDK
+          # platform files (android.jar etc for the target API level) - those are a separate
+          # download, hence XA5207 "Could not find android.jar for API level ..." without this.
+          # AcceptAndroidSDKLicenses is required non-interactively in CI (no terminal to accept the
+          # licence prompt).
+          cd FullTime.App/FullTime.App
+          $DOTNET build -t:InstallAndroidDependencies -f net10.0-android --no-restore \
+            -p:AndroidSdkDirectory=/usr/local/share/android-sdk \
+            -p:AcceptAndroidSDKLicenses=true
+
       - name: Build a directly-installable debug APK
         script: |
           # EmbedAssembliesIntoApk sidesteps Fast Deploy (which needs the IDE/adb to push
           # assemblies separately) - same reason it's used for local emulator installs, see
           # HANDOVER.md. Auto-signed with the default debug keystore, which is fine for sideloading
           # onto a personal device but NOT what would ship to the Play Store.
-          #
-          # FullTime.App.csproj multi-targets android/ios/maccatalyst/windows, and only the
-          # maui-android workload is installed on this runner - `dotnet build -f net10.0-android`
-          # alone still evaluates the full TargetFrameworks list during its implicit restore and
-          # fails with NETSDK1147 over the missing ios workload. Restoring with -p:TargetFramework
-          # first (which correctly narrows workload resolution to just that TFM) before a
-          # --no-restore build avoids that - NOT `-f`, which for `dotnet restore` specifically means
-          # --force (not --framework, unlike build/publish/run/test), and silently swallows
-          # "net10.0-android" as a bogus positional project-path argument instead.
           cd FullTime.App/FullTime.App
-          $DOTNET restore -p:TargetFramework=net10.0-android
           $DOTNET build -f net10.0-android -c Debug --no-restore -p:EmbedAssembliesIntoApk=true
 
     artifacts:
