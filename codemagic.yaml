@@ -17,19 +17,6 @@ workflows:
         script: |
           $DOTNET workload install maui-android
 
-      - name: Restore just the Android target
-        script: |
-          # FullTime.App.csproj multi-targets android/ios/maccatalyst/windows, and only the
-          # maui-android workload is installed on this runner - letting build/InstallAndroidDependencies
-          # do their own implicit restore evaluates the full TargetFrameworks list and fails with
-          # NETSDK1147 over the missing ios workload. -p:TargetFramework (NOT -f, which for
-          # `dotnet restore` specifically means --force, not --framework like it does for
-          # build/publish/run/test, and silently swallows "net10.0-android" as a bogus positional
-          # project-path argument instead) correctly narrows it to just this one TFM up front, so
-          # every later step here uses --no-restore against this.
-          cd FullTime.App/FullTime.App
-          $DOTNET restore -p:TargetFramework=net10.0-android
-
       - name: Install Android SDK platform
         script: |
           # The maui-android workload only brings the build tooling, not the actual Android SDK
@@ -37,8 +24,19 @@ workflows:
           # download, hence XA5207 "Could not find android.jar for API level ..." without this.
           # AcceptAndroidSDKLicenses is required non-interactively in CI (no terminal to accept the
           # licence prompt).
+          #
+          # AndroidOnlyBuild=true (FullTime.App.csproj) collapses this project down to just the
+          # net10.0-android TFM - same reason the ios-ad-hoc/ios-testflight workflows below pass
+          # IosOnlyBuild=true, and for the same reason: this runner only has the maui-android
+          # workload installed, not ios/maccatalyst's, and the full multi-target list needs all of
+          # them just to *restore*, let alone build. A command-line -p:TargetFramework=net10.0-android
+          # override was tried first instead of this - don't reintroduce it, it's a global MSBuild
+          # property that also propagates into FullTime.App.Shared's own restore, wrongly forcing
+          # its single real TargetFramework and corrupting its assets file (NETSDK1005 on the next
+          # --no-restore step, "doesn't have a target for 'net10.0'"). AndroidOnlyBuild is scoped to
+          # this project only, so it can't do that.
           cd FullTime.App/FullTime.App
-          $DOTNET build -t:InstallAndroidDependencies -f net10.0-android --no-restore \
+          $DOTNET build -t:InstallAndroidDependencies -f net10.0-android -p:AndroidOnlyBuild=true \
             -p:AndroidSdkDirectory=/usr/local/share/android-sdk \
             -p:AcceptAndroidSDKLicenses=true
 
@@ -49,7 +47,7 @@ workflows:
           # HANDOVER.md. Auto-signed with the default debug keystore, which is fine for sideloading
           # onto a personal device but NOT what would ship to the Play Store.
           cd FullTime.App/FullTime.App
-          $DOTNET build -f net10.0-android -c Debug --no-restore -p:EmbedAssembliesIntoApk=true
+          $DOTNET build -f net10.0-android -c Debug -p:AndroidOnlyBuild=true -p:EmbedAssembliesIntoApk=true
 
     artifacts:
       - FullTime.App/FullTime.App/bin/Debug/net10.0-android/*-Signed.apk
