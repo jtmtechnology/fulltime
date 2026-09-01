@@ -55,6 +55,23 @@ from `FullTime.Api/` (picks up User Secrets automatically). For the **VM's** Pos
 stored connection string to fetch — `sudo -u postgres psql -d friendsacca` over the same `gcloud
 compute ssh` used for deploys authenticates via local peer auth, no password needed.
 
+**⚠️ Running `FullTime.Api` locally burns the SAME shared RapidAPI/Highlightly quota as
+production** — local and the VM use the identical API key (confirmed: both start `99c7a86a95...`),
+and there's a single account-wide daily cap (confirmed 25,000/day). Confirmed happening: leaving
+the local API running (and restarting it repeatedly across a session, e.g. to release build file
+locks) racked up 9,572 Highlightly calls and 98 already-rate-limited (429) responses in *one*
+local run alone, exhausting the day's quota well before production's own normal usage would have.
+Two compounding causes, both worth knowing before running `FullTime.Api` locally for any length of
+time: (1) three background services (`HighlightlyFixtureDiscoveryBackgroundService`,
+`HighlightlyMatchSyncBackgroundService`, `BetBuilderSyncBackgroundService`) each fire an immediate,
+unconditional burst of calls on every process **start** — no "last synced" gate — so every restart
+adds its own spike; (2) a **stale local dev DB** (matches stuck at `Upcoming` with kickoff times
+weeks in the past) makes the live-sync query treat far more dates as "still need polling" per tick
+than a properly up-to-date DB would. Don't leave the local API running unattended, and don't
+restart it more than necessary — stop it (`Stop-Process` on the `FullTime.Api` process, needed
+anyway to release its file lock before rebuilding) as soon as you're done testing against it rather
+than leaving it running in the background.
+
 **Deployment pattern** (unchanged, works reliably — `X` = `api` / `web` / `website`):
 ```
 dotnet publish -c Release -r linux-x64 --self-contained false -o publish-X
