@@ -102,21 +102,6 @@ public class SpinService(AppDbContext db, IOptions<BettingOptions> options)
         return new SpinResult(SpinOutcome.Success, winningIndex, user.SpinStreak, mysteryAmount, streakBonusAmount, boostLabel);
     }
 
-    // TEMP for testing only - re-opens the daily gate by clearing LastSpinDate, same behaviour the
-    // old client-only bypass had. Note this also means the very next spin's streak calc no longer
-    // sees "yesterday", so it restarts the streak at 1 rather than continuing it - matches what the
-    // original bypass did too, just now enforced server-side. Remove this method and the
-    // "reset-for-testing" endpoint in SpinController once testing is done.
-    public async Task ResetForTestingAsync(Guid userId, CancellationToken ct = default)
-    {
-        var user = await db.Users.FindAsync([userId], ct);
-        if (user is not null)
-        {
-            user.LastSpinDate = null;
-            await db.SaveChangesAsync(ct);
-        }
-    }
-
     private async Task CreditAllMembershipsAsync(Guid userId, decimal amount, CancellationToken ct)
     {
         var memberships = await db.LeagueMemberships.Where(m => m.UserId == userId).ToListAsync(ct);

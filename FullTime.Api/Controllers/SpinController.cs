@@ -34,15 +34,6 @@ public class SpinController(SpinService spinService) : ControllerBase
             result.WinningIndex, result.Streak, result.MysteryCashAmount, result.StreakBonusAmount, result.BoostLabel));
     }
 
-    // TEMP for testing only - see SpinService.ResetForTestingAsync. Remove this endpoint (and its
-    // call site in DailySpinner.razor's DismissResult) once testing is done.
-    [HttpPost("reset-for-testing")]
-    public async Task<IActionResult> ResetForTesting(CancellationToken ct)
-    {
-        await spinService.ResetForTestingAsync(CurrentUserId, ct);
-        return Ok();
-    }
-
     private Guid CurrentUserId =>
         Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
 }

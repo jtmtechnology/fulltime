@@ -199,16 +199,10 @@
         }
     }
 
-    private async Task DismissResult()
+    private void DismissResult()
     {
         _result = null;
         _mysteryAmount = null;
         _streakBonusAmount = null;
-
-        // TEMP for testing only - re-opens the server-side daily gate so the next spin isn't
-        // blocked. Remove this whole block, plus ApiClient.ResetSpinForTestingAsync and the API's
-        // "reset-for-testing" endpoint, once testing is done.
-        await Api.ResetSpinForTestingAsync();
-        _canSpin = true;
     }
 }

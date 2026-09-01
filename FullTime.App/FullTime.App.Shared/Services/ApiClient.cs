@@ -153,15 +153,6 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         return (await res.Content.ReadFromJsonAsync<SpinResultDto>())!;
     }
 
-    // TEMP for testing only - see FullTime.Api's SpinController.ResetForTesting. Remove this method
-    // (and DailySpinner.razor's DismissResult call site) once testing is done.
-    public async Task ResetSpinForTestingAsync()
-    {
-        Authorize();
-        var res = await httpClient.PostAsync("api/spin/reset-for-testing", null);
-        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
-    }
-
     public async Task<BetBuilderMarketsResponse> GetBetBuilderMarketsAsync(Guid matchId)
     {
         var res = await httpClient.GetAsync($"api/matches/{matchId}/bet-builder-markets");
