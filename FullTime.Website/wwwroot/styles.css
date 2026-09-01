@@ -132,6 +132,14 @@ main { max-width: 960px; margin: 0 auto; padding: 0 1.25rem; }
     text-shadow: 0 0 24px rgba(57, 255, 136, 0.5);
 }
 
+.legal-page { padding: 3rem 0 4rem; }
+.legal-page h1 { font-size: 2rem; margin: 0 0 0.5rem; }
+.legal-page h2 { font-size: 1.2rem; color: var(--accent); margin: 2rem 0 0.75rem; }
+.legal-page p, .legal-page li { color: var(--text-muted); line-height: 1.6; }
+.legal-page ul { padding-left: 1.25rem; }
+.legal-page li { margin-bottom: 0.5rem; }
+.legal-page .hint { color: var(--text-muted); font-size: 0.9rem; }
+
 .contact { padding: 2.5rem 0 3.5rem; text-align: center; }
 .contact .hint { color: var(--text-muted); }
 .contact-form { text-align: left; max-width: 480px; margin: 1.5rem auto; }

@@ -101,12 +101,12 @@ as the "proper" fix but did **not** actually deploy or launch anything in this e
 succeeded, no install/launch occurred, root cause not confirmed — possibly an adb-target-resolution
 issue specific to this CLI setup). **What actually worked:** build with
 `-p:EmbedAssembliesIntoApk=true` to embed the assemblies straight into the APK (sidesteps Fast
-Deploy entirely), then a fresh `adb uninstall com.companyname.fulltime.app` + `adb install
-<path>\com.companyname.fulltime.app-Signed.apk` (not `-r`), then
-`adb shell am start -n com.companyname.fulltime.app/<activity>` to launch — the crc64-prefixed
+Deploy entirely), then a fresh `adb uninstall com.jtmtechnology.fulltime.app` + `adb install
+<path>\com.jtmtechnology.fulltime.app-Signed.apk` (not `-r`), then
+`adb shell am start -n com.jtmtechnology.fulltime.app/<activity>` to launch — the crc64-prefixed
 activity class name can change between builds, so if `am start` says "Activity class does not
 exist", re-resolve it first with `adb shell cmd package resolve-activity --brief
-com.companyname.fulltime.app`. Confirm it's actually running (not silently crashed back to the
+com.jtmtechnology.fulltime.app`. Confirm it's actually running (not silently crashed back to the
 launcher) via `adb shell dumpsys window | Select-String mCurrentFocus` before screenshotting.
 
 **New (prior session) — debugging via Chrome DevTools Protocol (CDP):** when a screenshot-based
