@@ -23,8 +23,16 @@ workflows:
           # assemblies separately) - same reason it's used for local emulator installs, see
           # HANDOVER.md. Auto-signed with the default debug keystore, which is fine for sideloading
           # onto a personal device but NOT what would ship to the Play Store.
+          #
+          # FullTime.App.csproj multi-targets android/ios/maccatalyst/windows, and only the
+          # maui-android workload is installed on this runner - `dotnet build -f net10.0-android`
+          # alone still evaluates the full TargetFrameworks list during its implicit restore and
+          # fails with NETSDK1147 over the missing ios workload. Restoring with -f first (which
+          # correctly narrows workload resolution to just that TFM) before a --no-restore build
+          # avoids that.
           cd FullTime.App/FullTime.App
-          $DOTNET build -f net10.0-android -c Debug -p:EmbedAssembliesIntoApk=true
+          $DOTNET restore -f net10.0-android
+          $DOTNET build -f net10.0-android -c Debug --no-restore -p:EmbedAssembliesIntoApk=true
 
     artifacts:
       - FullTime.App/FullTime.App/bin/Debug/net10.0-android/*-Signed.apk
