@@ -78,6 +78,8 @@ builder.Services.AddHostedService<WeeklyTopUpBackgroundService>();
 builder.Services.AddScoped<LeagueService>();
 
 builder.Services.AddScoped<SpinService>();
+builder.Services.AddScoped<SpinReminderService>();
+builder.Services.AddHostedService<SpinReminderBackgroundService>();
 
 builder.Services.Configure<PushOptions>(builder.Configuration.GetSection(PushOptions.SectionName));
 FirebaseApp.Create(new AppOptions

@@ -44,7 +44,10 @@ public class MauiPushRegistrar(
     {
         try
         {
-            await api.RegisterDeviceAsync(token, PlatformName);
+            // Whole-minutes UTC offset, refreshed once per app session - good enough for
+            // SpinReminderService's once-a-day nudge, not meant to be DST-transition-precise.
+            var utcOffsetMinutes = (int)DateTimeOffset.Now.Offset.TotalMinutes;
+            await api.RegisterDeviceAsync(token, PlatformName, utcOffsetMinutes);
         }
         catch
         {

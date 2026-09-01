@@ -75,7 +75,7 @@ else
                 }
                 else
                 {
-                    <button type="button" class="send-invite-btn" @onclick="() => StartInvite(league.Id)">✉ Invite a friend by email</button>
+                    <button type="button" class="send-invite-btn" @onclick="() => StartInvite(league.Id)">Invite friend</button>
                 }
 
                 @if (_leagueEntries.TryGetValue(league.Id, out var entries) && entries.Count > 0)

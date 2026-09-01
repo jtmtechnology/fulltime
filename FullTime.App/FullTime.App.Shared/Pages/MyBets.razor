@@ -29,6 +29,10 @@ else if (!string.IsNullOrEmpty(_status))
                 Combined odds @bet.CombinedOdds.ToString("0.00") ·
                 Potential return @ContextState.CurrencySymbol@bet.PotentialReturn.ToString("0.00") ·
                 <span class="@BetDisplay.StatusClass(bet.Status)">@bet.Status</span>
+                @if (bet.BoostApplied is not null)
+                {
+                    <span class="live"> · 🚀 @bet.BoostApplied applied</span>
+                }
             </div>
             <ul>
                 @foreach (var leg in bet.Legs)

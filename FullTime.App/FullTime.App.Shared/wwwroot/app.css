@@ -397,7 +397,10 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
 }
 
 .send-invite-btn {
-    margin-top: 0.75rem; margin-right: 0.6rem; background: transparent; border: 1px solid var(--accent); color: var(--accent);
+    /* Negative to pull it in tight under .stat-list's own 1.25rem bottom margin above (shared with
+       Profile.razor, so not reduced there) - otherwise it reads as a stray button lower down the
+       card rather than an action attached to the invite code line right above it. */
+    margin-top: -0.5rem; margin-right: 0.6rem; background: transparent; border: 1px solid var(--accent); color: var(--accent);
     padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer;
 }
 .send-invite-row { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
@@ -721,7 +724,6 @@ button[type="submit"] {
     display: flex; align-items: center; justify-content: center; gap: 0.4rem;
     text-align: center; font-size: 0.85rem; margin-bottom: 1.25rem;
 }
-.spin-countdown-time { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .streak-card {
     background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px;

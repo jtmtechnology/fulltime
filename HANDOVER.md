@@ -45,6 +45,16 @@ Blazor UI, identical on both hosts, so no Maui/Web split was needed there.)
 pd-standard, GCP Always Free tier. Database: PostgreSQL, database name is **`friendsacca`** (not
 "fulltime").
 
+**Local Postgres access:** a separate Postgres instance also runs on this dev machine (distinct
+database from the VM's, same name `friendsacca`). `FullTime.Api`'s local connection string lives in
+.NET User Secrets (`UserSecretsId` `fa9e94b4-5d83-4624-9c4b-28e396835b6e` in `FullTime.Api.csproj`),
+at `%APPDATA%\Microsoft\UserSecrets\fa9e94b4-5d83-4624-9c4b-28e396835b6e\secrets.json` — **not
+committed to git on purpose**, so it isn't reproduced here; read that file directly rather than
+asking the user to retype it. Applying an EF migration locally is just `dotnet ef database update`
+from `FullTime.Api/` (picks up User Secrets automatically). For the **VM's** Postgres, there's no
+stored connection string to fetch — `sudo -u postgres psql -d friendsacca` over the same `gcloud
+compute ssh` used for deploys authenticates via local peer auth, no password needed.
+
 **Deployment pattern** (unchanged, works reliably — `X` = `api` / `web` / `website`):
 ```
 dotnet publish -c Release -r linux-x64 --self-contained false -o publish-X

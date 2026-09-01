@@ -19,5 +19,13 @@ public class BettingOptions
 
     // Flat bonus credited when the Daily Spinner streak reaches day 7 - same profit-neutral rule as
     // WeeklyTopUpAmount (see SpinService.CreditAllMembershipsAsync).
-    public decimal SpinStreakBonusAmount { get; set; } = 50;
+    public decimal SpinStreakBonusAmount { get; set; } = 100;
+
+    // The local hour (0-23, per each user's own UtcOffsetMinutes) after which SpinReminderService
+    // starts nudging anyone who hasn't spun yet today.
+    public int SpinReminderHour { get; set; } = 16;
+
+    // Checked often enough that the reminder lands reasonably close to SpinReminderHour rather than
+    // up to an hour late, same reasoning as WeeklyTopUpCheckIntervalMinutes.
+    public int SpinReminderCheckIntervalMinutes { get; set; } = 15;
 }

@@ -21,7 +21,7 @@ public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
 public record MessageResponse(string? Message, string? Error, string? Reason);
 
-public record RegisterDeviceRequest(string Token, string Platform);
+public record RegisterDeviceRequest(string Token, string Platform, int? UtcOffsetMinutes = null);
 
 public record UpcomingMatchDto(
     Guid Id,
@@ -59,7 +59,7 @@ public record BetDto(Guid Id, decimal Stake, decimal CombinedOdds, decimal Poten
     DateTime PlacedAt, DateTime? SettledAt, Guid? LeagueId, string? LeagueName, string? BoostApplied, List<BetLegDto> Legs);
 public record PendingBetDto(Guid BetId, string UserName, decimal Stake);
 
-public record SpinStatusDto(bool CanSpin, int Streak);
+public record SpinStatusDto(bool CanSpin, int Streak, decimal? PendingBoostMultiplier, string? PendingBoostLabel);
 public record SpinResultDto(int WinningIndex, int Streak, decimal? MysteryCashAmount, decimal? StreakBonusAmount, string? BoostLabel);
 
 public record BetBuilderMarketDto(string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore, decimal Price);

@@ -231,10 +231,10 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
     }
 
-    public async Task RegisterDeviceAsync(string token, string platform)
+    public async Task RegisterDeviceAsync(string token, string platform, int? utcOffsetMinutes = null)
     {
         Authorize();
-        var res = await httpClient.PostAsJsonAsync("api/devices/register", new RegisterDeviceRequest(token, platform));
+        var res = await httpClient.PostAsJsonAsync("api/devices/register", new RegisterDeviceRequest(token, platform, utcOffsetMinutes));
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
     }
 }

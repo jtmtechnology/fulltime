@@ -34,12 +34,14 @@ public class SpinService(AppDbContext db, IOptions<BettingOptions> options)
         SpinPrizeType.TryAgainTomorrow,
     ];
 
-    public async Task<(bool CanSpin, int Streak)> GetStatusAsync(Guid userId, CancellationToken ct = default)
+    public async Task<(bool CanSpin, int Streak, decimal? PendingBoostMultiplier, string? PendingBoostLabel)> GetStatusAsync(
+        Guid userId, CancellationToken ct = default)
     {
         var user = await db.Users.FindAsync([userId], ct)
             ?? throw new InvalidOperationException("Current user not found.");
 
-        return (user.LastSpinDate != DateOnly.FromDateTime(DateTime.Now), user.SpinStreak);
+        return (user.LastSpinDate != DateOnly.FromDateTime(DateTime.Now), user.SpinStreak,
+            user.PendingBoostMultiplier, user.PendingBoostLabel);
     }
 
     public async Task<SpinResult> SpinAsync(Guid userId, CancellationToken ct = default)

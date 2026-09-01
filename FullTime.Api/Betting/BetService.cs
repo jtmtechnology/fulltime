@@ -132,6 +132,7 @@ public class BetService(AppDbContext db, ILogger<BetService> logger)
             Status = BetStatus.Pending,
             PlacedAt = DateTime.UtcNow,
             Legs = betLegs,
+            BoostApplied = appliedBoostLabel,
         };
 
         membership.Balance -= stake;
@@ -142,7 +143,7 @@ public class BetService(AppDbContext db, ILogger<BetService> logger)
         logger.LogInformation("User {UserId} placed a {LegCount}-leg bet {BetId} for {Stake} at combined odds {CombinedOdds}",
             userId, betLegs.Count, bet.Id, stake, combinedOdds);
 
-        return new PlaceBetResult(PlaceBetOutcome.Success, bet, appliedBoostLabel);
+        return new PlaceBetResult(PlaceBetOutcome.Success, bet);
     }
 
     private async Task<decimal?> GetCurrentOddsAsync(

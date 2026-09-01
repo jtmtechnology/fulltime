@@ -9,7 +9,7 @@ using Npgsql;
 
 namespace FullTime.Api.Controllers;
 
-public record RegisterDeviceRequest(string Token, string Platform);
+public record RegisterDeviceRequest(string Token, string Platform, int? UtcOffsetMinutes = null);
 
 [ApiController]
 [Route("api/devices")]
@@ -27,6 +27,15 @@ public class DevicesController(AppDbContext db) : ControllerBase
         if (!Enum.TryParse<DevicePlatform>(request.Platform, ignoreCase: true, out var platform))
         {
             return BadRequest(new { error = $"Invalid platform '{request.Platform}' — expected Android or iOS." });
+        }
+
+        if (request.UtcOffsetMinutes is { } offset)
+        {
+            var user = await db.Users.FindAsync([CurrentUserId], ct);
+            if (user is not null)
+            {
+                user.UtcOffsetMinutes = offset;
+            }
         }
 
         var existing = await db.DeviceTokens.SingleOrDefaultAsync(d => d.Token == request.Token, ct);

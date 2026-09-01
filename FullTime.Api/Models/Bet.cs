@@ -17,5 +17,10 @@ public class Bet
     public DateTime PlacedAt { get; set; }
     public DateTime? SettledAt { get; set; }
 
+    // Set when a pending Daily Spinner boost (see SpinService) was consumed by this bet - already
+    // folded into CombinedOdds/PotentialReturn above, this is purely a label for display (e.g. "Bet
+    // Boost 25%") so My Bets can show that a boost applied here.
+    public string? BoostApplied { get; set; }
+
     public List<BetLeg> Legs { get; set; } = [];
 }

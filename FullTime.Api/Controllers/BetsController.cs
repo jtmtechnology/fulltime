@@ -83,7 +83,7 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
         }
 
         var dto = await LoadBetDtoAsync(result.Bet!.Id, ct);
-        return Created(string.Empty, dto! with { BoostApplied = result.AppliedBoostLabel });
+        return Created(string.Empty, dto);
     }
 
     [HttpGet("me")]
@@ -114,7 +114,7 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
 
     private static BetDto ToBetDto(Bet b) => new(
         b.Id, b.Stake, b.CombinedOdds, b.PotentialReturn, b.Status.ToString(), b.PlacedAt, b.SettledAt,
-        b.LeagueId, b.LeagueId != null ? b.League!.Name : null, null,
+        b.LeagueId, b.LeagueId != null ? b.League!.Name : null, b.BoostApplied,
         b.Legs.Select(l => new BetLegDto(
             l.MatchId,
             l.Match!.HomeTeam,

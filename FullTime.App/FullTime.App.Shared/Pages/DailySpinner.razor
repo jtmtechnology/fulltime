@@ -1,5 +1,4 @@
 @page "/daily-spinner"
-@implements IDisposable
 @inject ApiClient Api
 @inject AuthState AuthState
 @inject ActiveContextState ContextState
@@ -43,7 +42,7 @@
 @if (!_canSpin)
 {
     <div class="spin-countdown">
-        <span>⏱</span> <span class="muted">Next free spin in</span> <span class="spin-countdown-time">@_countdownText</span>
+        <span>⏱</span> <span class="muted">Come back tomorrow for your next free spin</span>
     </div>
 }
 
@@ -94,7 +93,7 @@
         }
         @if (_streakBonusAmount is { } bonus)
         {
-            <p class="win-streak-bonus">🔥 7-Day Streak Bonus: +@ContextState.CurrencySymbol@bonus!</p>
+            <p class="win-streak-bonus">🎉 Bonus prize awarded of @ContextState.CurrencySymbol@bonus!</p>
         }
         <button type="button" class="primary-btn win-dismiss-btn" @onclick="DismissResult">@(isTryAgain ? "OK" : "Nice one!")</button>
     </div>
@@ -111,9 +110,6 @@
     private SpinSegment? _result;
     private decimal? _mysteryAmount;
     private decimal? _streakBonusAmount;
-    private string _countdownText = "";
-    private PeriodicTimer? _countdownTimer;
-    private CancellationTokenSource? _countdownCts;
 
     // Splits "Bet Boost 25%" into ("Bet Boost", "25%") etc. so the wheel can render the last word
     // in accent green under the rest in white, matching the reference wheel graphic's two-tone look.
@@ -132,10 +128,6 @@
         }
 
         await RefreshStatusAsync();
-        if (!_canSpin)
-        {
-            StartCountdown();
-        }
     }
 
     private async Task RefreshStatusAsync()
@@ -200,7 +192,6 @@
         _streakBonusAmount = response.StreakBonusAmount;
         _isSpinning = false;
         StateHasChanged();
-        StartCountdown();
 
         if (response.MysteryCashAmount is not null || response.StreakBonusAmount is not null)
         {
@@ -219,45 +210,5 @@
         // "reset-for-testing" endpoint, once testing is done.
         await Api.ResetSpinForTestingAsync();
         _canSpin = true;
-    }
-
-    private void StartCountdown()
-    {
-        _countdownCts?.Cancel();
-        _countdownCts = new CancellationTokenSource();
-        _ = RunCountdownAsync(_countdownCts.Token);
-    }
-
-    private async Task RunCountdownAsync(CancellationToken ct)
-    {
-        _countdownTimer?.Dispose();
-        _countdownTimer = new PeriodicTimer(TimeSpan.FromSeconds(1));
-        try
-        {
-            do
-            {
-                var remaining = DateTime.Now.Date.AddDays(1) - DateTime.Now;
-                if (remaining <= TimeSpan.Zero)
-                {
-                    _countdownText = "00:00:00";
-                    await InvokeAsync(StateHasChanged);
-                    return;
-                }
-
-                _countdownText = remaining.ToString(@"hh\:mm\:ss");
-                await InvokeAsync(StateHasChanged);
-            }
-            while (await _countdownTimer.WaitForNextTickAsync(ct));
-        }
-        catch (OperationCanceledException)
-        {
-            // expected when Dispose/StartCountdown cancels the previous countdown
-        }
-    }
-
-    public void Dispose()
-    {
-        _countdownCts?.Cancel();
-        _countdownTimer?.Dispose();
     }
 }

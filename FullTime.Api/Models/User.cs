@@ -19,6 +19,16 @@ public class User
     public DateOnly? LastSpinDate { get; set; }
     public int SpinStreak { get; set; }
 
+    // Captured from the MAUI app (only host that does push) each time it registers for push
+    // notifications - see DevicesController.Register. Null until the app's been opened at least
+    // once; SpinReminderService skips anyone without it rather than guessing UTC. Whole minutes,
+    // not a full IANA zone - good enough for a once-a-day reminder, not DST-transition-precise.
+    public int? UtcOffsetMinutes { get; set; }
+
+    // The local date (per UtcOffsetMinutes) SpinReminderService last sent this user a "you haven't
+    // spun today" push - keeps the reminder to once per local day, independent of LastSpinDate.
+    public DateOnly? LastSpinReminderDate { get; set; }
+
     // Set by a "Bet Boost"/"2x Odds Boost" spin prize, consumed (and cleared) by the very next bet
     // placed in BetService - always the single most recently won boost, never stacked; landing a
     // new boost while one is already pending overwrites it rather than queuing.

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FullTime.Api.Controllers;
 
-public record SpinStatusDto(bool CanSpin, int Streak);
+public record SpinStatusDto(bool CanSpin, int Streak, decimal? PendingBoostMultiplier, string? PendingBoostLabel);
 public record SpinResultDto(int WinningIndex, int Streak, decimal? MysteryCashAmount, decimal? StreakBonusAmount, string? BoostLabel);
 
 [ApiController]
@@ -17,8 +17,8 @@ public class SpinController(SpinService spinService) : ControllerBase
     [HttpGet("status")]
     public async Task<ActionResult<SpinStatusDto>> GetStatus(CancellationToken ct)
     {
-        var (canSpin, streak) = await spinService.GetStatusAsync(CurrentUserId, ct);
-        return Ok(new SpinStatusDto(canSpin, streak));
+        var (canSpin, streak, boostMultiplier, boostLabel) = await spinService.GetStatusAsync(CurrentUserId, ct);
+        return Ok(new SpinStatusDto(canSpin, streak, boostMultiplier, boostLabel));
     }
 
     [HttpPost]
