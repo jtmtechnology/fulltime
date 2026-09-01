@@ -29,6 +29,10 @@
                     <div class="bet-success-check">✓</div>
                     <h2>Bet placed!</h2>
                     <p class="bet-success-return">Potential return: @ContextState.CurrencySymbol@_placedReturn.ToString("0.00")</p>
+                    @if (_placedBoostLabel is not null)
+                    {
+                        <p class="bet-success-boost">🚀 @_placedBoostLabel applied!</p>
+                    }
                 </div>
             }
             else
@@ -97,6 +101,7 @@
     private bool _wasOpen;
     private bool _justPlaced;
     private decimal _placedReturn;
+    private string? _placedBoostLabel;
 
     protected override async Task OnInitializedAsync()
     {
@@ -191,6 +196,7 @@
             // Activity has taken the foreground and been dismissed, which left this view stuck
             // on-screen forever when the two overlapped.
             _placedReturn = placedBet.PotentialReturn;
+            _placedBoostLabel = placedBet.BoostApplied;
             _justPlaced = true;
             Haptics.Tap();
             StateHasChanged();

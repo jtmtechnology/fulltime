@@ -16,4 +16,8 @@ public class BettingOptions
     // Checked often enough that the top-up lands close to its 9pm UTC target (see
     // WeeklyTopUpService.TopUpHourUtc) rather than up to an hour late.
     public int WeeklyTopUpCheckIntervalMinutes { get; set; } = 15;
+
+    // Flat bonus credited when the Daily Spinner streak reaches day 7 - same profit-neutral rule as
+    // WeeklyTopUpAmount (see SpinService.CreditAllMembershipsAsync).
+    public decimal SpinStreakBonusAmount { get; set; } = 50;
 }

@@ -52,6 +52,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasPrecision(18, 2);
 
         modelBuilder.Entity<User>()
+            .Property(u => u.PendingBoostMultiplier)
+            .HasPrecision(5, 2);
+
+        modelBuilder.Entity<User>()
             .HasIndex(u => u.Email)
             .IsUnique();
 

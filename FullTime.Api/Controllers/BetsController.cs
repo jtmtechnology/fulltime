@@ -20,7 +20,7 @@ public record BetLegDto(
     Guid MatchId, string HomeTeam, string AwayTeam, string? HomeLogoUrl, string? AwayLogoUrl,
     DateTime KickoffTime, decimal OddsAtPlacement, string Outcome, List<BetLegPickDto> Picks);
 public record BetDto(Guid Id, decimal Stake, decimal CombinedOdds, decimal PotentialReturn, string Status,
-    DateTime PlacedAt, DateTime? SettledAt, Guid? LeagueId, string? LeagueName, List<BetLegDto> Legs);
+    DateTime PlacedAt, DateTime? SettledAt, Guid? LeagueId, string? LeagueName, string? BoostApplied, List<BetLegDto> Legs);
 
 [ApiController]
 [Route("api/bets")]
@@ -83,7 +83,7 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
         }
 
         var dto = await LoadBetDtoAsync(result.Bet!.Id, ct);
-        return Created(string.Empty, dto);
+        return Created(string.Empty, dto! with { BoostApplied = result.AppliedBoostLabel });
     }
 
     [HttpGet("me")]
@@ -114,7 +114,7 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
 
     private static BetDto ToBetDto(Bet b) => new(
         b.Id, b.Stake, b.CombinedOdds, b.PotentialReturn, b.Status.ToString(), b.PlacedAt, b.SettledAt,
-        b.LeagueId, b.LeagueId != null ? b.League!.Name : null,
+        b.LeagueId, b.LeagueId != null ? b.League!.Name : null, null,
         b.Legs.Select(l => new BetLegDto(
             l.MatchId,
             l.Match!.HomeTeam,

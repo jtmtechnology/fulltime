@@ -7,6 +7,7 @@ using FullTime.Api.Data;
 using FullTime.Api.Leagues;
 using FullTime.Api.Notifications;
 using FullTime.Api.Realtime;
+using FullTime.Api.Spin;
 using Google.Apis.Auth.OAuth2;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -75,6 +76,8 @@ builder.Services.AddScoped<WeeklyTopUpService>();
 builder.Services.AddHostedService<WeeklyTopUpBackgroundService>();
 
 builder.Services.AddScoped<LeagueService>();
+
+builder.Services.AddScoped<SpinService>();
 
 builder.Services.Configure<PushOptions>(builder.Configuration.GetSection(PushOptions.SectionName));
 FirebaseApp.Create(new AppOptions

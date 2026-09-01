@@ -14,4 +14,4 @@ public enum PlaceBetOutcome
     NoLeagueSelected,
 }
 
-public record PlaceBetResult(PlaceBetOutcome Outcome, Bet? Bet = null);
+public record PlaceBetResult(PlaceBetOutcome Outcome, Bet? Bet = null, string? AppliedBoostLabel = null);

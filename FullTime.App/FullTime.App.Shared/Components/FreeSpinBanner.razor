@@ -1,4 +1,4 @@
-@inject IDailySpinStore SpinStore
+@inject ApiClient Api
 @inject NavigationManager Nav
 
 @if (_available)
@@ -32,19 +32,14 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var raw = await SpinStore.GetAsync();
-        var lastSpinDate = ParseLastSpinDate(raw);
-        _available = lastSpinDate != DateOnly.FromDateTime(DateTime.Now);
-    }
-
-    private static DateOnly? ParseLastSpinDate(string? raw)
-    {
-        if (string.IsNullOrEmpty(raw))
+        try
         {
-            return null;
+            var status = await Api.GetSpinStatusAsync();
+            _available = status.CanSpin;
         }
-
-        var parts = raw.Split('|');
-        return parts.Length == 2 && DateOnly.TryParse(parts[0], out var date) ? date : null;
+        catch (ApiException)
+        {
+            // best-effort - banner just stays hidden if the status check fails
+        }
     }
 }

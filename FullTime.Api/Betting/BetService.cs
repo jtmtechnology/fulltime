@@ -110,6 +110,17 @@ public class BetService(AppDbContext db, ILogger<BetService> logger)
             });
         }
 
+        // A pending Daily Spinner boost (see SpinService) applies to this bet's odds and is
+        // consumed immediately - it's a one-shot "next bet" prize, never stacked or reused.
+        string? appliedBoostLabel = null;
+        if (user.PendingBoostMultiplier is { } boostMultiplier)
+        {
+            combinedOdds *= boostMultiplier;
+            appliedBoostLabel = user.PendingBoostLabel;
+            user.PendingBoostMultiplier = null;
+            user.PendingBoostLabel = null;
+        }
+
         var bet = new Bet
         {
             Id = betId,
@@ -131,7 +142,7 @@ public class BetService(AppDbContext db, ILogger<BetService> logger)
         logger.LogInformation("User {UserId} placed a {LegCount}-leg bet {BetId} for {Stake} at combined odds {CombinedOdds}",
             userId, betLegs.Count, bet.Id, stake, combinedOdds);
 
-        return new PlaceBetResult(PlaceBetOutcome.Success, bet);
+        return new PlaceBetResult(PlaceBetOutcome.Success, bet, appliedBoostLabel);
     }
 
     private async Task<decimal?> GetCurrentOddsAsync(

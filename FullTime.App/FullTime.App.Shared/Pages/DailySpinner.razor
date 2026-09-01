@@ -1,6 +1,7 @@
 @page "/daily-spinner"
 @implements IDisposable
-@inject IDailySpinStore SpinStore
+@inject ApiClient Api
+@inject AuthState AuthState
 @inject ActiveContextState ContextState
 @inject NavigationManager Nav
 
@@ -35,11 +36,11 @@
     </div>
 </div>
 
-<button type="button" class="primary-btn spin-btn" disabled="@(!CanSpin || _isSpinning)" @onclick="SpinAsync">
+<button type="button" class="primary-btn spin-btn" disabled="@(!_canSpin || _isSpinning)" @onclick="SpinAsync">
     @(_isSpinning ? "Spinning…" : "SPIN NOW")
 </button>
 
-@if (!CanSpin)
+@if (!_canSpin)
 {
     <div class="spin-countdown">
         <span>⏱</span> <span class="muted">Next free spin in</span> <span class="spin-countdown-time">@_countdownText</span>
@@ -106,19 +107,13 @@
     private double _rotationDeg;
     private bool _isSpinning;
     private int _streak;
-    private DateOnly? _lastSpinDate;
+    private bool _canSpin = true;
     private SpinSegment? _result;
-    private int? _mysteryAmount;
-    private int? _streakBonusAmount;
+    private decimal? _mysteryAmount;
+    private decimal? _streakBonusAmount;
     private string _countdownText = "";
     private PeriodicTimer? _countdownTimer;
     private CancellationTokenSource? _countdownCts;
-
-    // Placeholder cosmetic bonus - stacks on top of whatever segment was actually spun, same
-    // "no real economy yet" caveat as the Mystery Cash amount below.
-    private const int StreakBonusAmount = 50;
-
-    private bool CanSpin => _lastSpinDate != DateOnly.FromDateTime(DateTime.Now);
 
     // Splits "Bet Boost 25%" into ("Bet Boost", "25%") etc. so the wheel can render the last word
     // in accent green under the rest in white, matching the reference wheel graphic's two-tone look.
@@ -130,39 +125,67 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var raw = await SpinStore.GetAsync();
-        if (!string.IsNullOrEmpty(raw))
+        if (!AuthState.IsLoggedIn)
         {
-            var parts = raw.Split('|');
-            if (parts.Length == 2 && DateOnly.TryParse(parts[0], out var date) && int.TryParse(parts[1], out var streak))
-            {
-                _lastSpinDate = date;
-                _streak = streak;
-            }
+            Nav.NavigateTo("/login");
+            return;
         }
 
-        if (!CanSpin)
+        await RefreshStatusAsync();
+        if (!_canSpin)
         {
             StartCountdown();
         }
     }
 
+    private async Task RefreshStatusAsync()
+    {
+        try
+        {
+            var status = await Api.GetSpinStatusAsync();
+            _canSpin = status.CanSpin;
+            _streak = status.Streak;
+        }
+        catch (ApiException)
+        {
+            // best-effort - leave whatever's already showing if the status check fails
+        }
+    }
+
     private async Task SpinAsync()
     {
-        if (!CanSpin || _isSpinning)
+        if (!_canSpin || _isSpinning)
         {
             return;
         }
 
         _isSpinning = true;
-        var winningIndex = Random.Shared.Next(SpinSegments.All.Length);
+        StateHasChanged();
+
+        // The winning segment is decided server-side (SpinService) - the wheel here just animates
+        // to whichever index the API says won, and the actual prize (cash added to balance, or a
+        // boost queued for the next bet) has already been applied by the time this call returns.
+        SpinResultDto response;
+        try
+        {
+            response = await Api.SpinAsync();
+        }
+        catch (ApiException)
+        {
+            // Most likely another session already used today's spin - resync with the server
+            // rather than trusting the stale local _canSpin flag.
+            _isSpinning = false;
+            await RefreshStatusAsync();
+            StateHasChanged();
+            return;
+        }
 
         // Pointer is fixed at the top (angle 0). Rotating the wheel by R clockwise moves the point
         // that was originally at angle θ to (θ + R) mod 360, so landing segment i under the pointer
         // needs R mod 360 == (360 - i*SegmentAngle) mod 360. `delta` is however much extra rotation
         // (on top of whatever the wheel is already at) gets there; a few full turns are added purely
         // so the spin is visible rather than a tiny nudge.
-        var targetMod = (360 - winningIndex * SegmentAngle) % 360;
+        var targetMod = (360 - response.WinningIndex * SegmentAngle) % 360;
         var currentMod = _rotationDeg % 360;
         var delta = ((targetMod - currentMod) % 360 + 360) % 360;
         _rotationDeg += 6 * 360 + delta;
@@ -170,22 +193,19 @@
 
         await Task.Delay(SpinDuration);
 
-        var today = DateOnly.FromDateTime(DateTime.Now);
-        // Streak counts up to 7, awarding the bonus below on the day it gets there, then wraps
-        // back to 1 the following day rather than sitting at 7 forever.
-        var newStreak = _lastSpinDate == today.AddDays(-1) ? _streak + 1 : 1;
-        var streakBonusAwarded = newStreak >= 7;
-        _streak = newStreak;
-        _lastSpinDate = today;
-        await SpinStore.SetAsync($"{today:yyyy-MM-dd}|{(streakBonusAwarded ? 0 : _streak)}");
-
-        _result = SpinSegments.All[winningIndex];
-        // Placeholder only - no real economy behind this yet, just a number to show the user.
-        _mysteryAmount = _result.Label == "Mystery Cash" ? Random.Shared.Next(1, 11) * 5 : null;
-        _streakBonusAmount = streakBonusAwarded ? StreakBonusAmount : null;
+        _streak = response.Streak;
+        _canSpin = false;
+        _result = SpinSegments.All[response.WinningIndex];
+        _mysteryAmount = response.MysteryCashAmount;
+        _streakBonusAmount = response.StreakBonusAmount;
         _isSpinning = false;
         StateHasChanged();
         StartCountdown();
+
+        if (response.MysteryCashAmount is not null || response.StreakBonusAmount is not null)
+        {
+            await ContextState.RefreshBalanceAsync();
+        }
     }
 
     private async Task DismissResult()
@@ -194,13 +214,11 @@
         _mysteryAmount = null;
         _streakBonusAmount = null;
 
-        // TEMP for testing only - clears the just-recorded spin, in the store AND locally, so the
-        // daily gate doesn't block the next one. Local clearing is needed now that dismiss no
-        // longer navigates away (that navigate-away used to force a remount that reloaded the
-        // now-cleared store; staying on the page - so the streak is still visible - means nothing
-        // else would reset this field). Remove this whole block once testing is done.
-        await SpinStore.SetAsync("");
-        _lastSpinDate = null;
+        // TEMP for testing only - re-opens the server-side daily gate so the next spin isn't
+        // blocked. Remove this whole block, plus ApiClient.ResetSpinForTestingAsync and the API's
+        // "reset-for-testing" endpoint, once testing is done.
+        await Api.ResetSpinForTestingAsync();
+        _canSpin = true;
     }
 
     private void StartCountdown()
