@@ -66,8 +66,10 @@ else
                 {
                     <div class="send-invite-row">
                         <input type="email" placeholder="friend@example.com" @bind="_inviteEmail" @bind:event="oninput" />
-                        <button type="button" class="primary-btn" disabled="@_sendingInvite" @onclick="() => SendInviteAsync(league.Id)">Send</button>
-                        <button type="button" class="cancel-btn" @onclick="() => _invitingLeagueId = null">Cancel</button>
+                        <div class="send-invite-actions">
+                            <button type="button" class="primary-btn" disabled="@_sendingInvite" @onclick="() => SendInviteAsync(league.Id)">Send</button>
+                            <button type="button" class="cancel-btn" @onclick="() => _invitingLeagueId = null">Cancel</button>
+                        </div>
                     </div>
                     <div class="status @(_inviteError ? "error" : "")">@_inviteStatus</div>
                 }

@@ -400,11 +400,13 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
     margin-top: 0.75rem; margin-right: 0.6rem; background: transparent; border: 1px solid var(--accent); color: var(--accent);
     padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer;
 }
-.send-invite-row { margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.send-invite-row { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .send-invite-row input[type="email"] {
-    flex: 1 1 12rem; padding: 0.5rem 0.75rem; border-radius: 8px; border: 1px solid var(--border);
+    width: 100%; padding: 0.5rem 0.75rem; border-radius: 8px; border: 1px solid var(--border);
     background: var(--bg-elevated); color: var(--text);
 }
+.send-invite-actions { display: flex; gap: 0.5rem; }
+.send-invite-actions button { flex: 1 1 0; }
 
 .leave-league-confirm {
     margin-top: 0.75rem; padding: 0.75rem; border: 1px solid var(--danger); border-radius: 8px;

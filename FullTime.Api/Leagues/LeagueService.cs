@@ -17,9 +17,7 @@ public class LeagueService(
     private const string CodeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private const int CodeLength = 6;
 
-    // The marketing site (FullTime.Website, separate app/domain from the API and the Blazor app) -
-    // its /invite page doesn't exist yet; the user is adding it later with App Store/Play Store
-    // links once those exist. Linking to it now is fine even though it 404s until then.
+    // The marketing site (FullTime.Website, separate app/domain from the API and the Blazor app).
     private const string WebsiteUrl = "https://fulltime.jtmtechnology.co.uk";
 
     // Keeps the My Leagues list and the worldwide per-membership leaderboard from growing unbounded
@@ -132,7 +130,7 @@ public class LeagueService(
 
         var inviterName = await db.Users.Where(u => u.Id == requestingUserId).Select(u => u.Name).SingleAsync(ct);
         var subject = $"{inviterName} invited you to join {league.Name} on FullTime";
-        var inviteLink = $"{WebsiteUrl}/invite?code={Uri.EscapeDataString(league.InviteCode)}&league={Uri.EscapeDataString(league.Name)}";
+        var inviteLink = $"{WebsiteUrl}/invite.html?code={Uri.EscapeDataString(league.InviteCode)}&league={Uri.EscapeDataString(league.Name)}";
 
         var html = $"""
             <div style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: #0D1117; padding: 32px 16px;">
