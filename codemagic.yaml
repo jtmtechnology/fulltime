@@ -27,11 +27,13 @@ workflows:
           # FullTime.App.csproj multi-targets android/ios/maccatalyst/windows, and only the
           # maui-android workload is installed on this runner - `dotnet build -f net10.0-android`
           # alone still evaluates the full TargetFrameworks list during its implicit restore and
-          # fails with NETSDK1147 over the missing ios workload. Restoring with -f first (which
-          # correctly narrows workload resolution to just that TFM) before a --no-restore build
-          # avoids that.
+          # fails with NETSDK1147 over the missing ios workload. Restoring with -p:TargetFramework
+          # first (which correctly narrows workload resolution to just that TFM) before a
+          # --no-restore build avoids that - NOT `-f`, which for `dotnet restore` specifically means
+          # --force (not --framework, unlike build/publish/run/test), and silently swallows
+          # "net10.0-android" as a bogus positional project-path argument instead.
           cd FullTime.App/FullTime.App
-          $DOTNET restore -f net10.0-android
+          $DOTNET restore -p:TargetFramework=net10.0-android
           $DOTNET build -f net10.0-android -c Debug --no-restore -p:EmbedAssembliesIntoApk=true
 
     artifacts:
