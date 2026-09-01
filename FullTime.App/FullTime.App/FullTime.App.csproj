@@ -122,6 +122,20 @@
     <PackageReference Include="Plugin.MauiMTAdmob" Version="2.4.0" />
   </ItemGroup>
 
+  <!-- Google's UMP (User Messaging Platform) SDK, called directly rather than through
+       Plugin.MauiMTAdmob's own consent-form support - that's a paid add-on from the plugin's
+       vendor (undisclosed price), but implementing "your choice of Certified CMP" (their own
+       wording for the unlicensed path) against Google's own UMP is free and is itself a Certified
+       CMP. Microsoft's own binding on Android; a free MIT binding from the same author as the ad
+       plugin on iOS, since Microsoft's iOS UMP binding is a stale 2020 Xamarin.iOS-only package. -->
+  <ItemGroup Condition="$(TargetFramework.Contains('-android'))">
+    <PackageReference Include="Xamarin.Google.UserMessagingPlatform" Version="4.0.0.3" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$(TargetFramework.Contains('-ios'))">
+    <PackageReference Include="MTAdmob.UMP.iOS.Binding" Version="3.0.0" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\FullTime.App.Shared\FullTime.App.Shared.csproj" />
   </ItemGroup>
