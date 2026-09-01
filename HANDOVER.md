@@ -22,14 +22,19 @@ re-explaining everything. Read this fully before touching code.
     layouts, services, `wwwroot/app.css`). Both the MAUI head and the Web head reference this and
     render the same markup.
   - `FullTime.App/` — the MAUI native head (Android/iOS/MacCatalyst/Windows). This is what
-    Codemagic builds for TestFlight/Play Store.
+    Codemagic builds for TestFlight/Play Store. **Package/bundle ID is now `com.jtmtechnology.fulltime.app`
+    on BOTH platforms** (see §3 — Android used to be the unmodified `com.companyname.*` MAUI
+    template default; fixed this session, before any Play Store publish, since it can never change
+    after that).
   - `FullTime.App.Web/` — a Blazor Server web host of the same Shared UI, runs on the VM as
     `fulltime-web` (port 5200). Used for testing in a browser without needing a device/emulator.
     Prerenders statically before going interactive — see the JS-interop gotcha in §5.
 - `FullTime.Website/` — separate standalone marketing site (own `wwwroot`, own `styles.css`, not
-  related to FullTime.App.Shared). Runs on the VM as `fulltime-website` (port 5300, nginx reverse
+  related to `FullTime.App.Shared`). Runs on the VM as `fulltime-website` (port 5300, nginx reverse
   proxy on port 80 for `fulltime.jtmtechnology.co.uk`). Public domain is proxied through
-  **Cloudflare** — see the caching gotcha in §5, it affects how CSS/JS deploys show up live.
+  **Cloudflare** — see the caching gotcha in §5, it affects how CSS/JS deploys show up live. Now
+  has three pages: `index.html` (marketing), `invite.html` (league invite landing page, §3),
+  `privacy.html` (Play Store–required privacy policy, §3).
 
 **Per-host service pattern** (important convention, used throughout): any capability that differs
 between MAUI and Web gets an interface in `FullTime.App.Shared/Services/`, with a `Maui*`
@@ -37,13 +42,16 @@ implementation in `FullTime.App/Services/` and a `Web*` implementation in
 `FullTime.App.Web/Services/`, registered in `MauiProgram.cs` / `Program.cs` respectively. Examples:
 `IJwtStore`, `ILocaleProvider`, `ISlipStore`, `IActiveContextStore`, `IPushRegistrar`,
 `IAdsRemovalService`, `IInterstitialAdService`, `IMatchLeaguePreferenceStore`, `ICelebratedWinStore`,
-`IHapticFeedback`, `IDailySpinStore`. (The Daily Spinner's ticking sound did *not* need this
-pattern — it's plain JS/Web Audio API run inside whichever WebView/browser is already hosting the
-Blazor UI, identical on both hosts, so no Maui/Web split was needed there.)
+`IHapticFeedback`. **`IDailySpinStore` was removed this session** — the Daily Spinner moved from
+local-device storage to a server-authoritative API (§3), so there's no longer a per-host storage
+capability there at all.
 
 **VM:** `fulltime-vm`, GCP zone `us-east1-b`, external IP `34.23.16.148`. `e2-micro` + 30GB
 pd-standard, GCP Always Free tier. Database: PostgreSQL, database name is **`friendsacca`** (not
-"fulltime").
+"fulltime"). **All three services (`fulltime-api`, `fulltime-web`, `fulltime-website`) are current
+as of this handover** — redeployed multiple times this session, each after the code that landed on
+`main` at the time. Don't assume staleness without checking `git log` first, but there's no known
+gap right now.
 
 **Local Postgres access:** a separate Postgres instance also runs on this dev machine (distinct
 database from the VM's, same name `friendsacca`). `FullTime.Api`'s local connection string lives in
@@ -57,20 +65,18 @@ compute ssh` used for deploys authenticates via local peer auth, no password nee
 
 **⚠️ Running `FullTime.Api` locally burns the SAME shared RapidAPI/Highlightly quota as
 production** — local and the VM use the identical API key (confirmed: both start `99c7a86a95...`),
-and there's a single account-wide daily cap (confirmed 25,000/day). Confirmed happening: leaving
-the local API running (and restarting it repeatedly across a session, e.g. to release build file
-locks) racked up 9,572 Highlightly calls and 98 already-rate-limited (429) responses in *one*
-local run alone, exhausting the day's quota well before production's own normal usage would have.
-Two compounding causes, both worth knowing before running `FullTime.Api` locally for any length of
-time: (1) three background services (`HighlightlyFixtureDiscoveryBackgroundService`,
-`HighlightlyMatchSyncBackgroundService`, `BetBuilderSyncBackgroundService`) each fire an immediate,
-unconditional burst of calls on every process **start** — no "last synced" gate — so every restart
-adds its own spike; (2) a **stale local dev DB** (matches stuck at `Upcoming` with kickoff times
-weeks in the past) makes the live-sync query treat far more dates as "still need polling" per tick
-than a properly up-to-date DB would. Don't leave the local API running unattended, and don't
-restart it more than necessary — stop it (`Stop-Process` on the `FullTime.Api` process, needed
-anyway to release its file lock before rebuilding) as soon as you're done testing against it rather
-than leaving it running in the background.
+and there's a single account-wide daily cap (confirmed 25,000/day). Confirmed happening this
+session: leaving the local API running (and restarting it repeatedly, e.g. to release build file
+locks) racked up 9,572 Highlightly calls and 98 already-rate-limited (429) responses in *one* local
+run alone. Two compounding causes: (1) three background services
+(`HighlightlyFixtureDiscoveryBackgroundService`, `HighlightlyMatchSyncBackgroundService`,
+`BetBuilderSyncBackgroundService`) each fire an immediate, unconditional burst of calls on every
+process **start** — no "last synced" gate — so every restart adds its own spike; (2) a **stale
+local dev DB** (matches stuck at `Upcoming` with kickoff times weeks in the past) makes the
+live-sync query treat far more dates as "still need polling" per tick than an up-to-date DB would.
+Don't leave the local API running unattended, and don't restart it more than necessary — stop it
+(`Stop-Process` on the `FullTime.Api` process, needed anyway to release its file lock before
+rebuilding) as soon as you're done testing against it.
 
 **Deployment pattern** (unchanged, works reliably — `X` = `api` / `web` / `website`):
 ```
@@ -90,45 +96,46 @@ gcloud compute ssh fulltime-vm --zone=us-east1-b --command='
 ```
 Clean up local `publish-X/` and `publish-X.tar.gz` afterward — don't commit them.
 
-**⚠️ `fulltime-api` and `fulltime-web` are stale as of this handover.** Only `fulltime-website` was
-redeployed this session (three times, as changes landed). `fulltime-api` in particular now needs a
-redeploy before the new invite-by-email feature (§3) will actually work in production — the code is
-committed to `main` but the running VM instance predates it. Check `git log` vs. what's actually
-running before assuming the VM is current.
+**⚠️ Database migrations need applying to BOTH local and VM Postgres separately, and the VM has no
+auto-migrate on startup.** This session's pattern: after `dotnet ef migrations add`, run
+`dotnet ef database update` locally, and for the VM generate an idempotent script
+(`dotnet ef migrations script <lastAppliedMigration> --idempotent -o script.sql`, or omit the first
+arg for "from empty" the very first time), `gcloud compute scp` it over, then
+`sudo -u postgres psql -d friendsacca -f script.sql` over SSH. All migrations added this session are
+applied to both as of this handover.
 
 **Android testing:** Two AVDs exist locally: `FullTime_GoogleAPIs_API35` and `FullTime_Pixel8_API35`.
 adb lives at `C:\Program Files (x86)\Android\android-sdk\platform-tools\adb.exe`, emulator at
 `C:\Program Files (x86)\Android\android-sdk\emulator\emulator.exe`. **Always use the PowerShell
 tool for `adb screencap`/`pull`/`input tap` with `/sdcard/...` paths or coordinates** — git-bash
 mangles `/sdcard/...` path arguments. When converting a screenshot's *displayed* coordinates to
-real device coordinates for `adb shell input tap`, multiply by `actual_width / displayed_width`. If
-a MAUI Android build fails with a file-lock error, run `dotnet build-server shutdown` first, then
-retry; if a `dotnet build`/`dotnet run` background process is still holding a DLL lock afterward,
-find and kill it by PID (`Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'"` filtered by
-`CommandLine`, or just the PID printed in the MSB3026/MSB3027 error) rather than assuming
-`build-server shutdown` alone released it.
+real device coordinates for `adb shell input tap`, multiply by `actual_width / displayed_width` —
+**don't skip this multiplication**, using displayed coordinates directly taps the wrong element.
+If a MAUI Android build fails with a file-lock error, run `dotnet build-server shutdown` first,
+then retry; if a `dotnet build`/`dotnet run` background process (very likely the local API, see
+above) is still holding a DLL lock afterward, find and kill it by PID
+(`Get-CimInstance Win32_Process -Filter "Name='FullTime.Api.exe'"` or `'dotnet.exe'` filtered by
+`CommandLine`) rather than assuming `build-server shutdown` alone released it.
 
-**⚠️ New this session — plain `adb install` crashes a Debug build on launch.** A plain
-`dotnet build -f net10.0-android -c Debug` followed by `adb install` produces an app that aborts
-immediately (`SIGABRT`, logcat shows `No assemblies found in '.../.__override__/...' ... Assuming
-this is part of Fast Deployment. Exiting...`). Debug builds use MAUI's "Fast Deploy", which expects
-the .NET assemblies to be pushed to the device *separately* from the APK by the IDE/deploy tooling
-— a bare `adb install` skips that step entirely. `dotnet build -t:Run -f net10.0-android` was tried
-as the "proper" fix but did **not** actually deploy or launch anything in this environment (build
-succeeded, no install/launch occurred, root cause not confirmed — possibly an adb-target-resolution
-issue specific to this CLI setup). **What actually worked:** build with
-`-p:EmbedAssembliesIntoApk=true` to embed the assemblies straight into the APK (sidesteps Fast
-Deploy entirely), then a fresh `adb uninstall com.jtmtechnology.fulltime.app` + `adb install
+**Plain `adb install` crashes a Debug build on launch.** A plain `dotnet build -f net10.0-android -c
+Debug` followed by `adb install` produces an app that aborts immediately (`SIGABRT`, logcat shows
+`No assemblies found in '.../.__override__/...' ... Assuming this is part of Fast Deployment.
+Exiting...`). **What works:** build with `-p:EmbedAssembliesIntoApk=true` to embed the assemblies
+straight into the APK (sidesteps Fast Deploy entirely), then a fresh
+`adb uninstall com.jtmtechnology.fulltime.app` + `adb install
 <path>\com.jtmtechnology.fulltime.app-Signed.apk` (not `-r`), then
 `adb shell am start -n com.jtmtechnology.fulltime.app/<activity>` to launch — the crc64-prefixed
 activity class name can change between builds, so if `am start` says "Activity class does not
 exist", re-resolve it first with `adb shell cmd package resolve-activity --brief
 com.jtmtechnology.fulltime.app`. Confirm it's actually running (not silently crashed back to the
-launcher) via `adb shell dumpsys window | Select-String mCurrentFocus` before screenshotting.
+launcher, or stuck behind a Test Ad interstitial that needs dismissing) via
+`adb shell dumpsys window | Select-String mCurrentFocus` before screenshotting. A one-off HWUI/EGL
+SIGSEGV on cold start happened once this session — looked like an emulator graphics flake, not a
+code issue; just retry the launch.
 
-**New (prior session) — debugging via Chrome DevTools Protocol (CDP):** when a screenshot-based
-diagnosis is ambiguous (e.g. "is this element actually clipped, or does it just look that way?"),
-you can get exact DOM/layout truth from the *real* on-device Android WebView instead of guessing:
+**Debugging via Chrome DevTools Protocol (CDP):** when a screenshot-based diagnosis is ambiguous
+(e.g. "is this element actually clipped, or does it just look that way?"), get exact DOM/layout
+truth from the *real* on-device Android WebView instead of guessing:
 ```
 adb shell pidof <package>                                   # get the running process id
 adb shell cat /proc/net/unix | grep devtools                 # confirm the debug socket name
@@ -140,9 +147,11 @@ send `{"id":1,"method":"Runtime.evaluate","params":{"expression":"...","returnBy
 get real computed geometry. Far more reliable than iterating on screenshots for CSS layout bugs.
 
 **iOS:** No Mac available in this environment — iOS changes are pushed and verified via Codemagic
-CI (ad-hoc IPA builds + TestFlight) and the user's own physical iPhone. **Still not confirmed on a
-real iPhone as of this handover** — everything this session and last session was only verified via
-the Android emulator and the Blazor Server web host.
+CI. `codemagic.yaml` currently holds only the `ios-ad-hoc` and `ios-testflight` workflows (see §3
+for why an Android workflow was added then deliberately removed again). **Still not confirmed
+working on a real iPhone or via a fresh Codemagic build** — this session's Android package rename
+and the new UMP consent code (§3) are both unverified on iOS; the UMP iOS package in particular
+(`MTAdmob.UMP.iOS.Binding`) compiles but has never actually been run.
 
 ---
 
@@ -152,193 +161,277 @@ Condensed background context, not open work:
 - In-app splash bridge + native splash fix, win-celebration overlay (`WinCelebrationOverlay.razor`,
   once per newly-settled `Won` bet via `ICelebratedWinStore`), bet-placement confirmation in
   `BetSlipSheet.razor`, logo/branding assets.
-- **Daily Spinner** (prize wheel) was originally built two sessions ago: `/daily-spinner` page, a
-  `FreeSpinBanner.razor` promo on the Matches page with a live mini-preview wheel, a shared
-  `SpinSegments.All` prize catalogue (placeholder only — no real economy/backend/redemption),
-  `IDailySpinStore` persistence (per-host pattern), pointer-landing rotation math, a real football
-  photo in a pulsing glow ring. This session (§3) substantially polished it — see below for current
-  behaviour, don't assume the original build description still matches.
-- **Known still-unresolved from before this session** (not touched, still true unless the user says
-  otherwise): TestFlight beta submission was hitting a 422 (likely missing App Store Connect "Test
-  Information"); real AdMob IDs still swapped for test IDs; store-listing icon exports not done; a
-  stale plan exists at `C:\Users\alan.browne\.claude\plans\dazzling-giggling-engelbart.md` to retire
-  the old football-data provider in favour of Highlightly (unverified, possibly stale — re-check
-  before resuming).
+- League invite by email (`POST api/leagues/{id}/invite`, `LeagueService.SendInviteAsync`, HTML
+  emails via Brevo SMTP), a "Weekend League"-style leaderboard UI, join-by-code flow.
+- **Daily Spinner** (prize wheel) was originally built as a 100% cosmetic placeholder: `/daily-spinner`
+  page, a `FreeSpinBanner.razor` promo on the Matches page, a shared `SpinSegments.All` prize
+  catalogue, local-device persistence, pointer-landing rotation math. **This session (§3) rebuilt
+  its entire backing logic to be real and server-authoritative** — don't assume any pre-session
+  description of "placeholder only, no real economy" still applies; it's now wired to actual
+  balances and bet boosts.
+- Marketing website feature grid, flexbox card-centering fix, Cloudflare cache-bust workaround
+  (`styles.css?v=N`) first introduced.
 
 ---
 
 ## 3. This session's work
 
-### 3.1 League invite by email (new feature)
-- New `POST api/leagues/{id}/invite` endpoint (`LeaguesController.cs` + `LeagueService.SendInviteAsync`
-  + a new `InviteOutcome` enum in `LeagueResults.cs`). Verifies the caller is a member of the league,
-  then emails the target address.
-- `IEmailSender` gained `SendHtmlAsync(toEmail, subject, htmlBody, textFallback, ct)` (MimeKit
-  `MultipartAlternative`) alongside the existing plain-text `SendAsync` (still used unchanged by
-  `AuthService` for verification/reset emails) — same Brevo SMTP relay (`SmtpEmailSender.cs`), no
-  new config needed.
-- The HTML email embeds the FullTime logo (`https://fulltime.jtmtechnology.co.uk/logo.png`), the
-  invite code, and a link to `https://fulltime.jtmtechnology.co.uk/invite?code=...&league=...`.
-  **That `/invite` page does not exist yet** — the user said they'll build it themselves later, once
-  they have real App Store/Play Store links to put on it. Linking to it now is intentional even
-  though it currently 404s.
-- `Leaderboard.razor`: each league card now has an "✉ Invite a friend by email" button that opens an
-  email field and posts via a new `ApiClient.SendLeagueInviteAsync`. New `InviteToLeagueRequest(string
-  Email)` DTO mirrored in both `FullTime.Api/Controllers/LeaguesController.cs` and
-  `FullTime.App.Shared/Models/ApiModels.cs`, per the project's existing mirrored-DTO convention.
-- **Not yet live in production** — `fulltime-api` hasn't been redeployed since this was written (see
-  §1's stale-VM warning).
+This was a large, multi-part session. Grouped by theme rather than chronologically.
 
-### 3.2 Daily Spinner polish
-All in `DailySpinner.razor` / `FreeSpinBanner.razor` / `app.css` unless noted:
-- **Fixed a real bug**: dismissing a win used to `Nav.NavigateTo("/")` immediately, so the streak
-  update was never actually visible. Dismiss now just closes the popup and stays on the page. The
-  TEMP testing bypass (below) had to be adjusted to also clear the local `_lastSpinDate` field
-  directly, since it can no longer rely on the old navigate-away forcing a remount that reloaded
-  from the (cleared) store.
-- **7-day streak now cycles instead of capping**: previously `Math.Min(_streak+1,7)` sat at 7
-  forever; now it increments and wraps — hitting 7 awards a flat **£50** placeholder bonus
-  (`StreakBonusAmount` const, shown on the win card) and resets the persisted streak to 0, so the
-  next day starts a fresh 1..7 cycle.
-- **Mystery Cash range**: £5–£100 → **£5–£50** (`Random.Shared.Next(1, 11) * 5`), per explicit ask.
-- **Boost results** ("Bet Boost 25%/50%", "2x Odds Boost") now show "Applies automatically to your
-  next bet." — copy only, no real bet-integration exists (the whole wheel is still 100%
-  placeholder/cosmetic, no backend prize-granting).
-- Streak card subtitle: "Spin every day to build your streak — bonus prize on day 7".
-- `FreeSpinBanner`'s badge text: "Available" → "**Available now**"; its pulse animation amplitude
-  increased (scale peak 1.07 → 1.18, more noticeable).
-- The big wheel's pulsing center football image enlarged (`.wheel-center` 86px → 108px, ball scales
-  proportionally via its 72%/`object-fit:contain`).
-- **Spin ticking sound added**: new `FullTime.App.Shared/wwwroot/spinSound.js`, a small Web Audio
-  API module (`playSpinTicks(durationMs)`) synthesizing ~28 short oscillator clicks with an ease-out
-  spacing curve (mimics a wheel-of-fortune ratchet slowing down) — deliberately not a shipped audio
-  asset, nothing to bundle or license. Loaded via dynamic `import()` through `IJSRuntime`.
-  **Real bug caught and fixed**: importing it from `OnInitializedAsync` threw
-  `InvalidOperationException` under Blazor Server's static prerendering (JS interop isn't allowed
-  until the interactive circuit exists) — moved to `OnAfterRenderAsync(firstRender)` instead. Watch
-  for this on any *other* future JS-interop addition to a page rendered by `FullTime.App.Web`.
-- **Icon fix**: the `ℹ` (U+2139) and `🎯` emoji rendered inconsistently (wrong/broken glyph on the
-  Android emulator; emoji also ignore CSS `color` so couldn't be made green on request). Replaced
-  both with a new reusable `.info-icon` CSS class — a small bordered circle with a plain "i",
-  colored `var(--accent)` (green) — matching the existing `.wheel-icon-badge`/
-  `.spin-banner-icon-badge` "2x"-badge visual language. Used in the streak card's "Miss a day..."
-  note and the win card's boost note. **If any other emoji ever looks visually "off" or need a
-  specific brand color, check whether it should become a plain-glyph-in-a-badge like this instead
-  of fighting emoji-font rendering.**
-- **TEMP once-a-day bypass is still in place** (`DismissResult()` clears the spin record on every
-  dismiss). This was flagged as unexpected mid-session; asked to be removed, then the user said to
-  leave it in for now. Still marked `// TEMP for testing only` in code — still must be removed
-  before real shipping (carried over from before, unchanged).
+### 3.1 Daily Spinner: wired to a real backend (biggest change this session)
+The wheel itself (`DailySpinner.razor`, `SpinSegments.All`) is unchanged UI; everything behind it
+moved server-side:
+- New `FullTime.Api/Spin/` (`SpinService`, `SpinResults.cs`) + `SpinController`
+  (`GET api/spin/status`, `POST api/spin`). The winning segment is picked **server-side** — a
+  client-only "last spin date" (the old `IDailySpinStore`) could be spoofed by clearing local
+  storage once real value was on the line, so that store is gone entirely (Maui/Web
+  implementations deleted too).
+- **Mystery Cash** and the **day-7 streak bonus** (now **£100**, up from a placeholder £50) credit
+  every league membership the user has — both `Balance` and `StartingBalance`, same profit-neutral
+  treatment `WeeklyTopUpService` already used, so a lucky spin can't skew the leaderboard.
+- **Bet Boosts** (`Bet Boost 25%`, `Bet Boost 50%`, `2x Odds Boost`) are stored on `User`
+  (`PendingBoostMultiplier`/`PendingBoostLabel`) and consumed by the very next bet placed
+  (`BetService.PlaceBetAsync`) — multiplies combined odds, then clears. A new boost always
+  **overwrites** an unused one, never stacks. The bet slip now **previews the boosted potential
+  return live** while building a bet (fetches pending-boost status when the sheet opens), not just
+  after placing. `Bet.BoostApplied` is now persisted, so **My Bets shows which past bets had a
+  boost applied**.
+- **Daily spin reminder push notification**: new `SpinReminderService`/`SpinReminderBackgroundService`
+  nudges anyone who hasn't spun yet past 4pm their own local time, once a day. The MAUI app now
+  sends the device's UTC offset alongside its push token on registration
+  (`DevicesController.Register`, `User.UtcOffsetMinutes`) so this can be computed per user;
+  Web-only accounts are naturally skipped (they never register a push token).
+- **Countdown timer removed** from the "come back tomorrow" state — the daily gate was always
+  calendar-day based (not a rolling 24h cooldown), so a ticking clock implied a cooldown that never
+  actually existed. Now just a static message.
+- **The TEMP once-a-day testing bypass is fully removed** (was carried over from earlier sessions,
+  repeatedly flagged, finally taken out this session along with its API endpoint
+  (`SpinController.ResetForTesting`) and `ApiClient.ResetSpinForTestingAsync`). Spinning is
+  genuinely once-per-real-day everywhere now, including production.
+  - **For streak testing without waiting real days**: there's no bypass anymore, so testing a
+    7-day cycle means directly setting `Users.LastSpinDate` to yesterday (leaving `SpinStreak`
+    untouched) via SQL before each test spin — a small throwaway Npgsql console script does this in
+    a few lines (see §5 for the general pattern of writing one). Don't reintroduce an API-level
+    bypass without being asked; it was removed deliberately.
+- New `Users` columns (migrations `AddDailySpinToUser`, `AddSpinReminderToUser`): `LastSpinDate`,
+  `SpinStreak`, `PendingBoostMultiplier`, `PendingBoostLabel`, `UtcOffsetMinutes`,
+  `LastSpinReminderDate`. New `Bets` column (`AddBoostAppliedToBet`): `BoostApplied`. All applied to
+  both local and VM Postgres.
 
-### 3.3 Cosmetic
-- `.back-btn` (‹, used across all pages) font-size 1.4rem → 1.8rem.
-- `.spin-banner-arrow` (›, on the home-page Free Spin banner) font-size 1.3rem → 1.7rem.
-- iOS app icon backdrop color changed from accent green (`#2FAE4F`) to the same dark navy Android
-  and the splash screen already use (`#0D1117`), in `FullTime.App/FullTime.App/FullTime.App.csproj`.
+### 3.2 League invite page + privacy policy (Play Store/App Store prep)
+- Built `FullTime.Website/wwwroot/invite.html` from scratch — the invite email already linked to
+  `/invite?code=...&league=...` from a previous session but the page never existed (404). It's a
+  static page (no server routing on this site) that reads `code`/`league` from the query string via
+  inline JS, shows a big glowing invite-code card, and links to the same placeholder store badges as
+  the homepage. `LeagueService.cs`'s `inviteLink` now points at `/invite.html` (not `/invite` —
+  static file serving needs the real extension). Copy now explicitly says to create an account
+  before trying to join with the code (was missing, confusing without it).
+- Built `FullTime.Website/wwwroot/privacy.html` — required for the Play Store listing. Covers what's
+  collected (account details, country, league/betting activity, push token + device UTC offset),
+  the third-party services involved (Firebase Cloud Messaging, Google AdMob, the football data
+  provider), and how to request account deletion. Linked from the homepage footer.
+- **Hit the Cloudflare cache-busting bug TWICE this session** adding CSS for both of the above
+  (`.invite-code-card`, `.legal-page`) without bumping `styles.css?v=N` — see §5, now at **`v=5`**.
+  The lesson: bump the version *in the same edit* as any `styles.css` change, don't treat it as a
+  separate deploy-time step.
 
-### 3.4 Website (`FullTime.Website`)
-- Feature grid content refreshed to match currently-shipped app features: added a "Daily Spinner"
-  card; updated "Private leagues" copy to mention email invites; updated "Live scores" copy to
-  mention win celebrations.
-- **Fixed layout bug**: a lone last-row card (7 cards, 3-column layout) sat pinned to the left
-  instead of centering. Switched `.feature-grid` from CSS Grid to Flexbox
-  (`display:flex; flex-wrap:wrap; justify-content:center`) — flexbox centers every wrapped row
-  *including* a partial final one, which CSS Grid does not do for leftover items. Then had to fix a
-  second-order issue: `.feature-card`'s original `flex:1 1 240px` let a *lone* last-row card grow to
-  fill its entire row, making it visibly wider than cards in full rows above — changed to
-  `flex:0 1 296px` (fixed width, no grow) so every card is the same width regardless of row
-  completeness.
-- **⚠️ Discovered mid-session — the site is proxied through Cloudflare, and it edge-caches static
-  assets independent of origin deploys.** `index.html` responses come back `cf-cache-status:
-  DYNAMIC` (never cached), but `styles.css` came back `cf-cache-status: HIT` with `Cache-Control:
-  max-age=14400` (4h) — a CSS-only redeploy did not show up live even though the file was correctly
-  updated on the VM (confirmed via SSH). No Cloudflare dashboard/API access is configured in this
-  environment, so purging isn't possible directly. **Workaround in place:** the stylesheet
-  `<link>` in `index.html` uses a cache-busting query string, `styles.css?v=N` — bump `N` on every
-  CSS-only deploy so Cloudflare treats it as a new URL and fetches fresh from origin immediately.
-  Currently at **`v=3`**. If real Cloudflare purge access ever gets configured, this workaround can
-  be dropped in favour of an actual purge-on-deploy step.
-- Deployed to the VM (`fulltime-website` service) three times this session as changes landed; the
-  live site at https://fulltime.jtmtechnology.co.uk reflects all of §3.4 as of this handover.
+### 3.3 Android package name fixed before Play Store upload
+Android's `ApplicationId` was still the **unmodified MAUI template default**,
+`com.companyname.fulltime.app` — iOS already correctly used `com.jtmtechnology.fulltime.app`.
+Package names can never change after a first Play Store publish, so this had to be fixed now:
+- `FullTime.App.csproj`'s Android `ApplicationId` → `com.jtmtechnology.fulltime.app` (matches iOS,
+  no more platform-conditional override needed).
+- A new Android app was registered in the Firebase project (`fulltime-98cc9`) for the new package
+  name **before** the code change, so push notifications wouldn't silently break —
+  `Platforms/Android/Resources/google-services.json` now carries client entries for both the old and
+  new package names (harmless to leave the old one in).
+- `HANDOVER.md` and `.claude/settings.local.json`'s adb permission patterns updated to match.
 
-### 3.5 Files changed this session
-- **New:** `FullTime.App.Shared/wwwroot/spinSound.js`.
-- **Modified (App/API):** `FullTime.Api/Auth/IEmailSender.cs`, `FullTime.Api/Auth/SmtpEmailSender.cs`,
-  `FullTime.Api/Controllers/LeaguesController.cs`, `FullTime.Api/Leagues/LeagueResults.cs`,
-  `FullTime.Api/Leagues/LeagueService.cs`, `FullTime.App.Shared/Components/FreeSpinBanner.razor`,
-  `FullTime.App.Shared/Models/ApiModels.cs`, `FullTime.App.Shared/Pages/DailySpinner.razor`,
-  `FullTime.App.Shared/Pages/Leaderboard.razor`, `FullTime.App.Shared/Services/ApiClient.cs`,
-  `FullTime.App.Shared/wwwroot/app.css`, `FullTime.App/FullTime.App/FullTime.App.csproj`.
-- **Modified (Website):** `FullTime.Website/wwwroot/index.html`, `FullTime.Website/wwwroot/styles.css`.
-- Committed as `55d3e44` ("Add league email invites, tune Daily Spinner, update marketing site") and
-  a follow-up website-only commit for the card-width fix + `v=3` cache-bust (see git log for the
-  exact hash — created and pushed alongside this handover update).
+### 3.4 Ad provider investigation → UMP consent flow instead
+Asked to replace AdMob with Appodeal (real ads were showing 0 fill). Researched thoroughly before
+touching code:
+- **Appodeal**: no viable .NET MAUI path. Only NuGet package is `AppodealXamarinPlugin` — Android-only,
+  targets the legacy `MonoAndroid` TFM (not the modern `net10.0-android`), unmaintained-feeling
+  (single maintainer, ~1,900 downloads total), **no iOS package at all**.
+- **AppLovin MAX** (checked as an alternative): real `net10.0-android`/`net10.0-ios` packages exist
+  (`Anjo.Android.AppLovin`, `AppLovin.iOS`), but the iOS one has zero track record — all 8 published
+  versions landed the same day.
+- **Unity LevelPlay/ironSource** (checked too): official NuGet packages exist but are legacy
+  `MonoAndroid`/`Xamarin.iOS` bindings, stale since May 2023.
+- **Turned out to be moot**: AdMob only serves real ads to apps actually **live on a store** (an
+  anti-invalid-traffic policy, confirmed by the user, not a bug in the integration). This should
+  just start working once FullTime is actually published — no SDK migration needed.
+- **Wired up the UMP (GDPR/UK) consent flow anyway**, since it's good practice regardless and was a
+  real gap. NOT through `Plugin.MauiMtAdmob`'s own consent-form support — that's a **paid,
+  undisclosed-price add-on** from the plugin vendor. Instead calls Google's own UMP SDK directly
+  (itself a Certified CMP, which the plugin's own docs say is fine to use on the unlicensed path):
+  - Android: Microsoft's own `Xamarin.Google.UserMessagingPlatform` (free, MIT, actively maintained).
+  - iOS: `MTAdmob.UMP.iOS.Binding` (free, MIT, same author as the ad plugin, targets `net10.0-ios`).
+  - New code in `MauiInterstitialAdService.cs`: `RequestConsentAsync()` runs once per session, ahead
+    of ad-SDK init (Google's documented ordering). Android needs a small `Java.Lang.Object`-based
+    listener class (no lambda-friendly wrapper exists for those interfaces); iOS's binding uses
+    plain C# delegates, much simpler.
+  - **Verified working end-to-end on the Android emulator**: a real GDPR consent dialog renders,
+    resolves cleanly on tapping Consent, and the existing ad-loading pipeline proceeds normally
+    afterward (confirmed via logcat + screenshot, no crashes). **iOS side compiles but is completely
+    unverified** — needs a Codemagic build to confirm the delegate-based calls actually work at
+    runtime.
+- Test AdMob IDs are still in place (see §5 on why — unrelated to this investigation, just still
+  true) and must stay until actual store submission.
 
-### 3.6 Verification done this session
-- League invite email: backend builds clean; **not actually verified end-to-end** (no real SMTP
-  send was triggered/observed — credentials live only in VM config, and `fulltime-api` is stale
-  anyway, see §1).
-- Daily Spinner + cosmetic changes: built and installed to `FullTime_Pixel8_API35` repeatedly
-  (working around the Fast Deploy issue in §1), confirmed launching and rendering; user did their
-  own hands-on testing on the emulator and gave several rounds of live feedback (icon color, pulse
-  size, badge text, streak copy) that are all incorporated above.
-- Website: verified live via `curl` against the public domain (including the `?v=N` cache-bust
-  check) after each of the three deploys.
-- **Not verified on a real iPhone or against a freshly-deployed `fulltime-api`/`fulltime-web`.**
+### 3.5 Codemagic: added, then reverted, an Android debug workflow
+Wanted to sideload a debug build to a physical Android phone but `adb` never detected it over USB
+(driver/USB-mode issue, never resolved — worth re-diagnosing if picked up again). Instead added an
+`android-debug` Codemagic workflow that builds and **emails** a directly-installable APK. Took
+several iterations to get working on Codemagic's Mac runner (same runner type as the iOS workflows —
+`instance_type: linux_x2` isn't in the current billing plan):
+- **NETSDK1147** (missing ios workload) — `FullTime.App.csproj` multi-targets
+  android/ios/maccatalyst, and a plain `dotnet build -f net10.0-android` still evaluates the full
+  `TargetFrameworks` list during implicit restore even with `-f` narrowing the actual build.
+- **`dotnet restore -f <TFM>` is a trap** — `-f` means `--force` for the `restore` subcommand
+  specifically (unlike `build`/`publish`/`run`/`test`, where it means `--framework`), so it silently
+  swallowed the TFM string as a bogus project-path argument (`MSB1009`).
+- **XA5207** (missing Android SDK platform) — the `maui-android` *workload* only brings build
+  tooling, not the actual SDK platform files; needed an explicit
+  `dotnet build -t:InstallAndroidDependencies ... -p:AcceptAndroidSDKLicenses=true` step.
+- The actual fix that stuck: a new **`AndroidOnlyBuild`** MSBuild property in `FullTime.App.csproj`
+  (mirrors the existing `IosOnlyBuild` pattern already used by the iOS workflows), which collapses
+  `TargetFrameworks` down to just `net10.0-android` for that project only — scoped so it can't leak
+  into `FullTime.App.Shared`'s own restore the way a command-line `-p:TargetFramework=` override did
+  (that one corrupted Shared's assets file, `NETSDK1005`, on the very next `--no-restore` step).
+- Once working, **`codemagic.yaml` was reverted back to iOS-only** per explicit request. The
+  working Android workflow (with all the above fixes) is preserved in a **new file,
+  `codemagic-android-debug.yaml`** at the repo root — copy its content back into `codemagic.yaml`
+  whenever an Android sideload build is needed again. `AndroidOnlyBuild` itself is left in
+  `FullTime.App.csproj` (harmless when unused) since that saved workflow depends on it.
+
+### 3.6 Play Store listing assets produced
+All saved locally, **not yet confirmed actually uploaded/submitted** by the user (they were mid-flow
+through Play Console when the session wrapped):
+- Short + full description text (in conversation, not a file — ask if it's needed again, or check
+  chat history).
+- `Downloads\play-store-icon-512.png` — 512×512, the app icon composited onto its real navy
+  (`#0D1117`) backdrop rather than uploaded with its raw transparent padding (which would've shown
+  mostly empty space in the listing).
+- `Downloads\feature-graphic-1024x500.png` — built as an HTML file rendered via headless Edge
+  (`msedge --headless --screenshot --window-size=1024,500`) rather than hand-drawn, reusing the
+  site's actual brand colours/wordmark styling. This technique (author an HTML file, screenshot it
+  headless at an exact pixel size) is reusable for any future pixel-exact marketing asset.
+- `Downloads\play-store-screenshots\01-matches.png` through `05-leaderboard.png` — captured live
+  from the emulator against production (Matches, Bet Slip, Daily Spinner, My Bets, Leaderboard),
+  using a real test account (§3.7) so they show actual data, not empty states. **Had to be cropped**
+  from the emulator's native 1080×2400 (2.22:1) down to 1080×2106 (1.95:1) — Play Store rejects
+  screenshots over a 2:1 aspect ratio; the raw emulator capture would have failed upload.
+- Android package name for the listing: `com.jtmtechnology.fulltime.app` (§3.3).
+- Privacy policy URL for the listing: `https://fulltime.jtmtechnology.co.uk/privacy.html` (§3.2).
+
+### 3.7 Test account + local test data
+- **Production**: `test@jtmtechnology.co.uk` / `Testuser123`, registered via the real API then
+  marked `EmailVerified = true` directly in the VM's Postgres (bypasses needing to click a real
+  verification email). Has a **"Weekend League"** (invite code `SPQJJM`) and one **£10 pending bet**
+  placed against it, used to populate the Play Store screenshots. **Not cleaned up** — ask before
+  deleting, or leave in place if the user wants to keep using this account for further testing.
+- **Local**: `alan@jtmtechnology.co.uk`'s password reset to `matthew2003` (direct DB write, BCrypt
+  hash generated via a throwaway console app referencing the same `BCrypt.Net-Next` version as
+  `FullTime.Api`, to guarantee a matching hash). +£500 added to both the "Browne" and "WBA" league
+  membership `Balance`s (not `StartingBalance` — a deliberate one-off top-up for testing, not meant
+  to be profit-neutral like the in-app mechanisms).
+
+### 3.8 Smaller fixes
+- App icon shield shrunk to 78% on both `appicon.png` (Android) and `appicon_ios.png` (iOS) — was
+  edge-to-edge with almost no safe-zone margin.
+- Boost-message icon misalignment in the Daily Spinner win card (`.win-note` now a flex row like its
+  working sibling `.streak-note`, was relying on a hand-tuned `vertical-align` offset tuned for a
+  different context).
+- Invite "Send" button had no CSS class at all (unstyled) — now `.primary-btn`. Send/Cancel now
+  stack correctly on their own row instead of wrapping individually. Button text shortened to
+  "Invite friend", pulled up tighter under the invite code.
+- Tried adding a real recorded spin-wheel sound (`spinSound.js` → a Web Audio synth, then swapped for
+  an actual mp3) — **ultimately removed entirely** per explicit ask; the wheel is silent again.
 
 ---
 
-## 4. Outstanding tasks (merged: carried-over + new)
+## 4. Outstanding tasks
 
-1. **Redeploy `fulltime-api`** — the invite-by-email backend code is committed but not live; the
-   feature won't actually work for real users until this happens.
-2. **Redeploy `fulltime-web`** — stale relative to `main`, includes everything from §3.2/§3.3 plus
-   the prior session's Daily Spinner build.
-3. **Confirm everything works on a real iPhone** (Daily Spinner, league invites, all cosmetic
-   changes) — still only verified via Android emulator + Blazor Server web host across two
-   sessions now.
-4. **Revert the TEMP once-a-day spin bypass** in `DailySpinner.razor`'s `DismissResult()` — flagged
-   again this session, user asked for removal then explicitly said to leave it in for now. Do not
-   ship with it in place; the one-line removal is documented in a comment at the call site.
-5. **Design the real prize economy** — wheel/catalogue is still 100% placeholder UI, explicitly
-   deferred by the user, unchanged since it was first flagged.
-6. **Build the `/invite` website page** — the invite email already links to it
-   (`fulltime.jtmtechnology.co.uk/invite?code=...&league=...`); user said they'll do this themselves
-   once they have real App Store/Play Store links to include.
-7. Real store-listing icon exports (1024×1024 no-alpha Apple / 512×512 with-alpha Google) — not
-   produced.
-8. Real AdMob IDs still need swapping back in before any store submission (test IDs currently in
-   `MauiInterstitialAdService.cs` / `AndroidManifest.xml`).
-9. TestFlight beta review 422 — not confirmed resolved, not touched.
-10. The stale `free-api-live-football-data`-retirement plan at
-    `C:\Users\alan.browne\.claude\plans\dazzling-giggling-engelbart.md` — untouched, possibly stale,
-    re-verify before resuming if picked up.
-11. If Cloudflare dashboard/API access ever gets configured, replace the `styles.css?v=N`
-    cache-busting workaround (§3.4) with a real purge-on-deploy step.
+1. **Confirm the UMP consent flow and the Android package rename work on iOS** — both are
+   unverified there (no Mac; compiles but never run). Needs a Codemagic build.
+2. **Diagnose why `adb` never detected the physical Android phone over USB** — driver? USB mode?
+   Never resolved; the Codemagic email-a-debug-APK route was used instead as a workaround.
+3. **Decide what to do with the `test@jtmtechnology.co.uk` production test account** (§3.7) — leave
+   it, or clean it up (delete in FK-safe order: BetLegPicks → BetLegs → Bets → LeagueMemberships →
+   Leagues → Users, per the project's stated convention).
+4. **A stray 100MB `com.jtmtechnology.fulltime.app-Signed.apk` sits untracked at the repo root**
+   (`c:\AB\Friends\`) — not committed, origin unclear, probably safe to delete but wasn't confirmed.
+5. **Actually finish the Play Store submission** — all assets are ready (§3.6) but the user was
+   still filling in Play Console fields (app name, package name, screenshots, feature graphic, age
+   suitability, IAP server notifications — the last two were explicitly skipped as optional/not
+   needed yet) when the session ended. Likely continues next session.
+6. **App Store Connect submission also in progress in parallel** — same session touched an "Age
+   Suitability URL" field there too. No FullTime-specific work needed for that beyond what iOS
+   already has; just continuing the standard Apple submission flow.
+7. **Design the real prize economy is done** (§3.1) — this item from earlier handovers is now
+   resolved, no longer outstanding. (Left as a note so it isn't accidentally re-flagged.)
+8. Real AdMob IDs still need swapping back in (`MauiInterstitialAdService.cs` /
+   `AndroidManifest.xml` / iOS `Info.plist`) — but only **after** the app is actually live on a
+   store, per §3.4's finding. Doing it earlier would just show real ads with guaranteed 0 fill.
+9. Real store-listing icon exports for Apple specifically (1024×1024, no alpha) — not produced this
+   session (only the Google 512×512 with-alpha version was).
+10. TestFlight beta review 422 (from an earlier session) — not confirmed resolved, not touched this
+    session either.
+11. The stale `free-api-live-football-data`-retirement plan at
+    `C:\Users\alan.browne\.claude\plans\dazzling-giggling-engelbart.md` — still untouched, still
+    possibly stale, re-verify before resuming if picked up.
+12. If Cloudflare dashboard/API access ever gets configured, replace the `styles.css?v=N`
+    cache-busting workaround with a real purge-on-deploy step.
 
 ---
 
 ## 5. Conventions reconfirmed/added this session
 
-- **Per-host service pattern** (§1) — still the rule for any new platform-different capability; note
-  that plain browser-standard JS interop (no platform difference) doesn't need it, as with the spin
-  sound.
+- **Per-host service pattern** (§1) — still the rule for any new platform-different capability.
 - **No comments explaining "what"**, only non-obvious "why" — followed throughout.
-- **Confirm before pushing to the VM.** Every VM deploy this session (website × 3) was explicitly
-  requested in the moment ("push the website to the vm", "then deploy to vm") — treat each as
-  one-time authorization, not standing approval for future deploys including `fulltime-api`/`-web`.
+- **Confirm before pushing to the VM or writing to production.** Every deploy and every production
+  write this session (test account creation, marking it verified) was explicitly requested or
+  confirmed in the moment — treat each as one-time authorization, not standing approval.
 - **Git**: commit messages explain *why*, not *what*; always end with `Co-Authored-By: Claude Sonnet
-  5 <noreply@anthropic.com>`; never `--amend`; never force-push. When staging, name files
-  explicitly rather than `git add -A`/`.` — this session had several unrelated untracked files
-  sitting in the working tree (a stray `CLAUDE.md`, `new 1.txt`, `splash-check.png`, a local
-  `scratch/` screenshot folder) that were deliberately left out of both commits.
-- **Blazor Server prerendering blocks JS interop until after first render** (§3.2) — any
-  `IJSRuntime` call (including dynamic `import()`) must happen in `OnAfterRenderAsync(firstRender)`
-  or later, never `OnInitializedAsync`, on any page also served by `FullTime.App.Web`.
-- **MAUI Debug builds need `-p:EmbedAssembliesIntoApk=true` for a plain `adb install` to work in
-  this environment** (§1) — otherwise the app crashes on launch with a Fast Deploy assembly error.
-- **The live website is behind Cloudflare and edge-caches static assets** (§3.4) — a CSS/JS-only
-  change needs the `styles.css?v=N` cache-bust bumped, or it won't show up live for up to 4 hours
-  even though the origin VM is already updated.
+  5 <noreply@anthropic.com>`; never `--amend`; never force-push. Stage files explicitly rather than
+  `git add -A`/`.` — stray untracked files (`CLAUDE.md`, `new 1.txt`, `splash-check.png`, a local
+  `scratch/` folder, and now a stray `.apk`) keep accumulating in the working tree; leave them out
+  of commits unless asked.
+- **Blazor Server prerendering blocks JS interop until after first render** — any `IJSRuntime` call
+  must happen in `OnAfterRenderAsync(firstRender)` or later, never `OnInitializedAsync`, on any page
+  also served by `FullTime.App.Web`.
+- **MAUI Debug builds need `-p:EmbedAssembliesIntoApk=true`** for a plain `adb install` to work in
+  this environment (§1).
+- **The live website is behind Cloudflare and edge-caches static assets.** A CSS-only change needs
+  the `styles.css?v=N` cache-bust bumped **in the same edit**, or it won't show up live for up to 4
+  hours even though the origin VM is already updated. Got bitten by this twice in one session
+  despite already knowing about it — treat it as a reflex, not a checklist item to remember later.
+  Currently at **`v=5`**.
+- **`dotnet restore -f <value>` means `--force`, not `--framework`** — unlike `build`/`publish`/
+  `run`/`test`. To scope a restore/build to one TFM of a multi-target project without corrupting a
+  referenced project's own restore, add a project-scoped MSBuild property (see `IosOnlyBuild` /
+  `AndroidOnlyBuild` in `FullTime.App.csproj`) rather than a command-line
+  `-p:TargetFramework=` override, which propagates globally to every project in the graph.
+- **Play Store phone screenshots must be ≤2:1 aspect ratio** — a raw Android emulator/device
+  screenshot (e.g. 1080×2400, 2.22:1) will be rejected on upload; crop it down (removing the status
+  bar and nav bar is a reasonable way to claw back the needed margin) before handing it over.
+- **For pixel-exact marketing graphics** (feature graphics, banners), author plain HTML/CSS and
+  render it with headless Edge at an exact viewport size
+  (`msedge --headless --disable-gpu --screenshot=out.png --window-size=W,H file.html`) rather than
+  trying to compose one with an image library — much easier to get typography and brand colours
+  right.
+- **When a NuGet package's API isn't documented anywhere usable** (common for smaller binding
+  libraries), a small throwaway console app using `System.Reflection.Metadata`/`PEReader` to dump a
+  DLL's public types/methods directly from its metadata (no need to load/resolve its actual runtime
+  dependencies) is a reliable way to confirm exact method signatures before writing code against
+  them — used this session to correctly wire up two undocumented UMP consent binding packages on
+  the first attempt.
+- **A throwaway Npgsql console app in the scratchpad directory** (add the package with
+  `dotnet add package Npgsql --source https://api.nuget.org/v3/index.json` if the org NuGet feed is
+  unreachable) is the established pattern for any one-off local-DB read/write that doesn't warrant a
+  full migration — used repeatedly this session (password resets, balance top-ups, streak-testing
+  date manipulation). Delete the throwaway project afterward, especially since it embeds the DB
+  password inline.
 - **When a screenshot makes an on-device CSS bug look ambiguous, reach for CDP (§1) rather than
   iterating blindly on screenshots.**
