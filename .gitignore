@@ -13,6 +13,10 @@ publish/
 *.keystore
 *.p8
 
+## Whole folder, not just the keystore file above - the README next to it carries the plaintext
+## keystore password, which must never enter git history either.
+/signing/
+
 ## Firebase config — google-services.json/GoogleService-Info.plist are committed (Google's own
 ## guidance: they're client-scoped, not secrets — Codemagic clones this repo and needs them at
 ## build time). A service-account key is a real secret and must never be committed.
