@@ -148,10 +148,22 @@ get real computed geometry. Far more reliable than iterating on screenshots for 
 
 **iOS:** No Mac available in this environment — iOS changes are pushed and verified via Codemagic
 CI. `codemagic.yaml` currently holds only the `ios-ad-hoc` and `ios-testflight` workflows (see §3
-for why an Android workflow was added then deliberately removed again). **Still not confirmed
-working on a real iPhone or via a fresh Codemagic build** — this session's Android package rename
-and the new UMP consent code (§3) are both unverified on iOS; the UMP iOS package in particular
+for why an Android workflow was added then deliberately removed again). The user's own real
+iPhone (running whatever build was already installed, **not** a fresh build with this session's
+changes) supplied real App Store screenshots (§3.9) confirming the core UI genuinely works well on
+a real device. **This does NOT verify this session's Android package rename or the new UMP consent
+code** — those landed in code but were never actually installed on that phone; both remain
+unverified on iOS and need a fresh Codemagic build to confirm. The UMP iOS package in particular
 (`MTAdmob.UMP.iOS.Binding`) compiles but has never actually been run.
+
+**⚠️ `FullTime.App.Shared`'s UI has no responsive/tablet layout at all** — `.content` (the main
+page container in `MainLayout.razor`) has no `max-width`, so on a large screen (iPad, desktop
+browser) everything just stretches edge-to-edge: odds buttons ~500px wide, huge dead whitespace.
+Confirmed by rendering the Blazor Web host at iPad Pro 13" dimensions (§3.9) — this is a real,
+visually-confirmed limitation, not a hypothetical one. **Deliberately left as-is**: the iOS app is
+configured `UIDeviceFamily` `[1, 2]` (Universal, iPhone *and* iPad) in `Info.plist`, and the user
+explicitly chose to keep it that way and ship the unpolished iPad experience rather than restrict
+to iPhone-only, after seeing exactly how it looks. Don't "fix" this unprompted.
 
 ---
 
@@ -349,6 +361,49 @@ through Play Console when the session wrapped):
 - Tried adding a real recorded spin-wheel sound (`spinSound.js` → a Web Audio synth, then swapped for
   an actual mp3) — **ultimately removed entirely** per explicit ask; the wheel is silent again.
 
+### 3.9 App Store Connect submission progress (same session, after the last handover update)
+No code changes — all guidance/asset production while the user worked through App Store Connect
+directly. Nothing here was committed since none of it is code, but worth knowing where things stand:
+- **In-app purchase**: code side was already complete (`MauiAdsRemovalService.cs`, product ID
+  `remove_ads`, non-consumable via `Plugin.InAppBilling`) — just needed creating in App Store
+  Connect with that exact product ID, walked through step by step.
+- **iPhone screenshots**: the user supplied 7 real screenshots from their own iPhone
+  (`Downloads\ios\*.jpg`, 1290×2796 native) — resized to Apple's accepted **1284×2778** and saved to
+  `Downloads\ios\appstore-6.5in\`. These are genuinely real device captures (not emulator), and
+  incidentally the first real confirmation this project has had that the app works properly on
+  actual iOS hardware.
+- **iPad screenshot**: Apple requires one for "13-inch iPad displays" whenever `UIDeviceFamily`
+  includes iPad (see §1's new limitation note) — no Mac/iPad available, so generated one from the
+  **Blazor Web host** (`FullTime.App.Web`, same Razor components as the iOS app) via headless Edge
+  at `2064×2752` (iPad Pro 13" M4 resolution), saved to `Downloads\ios\ipad-13in-screenshot.png`.
+  **Gotcha hit and fixed**: the first attempt came out almost black — `MainLayout.razor`'s
+  `.page-transition` fade-in animation was mid-transition when the screenshot fired. Adding
+  `--virtual-time-budget=5000` to the `msedge --headless` command (lets the renderer advance virtual
+  time before capturing) fixed it. Add this flag to *any* future headless-Edge screenshot of a page
+  with CSS transitions/animations, not just this one.
+- **Description/keywords/URLs**: drafted in conversation (not saved to a file) — Promotional Text,
+  the same long Description used for Google Play, Keywords, Support URL
+  (`https://fulltime.jtmtechnology.co.uk/#contact`), Marketing URL, Copyright (`2026 JTM
+  Technology`). Ask the user to re-paste if a fresh session needs these again, they weren't
+  persisted anywhere else.
+- **App Tracking Transparency / App Privacy**: `Info.plist`'s `NSUserTrackingUsageDescription` is
+  solely for AdMob's ad personalization — confirmed no duplicate ATT prompt in code (only the ad
+  plugin's own `handleTrackingAuthorization: true` triggers it). Correct App Privacy declaration:
+  `Identifiers → Device ID`, used for tracking = Yes, purpose = Third-Party Advertising, not linked
+  to the user's account identity.
+- **Content Rights question**: answered "Yes, contains third-party content" (football data/odds
+  from the Highlightly provider, club crests, bookmaker logos, AdMob ads) — "No" would have been
+  factually wrong and risked a rejection or later strike.
+- **Test/demo account for App Review**: same one from §3.7 (`test@jtmtechnology.co.uk` /
+  `Testuser123`) — already has real league/bet data so a reviewer doesn't see an empty app.
+- **Ads-removal for family members**: asked to comp free ads-removal to everyone in "the Brownes"
+  league except one person. **There is no server-side mechanism for this at all** — ads-removed
+  state is purely a local-device cache of a real store purchase (`IAdsRemovalService`/
+  `Plugin.InAppBilling`), nothing in the `Users` table. Offered to build a server-side override;
+  **user chose instead to wait and use real store promo codes** (App Store Connect → the
+  `remove_ads` IAP → Promo Codes; Google Play Console has an equivalent) once the app is actually
+  published — no code needed, but only usable post-launch.
+
 ---
 
 ## 4. Outstanding tasks
@@ -365,23 +420,28 @@ through Play Console when the session wrapped):
 5. **Actually finish the Play Store submission** — all assets are ready (§3.6) but the user was
    still filling in Play Console fields (app name, package name, screenshots, feature graphic, age
    suitability, IAP server notifications — the last two were explicitly skipped as optional/not
-   needed yet) when the session ended. Likely continues next session.
-6. **App Store Connect submission also in progress in parallel** — same session touched an "Age
-   Suitability URL" field there too. No FullTime-specific work needed for that beyond what iOS
-   already has; just continuing the standard Apple submission flow.
-7. **Design the real prize economy is done** (§3.1) — this item from earlier handovers is now
+   needed yet) when that part of the session ended.
+6. **Finish the App Store Connect submission** — further along than Play Store (§3.9): IAP product,
+   both screenshot sizes, description/keywords/URLs, App Privacy tracking declaration, and Content
+   Rights are all done/answered. Still needs: an actual build uploaded (this session did no iOS
+   build/upload, only listing metadata and asset prep), Apple's "Age Suitability" content
+   questionnaire, and final submission for review.
+7. **Once FullTime is live on both stores**: generate free `remove_ads` promo codes for everyone in
+   the Brownes league except one specific person (§3.9) — was explicitly deferred to this point
+   rather than building a server-side override.
+8. **Design the real prize economy is done** (§3.1) — this item from earlier handovers is now
    resolved, no longer outstanding. (Left as a note so it isn't accidentally re-flagged.)
-8. Real AdMob IDs still need swapping back in (`MauiInterstitialAdService.cs` /
+9. Real AdMob IDs still need swapping back in (`MauiInterstitialAdService.cs` /
    `AndroidManifest.xml` / iOS `Info.plist`) — but only **after** the app is actually live on a
    store, per §3.4's finding. Doing it earlier would just show real ads with guaranteed 0 fill.
-9. Real store-listing icon exports for Apple specifically (1024×1024, no alpha) — not produced this
-   session (only the Google 512×512 with-alpha version was).
-10. TestFlight beta review 422 (from an earlier session) — not confirmed resolved, not touched this
+10. Real store-listing icon exports for Apple specifically (1024×1024, no alpha) — not produced this
+    session (only the Google 512×512 with-alpha version was).
+11. TestFlight beta review 422 (from an earlier session) — not confirmed resolved, not touched this
     session either.
-11. The stale `free-api-live-football-data`-retirement plan at
+12. The stale `free-api-live-football-data`-retirement plan at
     `C:\Users\alan.browne\.claude\plans\dazzling-giggling-engelbart.md` — still untouched, still
     possibly stale, re-verify before resuming if picked up.
-12. If Cloudflare dashboard/API access ever gets configured, replace the `styles.css?v=N`
+13. If Cloudflare dashboard/API access ever gets configured, replace the `styles.css?v=N`
     cache-busting workaround with a real purge-on-deploy step.
 
 ---
@@ -420,7 +480,14 @@ through Play Console when the session wrapped):
   render it with headless Edge at an exact viewport size
   (`msedge --headless --disable-gpu --screenshot=out.png --window-size=W,H file.html`) rather than
   trying to compose one with an image library — much easier to get typography and brand colours
-  right.
+  right. **If the page has any CSS transition/animation** (this app's own `.page-transition`
+  fade-in included), add `--virtual-time-budget=5000` too, or the capture can fire mid-transition
+  and come out looking broken (near-black, in this app's case) even though nothing is actually
+  wrong.
+- **The real running app's own Blazor Web host (`FullTime.App.Web`) is a legitimate way to capture
+  "real UI" screenshots at sizes the native app can't easily produce locally** (e.g. iPad
+  dimensions, with no Mac/iPad available) — it renders the exact same Razor components as the MAUI
+  heads, so a screenshot of it is an accurate representation of the app's actual UI, not a mockup.
 - **When a NuGet package's API isn't documented anywhere usable** (common for smaller binding
   libraries), a small throwaway console app using `System.Reflection.Metadata`/`PEReader` to dump a
   DLL's public types/methods directly from its metadata (no need to load/resolve its actual runtime
