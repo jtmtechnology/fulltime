@@ -83,8 +83,13 @@
     <!-- App Icon - genuinely transparent PNG this time (confirmed alpha=0 outside the shield), so
          Color correctly shows through as the adaptive-icon backdrop instead of being fully hidden
          behind an opaque foreground like the previous attempt. Padded so Android's adaptive-icon
-         mask has a safe zone to crop into without clipping the shield. -->
-    <MauiIcon Include="Resources\AppIcon\appicon.png" Color="#0D1117" />
+         mask has a safe zone to crop into without clipping the shield.
+         ForegroundScale added after measuring the source's actual content bounding box: it fills
+         61% of the canvas width but 70% of the height, taller than the ~61% diameter safe-zone
+         circle Android's mask guarantees - fine on Pixel's rounder mask but the shield's top point
+         and bottom corners clip on tighter OEM masks (confirmed on a Samsung Galaxy A12). 0.85
+         brings the tallest axis back under the safe-zone circle. -->
+    <MauiIcon Include="Resources\AppIcon\appicon.png" Color="#0D1117" ForegroundScale="0.85" />
   </ItemGroup>
 
   <ItemGroup Condition="$(TargetFramework.Contains('-ios'))">

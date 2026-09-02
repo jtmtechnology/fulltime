@@ -9,8 +9,17 @@
     --accent-ink: #05130a;
     --warn: #ffb020;
     --danger: #ff4d5e;
-    --tab-bar-height: 5.6rem;
     --slip-fab-height: 3.25rem;
+    /* Set from native code on Android only (MainPage.xaml.cs) - Android's WebView doesn't populate
+       env(safe-area-inset-bottom) the way iOS's WKWebView does, so without this the 3-button/gesture
+       nav bar's real height is invisible to CSS and falls through to the 18px guess below. */
+    --android-nav-inset-bottom: 0px;
+    --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--android-nav-inset-bottom), 18px);
+    /* Bootstrap's reboot sets box-sizing: border-box globally, so this "height" is the bar's TOTAL
+       rendered height, not just its content area - --safe-bottom (padding-bottom, below) eats into
+       it. Grow the total by the same amount so the icon/label content area never shrinks, instead of
+       the bar just getting taller/lower to clear whatever the real nav bar height turns out to be. */
+    --tab-bar-height: calc(5.6rem + var(--android-nav-inset-bottom));
 }
 
 html, body {
@@ -217,7 +226,7 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
     border-top: 1px solid var(--border);
     height: var(--tab-bar-height);
     padding-top: 0.6rem;
-    padding-bottom: max(env(safe-area-inset-bottom, 0px), 18px);
+    padding-bottom: var(--safe-bottom);
 }
 .tab-item {
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -383,7 +392,7 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 41;
     background: var(--bg-elevated); border-top: 1px solid var(--border);
     border-radius: 16px 16px 0 0; padding: 1rem; max-height: 75vh; overflow-y: auto;
-    padding-bottom: calc(1rem + max(env(safe-area-inset-bottom, 0px), 18px));
+    padding-bottom: calc(1rem + var(--safe-bottom));
 }
 .slip-sheet .sheet-handle { width: 36px; height: 4px; background: var(--border); border-radius: 999px; margin: 0 auto 0.75rem; }
 .slip-sheet h2 { margin: 0 0 0.75rem; }
