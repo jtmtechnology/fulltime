@@ -5,10 +5,13 @@ namespace FullTime.App.Shared.Services;
 // LeagueCatalog.OptionalLeagues group's first (primary) league ID.
 public class MatchLeaguePreferences(IMatchLeaguePreferenceStore store)
 {
-    // Two chained one-time translations for preferences stored under an earlier provider's league
-    // IDs — old provider -> Highlightly, then Highlightly -> API-Football (the current provider,
-    // see FullTime.Api's ApiFootballLeagueMap.cs). Without this, an existing user's stored toggles
-    // would silently stop matching anything each time LeagueCatalog re-keys to a new provider's IDs.
+    // One-time translation for preferences stored before the switch to Highlightly as the sole
+    // data source — old provider's league ID -> Highlightly's own ID for the same competition
+    // (see FullTime.Api's HighlightlyLeagueMap.cs). Without this, an existing user's stored toggles
+    // would silently stop matching anything once LeagueCatalog re-keyed to Highlightly's IDs.
+    // (A same-day API-Football/the-odds-api cutover briefly re-keyed this to API-Football's IDs
+    // and back again — see HANDOVER.md — but that window was short enough, and no real build ever
+    // shipped with it, that no translation layer for it was needed here.)
     private static readonly Dictionary<long, long> LegacyIdTranslation = new()
     {
         [54] = 67162,
@@ -18,24 +21,6 @@ public class MatchLeaguePreferences(IMatchLeaguePreferenceStore store)
         [42] = 2486,
         [73] = 3337,
         [10216] = 722432,
-    };
-
-    private static readonly Dictionary<long, long> HighlightlyToApiFootballTranslation = new()
-    {
-        [33973] = 39,
-        [34824] = 40,
-        [35675] = 41,
-        [36526] = 42,
-        [39079] = 45,
-        [41632] = 48,
-        [450112] = 528,
-        [67162] = 78,
-        [119924] = 140,
-        [52695] = 61,
-        [115669] = 135,
-        [2486] = 2,
-        [3337] = 3,
-        [722432] = 848,
     };
 
     public HashSet<long> EnabledOptionalLeagueIds { get; private set; } = [];
@@ -49,10 +34,7 @@ public class MatchLeaguePreferences(IMatchLeaguePreferenceStore store)
             ? []
             : stored.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(long.Parse).ToHashSet();
 
-        var translated = parsed
-            .Select(id => LegacyIdTranslation.GetValueOrDefault(id, id))
-            .Select(id => HighlightlyToApiFootballTranslation.GetValueOrDefault(id, id))
-            .ToHashSet();
+        var translated = parsed.Select(id => LegacyIdTranslation.GetValueOrDefault(id, id)).ToHashSet();
         EnabledOptionalLeagueIds = translated;
 
         if (!translated.SetEquals(parsed))

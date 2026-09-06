@@ -141,7 +141,7 @@ public class HighlightlyMatchSyncService(
                 continue;
             }
 
-            foreach (var dto in matches)
+            foreach (var dto in matches.Where(IsEligibleFaCupRound))
             {
                 await UpsertMatchAsync(dto, ct);
                 count++;
@@ -178,6 +178,7 @@ public class HighlightlyMatchSyncService(
         }
 
         match.LeagueId = dto.League.Id;
+        match.Round = dto.Round;
         match.HomeTeam = dto.HomeTeam.Name;
         match.AwayTeam = dto.AwayTeam.Name;
         match.HomeTeamId = dto.HomeTeam.Id;
@@ -264,5 +265,35 @@ public class HighlightlyMatchSyncService(
             "Unrecognized Highlightly match status {Description} for match {ExternalId}, keeping previous status {PreviousStatus}",
             description, externalId, previousStatus);
         return previousStatus;
+    }
+
+    // FA Cup's qualifying rounds and 1st/2nd Round Proper are entirely non-league/lower-league
+    // clubs (this is what the 110+-simultaneous-match preliminary-round batch that originally
+    // pinned DeriveStatus at InProgress for 11+ hours was) - requested to only track FA Cup from
+    // the 3rd Round Proper onwards, which is also when Championship/Premier League clubs actually
+    // enter. Every other tracked league is unaffected. MatchDto.Round's exact field name is
+    // UNVERIFIED (see its own comment) - if it's wrong, Round is always null here and this always
+    // returns true (fails open, shows everything, same as not having this filter at all) rather
+    // than silently hiding real matches.
+    private static bool IsEligibleFaCupRound(MatchDto dto)
+    {
+        if (dto.League.Id != HighlightlyLeagueMap.FaCup)
+        {
+            return true;
+        }
+
+        var round = dto.Round;
+        if (string.IsNullOrEmpty(round))
+        {
+            return true;
+        }
+
+        if (round.Contains("Qualifying", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !round.StartsWith("1st Round", StringComparison.OrdinalIgnoreCase)
+            && !round.StartsWith("2nd Round", StringComparison.OrdinalIgnoreCase);
     }
 }

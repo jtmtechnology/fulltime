@@ -1,54 +1,59 @@
 namespace FullTime.App.Shared.Services;
 
-// Known league/cup IDs, keyed on API-Football's own league IDs (see FullTime.Api's
-// ApiFootballLeagueMap.cs, the server-side source of truth for these same values) — looked up via
-// its GET /leagues?name=&country= endpoint against the real API, not guessed. Replaces the earlier
-// Highlightly-keyed catalog wholesale as part of the API-Football/the-odds-api cutover; there is no
-// shared ID space with Highlightly's own league IDs at all.
+// Known league/cup IDs, keyed on Highlightly's own league IDs (see FullTime.Api's
+// HighlightlyLeagueMap.cs, the server-side source of truth for these same values). Reverted back
+// to Highlightly 2026-09-06 after a same-day API-Football/the-odds-api cutover attempt - see
+// HANDOVER.md for why. Unlike the old provider, Highlightly keeps qualifying/play-off rounds
+// under the *same* ID as the main competition and gives every tracked competition, including the
+// English lower divisions, a stable ID with its own logo — so there's no temporary-ID remapping
+// or shared qualifying-round pool to maintain here any more.
 public static class LeagueCatalog
 {
     public static readonly Dictionary<long, string> Names = new()
     {
-        [39] = "Premier League",
-        [40] = "Championship",
-        [41] = "League One",
-        [42] = "League Two",
-        [45] = "FA Cup",
-        [48] = "EFL Cup",
-        [528] = "Community Shield",
-        [78] = "Bundesliga",
-        [140] = "La Liga",
-        [61] = "Ligue 1",
-        [135] = "Serie A",
-        [2] = "Champions League",
-        [3] = "Europa League",
-        [848] = "Conference League",
+        [33973] = "Premier League",
+        [34824] = "Championship",
+        [35675] = "League One",
+        [36526] = "League Two",
+        [39079] = "FA Cup",
+        [41632] = "EFL Cup",
+        [450112] = "Community Shield",
+        [67162] = "Bundesliga",
+        [119924] = "La Liga",
+        [52695] = "Ligue 1",
+        [115669] = "Serie A",
+        [2486] = "Champions League",
+        [3337] = "Europa League",
+        [722432] = "Conference League",
     };
 
-    // Always shown regardless of preference: the domestic English pyramid only.
-    public static readonly long[] AlwaysVisible = [39, 40, 41, 42, 45, 48, 528];
+    // Always shown regardless of preference: the domestic English pyramid only. FA Cup (39079) is
+    // now only synced from the 3rd Round Proper onwards — see
+    // HighlightlyMatchSyncService.IsEligibleFaCupRound — so it never shows the non-league early
+    // rounds that caused the original quota-exhaustion incident.
+    public static readonly long[] AlwaysVisible = [33973, 34824, 35675, 36526, 39079, 41632, 450112];
 
     // Opt-in: other countries' top flights plus the UEFA club competitions. Order here also
     // controls display order after AlwaysVisible.
     public static readonly (string Name, long[] LeagueIds)[] OptionalLeagues =
     [
-        ("Bundesliga", [78]),
-        ("La Liga", [140]),
-        ("Ligue 1", [61]),
-        ("Serie A", [135]),
-        ("Champions League", [2]),
-        ("Europa League", [3]),
-        ("Conference League", [848]),
+        ("Bundesliga", [67162]),
+        ("La Liga", [119924]),
+        ("Ligue 1", [52695]),
+        ("Serie A", [115669]),
+        ("Champions League", [2486]),
+        ("Europa League", [3337]),
+        ("Conference League", [722432]),
     ];
 
     public static readonly long[] DisplayOrder =
         [.. AlwaysVisible, .. OptionalLeagues.SelectMany(l => l.LeagueIds).Distinct()];
 
-    // No-op — every competition (main draw and qualifying alike) lives under one API-Football ID.
-    // Kept so callers that group/chip/select by this key don't need to change.
+    // No-op now that every competition (main draw and qualifying alike) lives under one Highlightly
+    // ID — kept so callers that group/chip/select by this key don't need to change.
     public static long GroupKey(long leagueId) => leagueId;
 
     public static string Name(long leagueId) => Names.GetValueOrDefault(leagueId, $"League {leagueId}");
 
-    public static string LogoUrl(long leagueId) => $"https://media.api-sports.io/football/leagues/{leagueId}.png";
+    public static string LogoUrl(long leagueId) => $"https://highlightly.net/soccer/images/leagues/{leagueId}.png";
 }
