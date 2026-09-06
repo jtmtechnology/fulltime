@@ -3,6 +3,13 @@ using FullTime.Api.BetBuilder.Dtos;
 
 namespace FullTime.Api.BetBuilder;
 
+// Paths here are bare ("matches", "odds", "events/{id}"), not prefixed "football/" - confirmed real
+// 2026-09-06: RapidAPI's proxy namespaces multiple sports under one host
+// (sport-highlights-api.p.rapidapi.com/football/matches), but this project moved to a direct
+// Highlightly account on a sport-specific host (soccer.highlightly.net, see HighlightlyOptions)
+// whose paths are already scoped to football and don't repeat it - the "football/" prefix 404s
+// there. If HighlightlyOptions.ApiHost ever points back at the RapidAPI proxy, these paths would
+// need the prefix restored.
 public class HighlightlyClient(HttpClient httpClient, ILogger<HighlightlyClient> logger)
 {
     private static readonly TimeSpan MinRequestInterval = TimeSpan.FromMilliseconds(300);
@@ -23,7 +30,7 @@ public class HighlightlyClient(HttpClient httpClient, ILogger<HighlightlyClient>
     public async Task<List<MatchDto>> GetMatchesAsync(int leagueId, int season, DateOnly date, CancellationToken ct = default)
     {
         var result = await GetWithRetryAsync<MatchesResponse>(
-            $"football/matches?leagueId={leagueId}&season={season}&date={date:yyyy-MM-dd}&limit=100", ct);
+            $"matches?leagueId={leagueId}&season={season}&date={date:yyyy-MM-dd}&limit=100", ct);
         return result?.Data ?? [];
     }
 
@@ -38,13 +45,13 @@ public class HighlightlyClient(HttpClient httpClient, ILogger<HighlightlyClient>
     {
         var bookmakerParam = bookmakerName is null ? "" : $"&bookmakerName={Uri.EscapeDataString(bookmakerName)}";
         return await GetWithRetryAsync<OddsResponse>(
-            $"football/odds?leagueId={leagueId}&date={date:yyyy-MM-dd}{bookmakerParam}" +
+            $"odds?leagueId={leagueId}&date={date:yyyy-MM-dd}{bookmakerParam}" +
             $"&oddsType=prematch&limit=5&offset={offset}", ct);
     }
 
     public async Task<List<MatchEventDto>> GetEventsAsync(long matchId, CancellationToken ct = default)
     {
-        var result = await GetWithRetryAsync<List<MatchEventDto>>($"football/events/{matchId}", ct);
+        var result = await GetWithRetryAsync<List<MatchEventDto>>($"events/{matchId}", ct);
         return result ?? [];
     }
 
