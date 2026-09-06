@@ -12,6 +12,15 @@ public static class TeamNameMatcher
     private static readonly string[] NoiseTokens =
         ["fc", "afc", "cf", "sc", "ac", "calcio", "club", "the", "and"];
 
+    // API-Football abbreviates "United" as "Utd" for some clubs (confirmed real: "Sheffield Utd"),
+    // where the-odds-api always spells it out ("Sheffield United") - unlike a noise token, this
+    // can't just be stripped (it's the distinguishing word for that club), it has to be normalized
+    // to the same canonical spelling both sides use, or the token-set/Jaccard component scores two
+    // real matches as barely related. Confirmed missing during the 2026-09-06 cutover: Blackburn v
+    // Sheffield Utd never linked to the real the-odds-api event for it despite an exact kickoff-time
+    // match, purely because of this spelling difference.
+    private static readonly Dictionary<string, string> TokenSynonyms = new() { ["utd"] = "united" };
+
     public record MatchCandidate(string HomeTeam, string AwayTeam, DateTime KickoffTime);
 
     public static (T OddsEvent, double Score)? FindBest<T>(
@@ -82,6 +91,7 @@ public static class TeamNameMatcher
         return cleaned
             .Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Where(t => !NoiseTokens.Contains(t))
+            .Select(t => TokenSynonyms.GetValueOrDefault(t, t))
             .ToList();
     }
 
