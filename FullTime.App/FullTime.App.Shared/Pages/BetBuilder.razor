@@ -9,7 +9,21 @@
     <button type="button" class="back-btn" @onclick="Cancel" aria-label="Cancel">‹</button>
     <h1>Bet Builder</h1>
 </div>
-<div class="muted">@HomeTeam v @AwayTeam — @KickoffTime.ToLocalTime().ToString("ddd d MMM, HH:mm")</div>
+
+<div class="bb-teams-row">
+    <div class="bb-team">
+        <LogoImg Src="@HomeLogo" CssClass="crest" Alt="@HomeTeam" />
+        <span>@HomeTeam</span>
+    </div>
+    <div class="bb-kickoff">
+        <span>@KickoffTime.ToLocalTime().ToString("d MMM, HH:mm")</span>
+        <span class="muted">v</span>
+    </div>
+    <div class="bb-team">
+        <LogoImg Src="@AwayLogo" CssClass="crest" Alt="@AwayTeam" />
+        <span>@AwayTeam</span>
+    </div>
+</div>
 
 @if (_bookmaker is not null)
 {
@@ -26,100 +40,194 @@ else if (!string.IsNullOrEmpty(_status))
 {
     <div class="status @(_error ? "error" : "")">@_status</div>
 }
-
-@if (_overUnderLines.Count > 0)
+else
 {
-    <div class="market-group">
-        <h4>Total goals</h4>
-        <div class="odds-table">
-            <div class="odds-table-header">
-                <span></span><span>Over</span><span>Under</span>
-            </div>
-            @foreach (var line in _overUnderLines)
-            {
-                var overPick = new SlipPick("OverUnder", line.Line, "Over", line.OverPrice);
-                var underPick = new SlipPick("OverUnder", line.Line, "Under", line.UnderPrice);
-                <div class="odds-table-row">
-                    <span class="odds-table-label">@line.Line.ToString("0.##")</span>
-                    <span class="@TableCellClass(overPick)" @onclick="() => TogglePick(overPick)">@OddsCell.FormatOdds(line.OverPrice)</span>
-                    <span class="@TableCellClass(underPick)" @onclick="() => TogglePick(underPick)">@OddsCell.FormatOdds(line.UnderPrice)</span>
-                </div>
-            }
-        </div>
-    </div>
-}
-
-@if (_btts is { } btts)
-{
-    <div class="market-group">
-        <h4>Both teams to score</h4>
-        <div class="odds-list">
-            @foreach (var opt in BttsOptions(btts))
-            {
-                <div class="@ListRowClass(opt.Pick)" @onclick="() => TogglePick(opt.Pick)">
-                    <span>@opt.Label</span>
-                    <span class="odds-list-price">@OddsCell.FormatOdds(opt.Pick.Odds)</span>
-                </div>
-            }
-        </div>
-    </div>
-}
-
-@if (_firstScorer is { } firstScorer)
-{
-    <div class="market-group">
-        <h4>First team to score</h4>
-        <div class="odds-list">
-            @foreach (var opt in FirstScorerOptions(firstScorer))
-            {
-                <div class="@ListRowClass(opt.Pick)" @onclick="() => TogglePick(opt.Pick)">
-                    <span>@opt.Label</span>
-                    <span class="odds-list-price">@OddsCell.FormatOdds(opt.Pick.Odds)</span>
-                </div>
-            }
-        </div>
-    </div>
-}
-
-@if (_correctScoreLookup.Count > 0)
-{
-    <div class="market-group">
-        <h4>Correct score</h4>
-        <div class="score-stepper-row">
-            <div class="score-stepper">
-                <span class="team-name">@HomeTeam</span>
-                <div class="stepper-controls">
-                    <button type="button" class="stepper-btn" disabled="@(_correctScoreHome == 0)" @onclick="() => AdjustScore(home: true, delta: -1)">−</button>
-                    <span class="stepper-value">@_correctScoreHome</span>
-                    <button type="button" class="stepper-btn" disabled="@(_correctScoreHome >= _maxCorrectScoreHome)" @onclick="() => AdjustScore(home: true, delta: 1)">+</button>
-                </div>
-            </div>
-            <div class="score-stepper">
-                <span class="team-name">@AwayTeam</span>
-                <div class="stepper-controls">
-                    <button type="button" class="stepper-btn" disabled="@(_correctScoreAway == 0)" @onclick="() => AdjustScore(home: false, delta: -1)">−</button>
-                    <span class="stepper-value">@_correctScoreAway</span>
-                    <button type="button" class="stepper-btn" disabled="@(_correctScoreAway >= _maxCorrectScoreAway)" @onclick="() => AdjustScore(home: false, delta: 1)">+</button>
-                </div>
-            </div>
-        </div>
-
-        @if (CurrentCorrectScorePick is { } pick)
+    <div class="bb-tabs">
+        @foreach (var tab in Tabs)
         {
-            <span class="@("correct-score-price " + (_correctScoreSelected ? "selected" : ""))" @onclick="ToggleCorrectScoreSelected">
-                @_correctScoreHome - @_correctScoreAway (@OddsCell.FormatOdds(pick.Odds))
-            </span>
-        }
-        else
-        {
-            <div class="muted">Not priced for this score.</div>
+            <button type="button" class="bb-tab @(_activeTab == tab ? "active" : "")" @onclick="() => _activeTab = tab">@tab</button>
         }
     </div>
-}
 
-@if (_markets is not null && _overUnderLines.Count == 0 && _btts is null && _firstScorer is null && _correctScoreLookup.Count == 0)
-{
-    <div class="muted">No extra markets are priced for this match right now.</div>
+    @if (_activeTab == "Popular")
+    {
+        @if (_totalCorners.Count > 0)
+        {
+            <AccordionSection Id="corners" Title="Total corners" Expanded="_expanded" OnToggle="ToggleSection">
+                <div class="odds-table">
+                    <div class="odds-table-header">
+                        <span></span><span>Over</span><span>Under</span>
+                    </div>
+                    @foreach (var line in _totalCorners)
+                    {
+                        var overPick = new SlipPick("TotalCorners", line.Line, "Over", line.OverPrice);
+                        var underPick = new SlipPick("TotalCorners", line.Line, "Under", line.UnderPrice);
+                        <div class="odds-table-row">
+                            <span class="odds-table-label">@line.Line.ToString("0.##")</span>
+                            <span class="@TableCellClass(overPick)" @onclick="() => TogglePick(overPick)">@OddsCell.FormatOdds(overPick.Odds)</span>
+                            <span class="@TableCellClass(underPick)" @onclick="() => TogglePick(underPick)">@OddsCell.FormatOdds(underPick.Odds)</span>
+                        </div>
+                    }
+                </div>
+            </AccordionSection>
+        }
+
+        @if (_overUnderLines.Count > 0)
+        {
+            <AccordionSection Id="totals" Title="Total goals" Expanded="_expanded" OnToggle="ToggleSection">
+                <div class="odds-table">
+                    <div class="odds-table-header">
+                        <span></span><span>Over</span><span>Under</span>
+                    </div>
+                    @foreach (var line in _overUnderLines)
+                    {
+                        var overPick = new SlipPick("OverUnder", line.Line, "Over", line.OverPrice);
+                        var underPick = new SlipPick("OverUnder", line.Line, "Under", line.UnderPrice);
+                        <div class="odds-table-row">
+                            <span class="odds-table-label">@line.Line.ToString("0.##")</span>
+                            <span class="@TableCellClass(overPick)" @onclick="() => TogglePick(overPick)">@OddsCell.FormatOdds(line.OverPrice)</span>
+                            <span class="@TableCellClass(underPick)" @onclick="() => TogglePick(underPick)">@OddsCell.FormatOdds(line.UnderPrice)</span>
+                        </div>
+                    }
+                </div>
+            </AccordionSection>
+        }
+
+        @if (_btts is { } btts)
+        {
+            <AccordionSection Id="btts" Title="Both teams to score" Expanded="_expanded" OnToggle="ToggleSection">
+                <div class="odds-list">
+                    @foreach (var opt in BttsOptions(btts))
+                    {
+                        <div class="@ListRowClass(opt.Pick)" @onclick="() => TogglePick(opt.Pick)">
+                            <span>@opt.Label</span>
+                            <span class="odds-list-price">@OddsCell.FormatOdds(opt.Pick.Odds)</span>
+                        </div>
+                    }
+                </div>
+            </AccordionSection>
+        }
+
+        @if (_firstScorer is { } firstScorer)
+        {
+            <AccordionSection Id="firstscorer" Title="First team to score" Expanded="_expanded" OnToggle="ToggleSection">
+                <div class="odds-list">
+                    @foreach (var opt in FirstScorerOptions(firstScorer))
+                    {
+                        <div class="@ListRowClass(opt.Pick)" @onclick="() => TogglePick(opt.Pick)">
+                            <span>@opt.Label</span>
+                            <span class="odds-list-price">@OddsCell.FormatOdds(opt.Pick.Odds)</span>
+                        </div>
+                    }
+                </div>
+            </AccordionSection>
+        }
+
+        @if (_correctScoreLookup.Count > 0)
+        {
+            <AccordionSection Id="correctscore" Title="Correct score" Expanded="_expanded" OnToggle="ToggleSection">
+                <div class="score-stepper-row">
+                    <div class="score-stepper">
+                        <span class="team-name">@HomeTeam</span>
+                        <div class="stepper-controls">
+                            <button type="button" class="stepper-btn" disabled="@(_correctScoreHome == 0)" @onclick="() => AdjustScore(home: true, delta: -1)">−</button>
+                            <span class="stepper-value">@_correctScoreHome</span>
+                            <button type="button" class="stepper-btn" disabled="@(_correctScoreHome >= _maxCorrectScoreHome)" @onclick="() => AdjustScore(home: true, delta: 1)">+</button>
+                        </div>
+                    </div>
+                    <div class="score-stepper">
+                        <span class="team-name">@AwayTeam</span>
+                        <div class="stepper-controls">
+                            <button type="button" class="stepper-btn" disabled="@(_correctScoreAway == 0)" @onclick="() => AdjustScore(home: false, delta: -1)">−</button>
+                            <span class="stepper-value">@_correctScoreAway</span>
+                            <button type="button" class="stepper-btn" disabled="@(_correctScoreAway >= _maxCorrectScoreAway)" @onclick="() => AdjustScore(home: false, delta: 1)">+</button>
+                        </div>
+                    </div>
+                </div>
+
+                @if (CurrentCorrectScorePick is { } pick)
+                {
+                    <span class="@("correct-score-price " + (_correctScoreSelected ? "selected" : ""))" @onclick="ToggleCorrectScoreSelected">
+                        @_correctScoreHome - @_correctScoreAway (@OddsCell.FormatOdds(pick.Odds))
+                    </span>
+                }
+                else
+                {
+                    <div class="muted">Not priced for this score.</div>
+                }
+            </AccordionSection>
+        }
+
+        @if (_overUnderLines.Count == 0 && _btts is null && _firstScorer is null && _correctScoreLookup.Count == 0 && _totalCorners.Count == 0)
+        {
+            <div class="muted">No standard markets are priced for this match right now.</div>
+        }
+    }
+    else
+    {
+        @if (_playerPropGroups.Count == 0)
+        {
+            <div class="muted">No player markets are priced for this match right now.</div>
+        }
+        @foreach (var group in _playerPropGroups)
+        {
+            <AccordionSection Id="@group.MarketType" Title="@group.Label" Expanded="_expanded" OnToggle="ToggleSection">
+                @foreach (var teamGroup in group.Teams)
+                {
+                    <AccordionSection Id="@($"{group.MarketType}-{teamGroup.Team}")" Title="@teamGroup.Team" Expanded="_expanded" OnToggle="ToggleSection">
+                        @if (teamGroup.Rows.Count > 0)
+                        {
+                            <div class="player-table-wrap">
+                                <table class="player-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Player</th>
+                                            @foreach (var line in teamGroup.Lines)
+                                            {
+                                                <th>@LineLabel(line)</th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var row in teamGroup.Rows)
+                                        {
+                                            <tr>
+                                                <td>@row.PlayerName</td>
+                                                @foreach (var line in teamGroup.Lines)
+                                                {
+                                                    if (row.PricesByLine.TryGetValue(line, out var price))
+                                                    {
+                                                        var pick = new SlipPick(group.MarketType, line, "Over", price, PlayerName: row.PlayerName);
+                                                        <td class="@(IsSelected(pick) ? "picked" : "")" @onclick="() => TogglePick(pick)">@OddsCell.FormatOdds(price)</td>
+                                                    }
+                                                    else
+                                                    {
+                                                        <td class="locked">—</td>
+                                                    }
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="odds-list">
+                                @foreach (var opt in teamGroup.Options)
+                                {
+                                    <div class="@ListRowClass(opt.Pick)" @onclick="() => TogglePick(opt.Pick)">
+                                        <span>@opt.Label</span>
+                                        <span class="odds-list-price">@OddsCell.FormatOdds(opt.Pick.Odds)</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </AccordionSection>
+                }
+            </AccordionSection>
+        }
+    }
 }
 
 @if (HasAnySelection)
@@ -142,11 +250,46 @@ else if (!string.IsNullOrEmpty(_status))
     private record BttsOption(decimal YesPrice, decimal NoPrice);
     private record FirstScorerOption(decimal HomePrice, decimal NonePrice, decimal AwayPrice);
     private record PickOption(string Label, SlipPick Pick);
+    private record PlayerPropRow(string PlayerName, Dictionary<decimal, decimal> PricesByLine);
+    private record TeamPropGroup(string Team, List<PickOption> Options, List<decimal> Lines, List<PlayerPropRow> Rows);
+    private record PlayerPropGroup(string MarketType, string Label, List<TeamPropGroup> Teams);
+
+    // Client-only market-type strings, not shared with any server enum (BetBuilderMarketDto.MarketType
+    // is a plain string on both ends) - added while evaluating the-odds-api's player-prop markets via
+    // FullTime.Api.Sandbox, see HANDOVER.md. Anytime-scorer/card markets price a single "Yes" outcome
+    // per player; shots/assists price Over/Under per player per line, hence PlayerRowLabel including
+    // Side+Line only when present.
+    private static readonly (string MarketType, string Label)[] PlayerPropMarketTypes =
+    [
+        ("PlayerGoalscorerAnytime", "Anytime goalscorer"),
+        ("PlayerCard", "Player to be booked"),
+        ("PlayerShotsOnTarget", "Shots on target"),
+        ("PlayerAssists", "Player assists"),
+    ];
+
+    // Shots/assists price a per-player Over/Under line rather than a single Yes/No outcome (unlike
+    // goalscorer/card) - rendered as a "1+/2+/3+" table (one column per Over line actually priced)
+    // to match the reference bookmaker layout, rather than a flat "Player (Over 1.5)" list row per
+    // line like the other two player-prop markets.
+    private static readonly HashSet<string> LinedPlayerPropMarketTypes = ["PlayerShotsOnTarget", "PlayerAssists"];
+
+    // "Popular" holds the markets Highlightly already prices (match result, totals, BTTS, etc.);
+    // "Player Bets" holds the-odds-api's player props evaluated via FullTime.Api.Sandbox. The
+    // reference bookmaker app this was modeled on also has "Quick Players"/"Scorers" tabs, but those
+    // don't correspond to any data source we actually have - splitting further would just be an
+    // empty tab pretending to be a real feature, so left out rather than faked.
+    private static readonly string[] Tabs = ["Popular", "Player Bets"];
+    private string _activeTab = "Popular";
+
+    private readonly HashSet<string> _expanded = [];
 
     [Parameter] public Guid MatchId { get; set; }
     [SupplyParameterFromQuery(Name = "home")] public string? Home { get; set; }
     [SupplyParameterFromQuery(Name = "away")] public string? Away { get; set; }
     [SupplyParameterFromQuery(Name = "kickoff")] public string? Kickoff { get; set; }
+    [SupplyParameterFromQuery(Name = "league")] public string? League { get; set; }
+    [SupplyParameterFromQuery(Name = "homeLogo")] public string? HomeLogo { get; set; }
+    [SupplyParameterFromQuery(Name = "awayLogo")] public string? AwayLogo { get; set; }
 
     private string HomeTeam => Home ?? "";
     private string AwayTeam => Away ?? "";
@@ -154,12 +297,14 @@ else if (!string.IsNullOrEmpty(_status))
 
     private List<BetBuilderMarketDto>? _markets;
     private readonly List<OverUnderLine> _overUnderLines = [];
+    private readonly List<OverUnderLine> _totalCorners = [];
     private BttsOption? _btts;
     private FirstScorerOption? _firstScorer;
     private string? _bookmaker;
     private string? _bookmakerLogoUrl;
 
     private readonly Dictionary<(int Home, int Away), decimal> _correctScoreLookup = [];
+    private List<PlayerPropGroup> _playerPropGroups = [];
     private int _correctScoreHome;
     private int _correctScoreAway;
     private int _maxCorrectScoreHome;
@@ -178,6 +323,14 @@ else if (!string.IsNullOrEmpty(_status))
 
     private string _status = "Loading…";
     private bool _error;
+
+    private void ToggleSection(string id)
+    {
+        if (!_expanded.Remove(id))
+        {
+            _expanded.Add(id);
+        }
+    }
 
     private SlipPick? CurrentCorrectScorePick =>
         _correctScoreLookup.TryGetValue((_correctScoreHome, _correctScoreAway), out var price)
@@ -294,6 +447,66 @@ else if (!string.IsNullOrEmpty(_status))
                 _maxCorrectScoreAway = _correctScoreLookup.Keys.Max(k => k.Away);
             }
 
+            _totalCorners.AddRange(_markets
+                .Where(m => m.MarketType == "TotalCorners" && m.Line is not null)
+                .GroupBy(m => m.Line!.Value)
+                .Where(g => g.Any(m => m.Side == "Over") && g.Any(m => m.Side == "Under"))
+                .Select(g => new OverUnderLine(g.Key, g.First(m => m.Side == "Over").Price, g.First(m => m.Side == "Under").Price))
+                .OrderBy(l => l.Line));
+
+            // Grouped by team (see SandboxPlayerPropMarket.Team's surname-matching comment for how
+            // that's resolved) - players the surname heuristic couldn't place on either squad are
+            // dropped server-side (AppCompatController) rather than shown in an "Unmatched" group.
+            _playerPropGroups = PlayerPropMarketTypes
+                .Select(mt =>
+                {
+                    var rows = _markets.Where(m => m.MarketType == mt.MarketType && m.PlayerName is not null).ToList();
+                    var isLined = LinedPlayerPropMarketTypes.Contains(mt.MarketType);
+
+                    // Only "Over" is shown as a column ("N+") - "Under" carries no separate meaning
+                    // in the N+ framing the reference layout uses, so those rows are simply not
+                    // rendered (still present in _markets, just unused here).
+                    var lines = isLined
+                        ? rows.Where(m => m.Side == "Over" && m.Line is not null)
+                            .Select(m => m.Line!.Value).Distinct().OrderBy(l => l).ToList()
+                        : [];
+
+                    var teams = new (string? Key, string Label)[] { ("Home", HomeTeam), ("Away", AwayTeam) }
+                        .Select(t =>
+                        {
+                            var teamRows = rows.Where(m => m.Team == t.Key).ToList();
+                            if (isLined)
+                            {
+                                var propRows = teamRows.Where(m => m.Side == "Over" && m.Line is not null)
+                                    .GroupBy(m => m.PlayerName!)
+                                    .OrderBy(g => g.Key)
+                                    .Select(g => new PlayerPropRow(g.Key, g.ToDictionary(m => m.Line!.Value, m => m.Price)))
+                                    .ToList();
+                                return new TeamPropGroup(t.Label, [], lines, propRows);
+                            }
+
+                            var options = teamRows.OrderBy(m => m.PlayerName).ThenBy(m => m.Line)
+                                .Select(m => new PickOption(
+                                    PlayerRowLabel(m),
+                                    new SlipPick(mt.MarketType, m.Line, m.Side, m.Price, PlayerName: m.PlayerName)))
+                                .ToList();
+                            return new TeamPropGroup(t.Label, options, [], []);
+                        })
+                        .Where(tg => tg.Options.Count > 0 || tg.Rows.Count > 0)
+                        .ToList();
+                    return new PlayerPropGroup(mt.MarketType, mt.Label, teams);
+                })
+                .Where(g => g.Teams.Count > 0)
+                .ToList();
+
+            // If this match only has player props priced (no Popular markets at all), land on the
+            // tab that actually has something to show instead of an empty "Popular" screen.
+            if (_overUnderLines.Count == 0 && _btts is null && _firstScorer is null
+                && _correctScoreLookup.Count == 0 && _totalCorners.Count == 0 && _playerPropGroups.Count > 0)
+            {
+                _activeTab = "Player Bets";
+            }
+
             _status = "";
         }
         catch (Exception ex)
@@ -339,7 +552,17 @@ else if (!string.IsNullOrEmpty(_status))
     private bool IsSelected(SlipPick pick) =>
         _selected.TryGetValue(pick.MarketType, out var existing)
         && existing.Line == pick.Line && existing.Side == pick.Side
-        && existing.PredictedHomeScore == pick.PredictedHomeScore && existing.PredictedAwayScore == pick.PredictedAwayScore;
+        && existing.PredictedHomeScore == pick.PredictedHomeScore && existing.PredictedAwayScore == pick.PredictedAwayScore
+        && existing.PlayerName == pick.PlayerName;
+
+    // "Amad Diallo (Over 1.5)" for a lined prop, just "Amad Diallo" for a plain Yes/No one (Line is
+    // null for anytime-scorer/card markets - see PlayerPropMarketTypes).
+    private static string PlayerRowLabel(BetBuilderMarketDto m) =>
+        m.Line is { } line ? $"{m.PlayerName} ({m.Side} {line:0.#})" : m.PlayerName ?? "Unknown";
+
+    // An "Over 1.5" line means 2 or more - the reference layout shows that as a plain "2+" column
+    // rather than a bookmaker-style half-line, since there's no such thing as "1.5 shots".
+    private static string LineLabel(decimal line) => $"{(int)(line + 1m)}+";
 
     private string TableCellClass(SlipPick pick) => IsSelected(pick) ? "odds-table-cell selected" : "odds-table-cell";
 

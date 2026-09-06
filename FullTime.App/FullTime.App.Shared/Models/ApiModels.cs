@@ -62,7 +62,9 @@ public record PendingBetDto(Guid BetId, string UserName, decimal Stake);
 public record SpinStatusDto(bool CanSpin, int Streak, decimal? PendingBoostMultiplier, string? PendingBoostLabel);
 public record SpinResultDto(int WinningIndex, int Streak, decimal? MysteryCashAmount, decimal? StreakBonusAmount, string? BoostLabel);
 
-public record BetBuilderMarketDto(string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore, decimal Price);
+public record BetBuilderMarketDto(
+    string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore,
+    decimal Price, string? PlayerName = null, string? Team = null);
 public record BetBuilderMarketsResponse(bool Available, List<BetBuilderMarketDto> Markets, string? Bookmaker, string? BookmakerLogoUrl);
 
 public record LeaderboardEntryDto(Guid UserId, string Name, string LeagueName, decimal Balance, decimal Profit, string CurrencySymbol);

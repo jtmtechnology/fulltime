@@ -1,0 +1,25 @@
+@* Collapsible market-group wrapper for BetBuilder.razor - Expanded/OnToggle are owned by the
+   parent page (a HashSet<string> of open section ids) rather than local state here, so the parent
+   can decide defaults (e.g. the first section open on load) without reaching into this component. *@
+<div class="accordion-section">
+    <div class="accordion-header" @onclick="() => OnToggle.InvokeAsync(Id)">
+        <h4>@Title</h4>
+        <span class="accordion-chevron @(IsOpen ? "open" : "")">▾</span>
+    </div>
+    @if (IsOpen)
+    {
+        <div class="accordion-body">
+            @ChildContent
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public HashSet<string> Expanded { get; set; } = [];
+    [Parameter, EditorRequired] public EventCallback<string> OnToggle { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool IsOpen => Expanded.Contains(Id);
+}

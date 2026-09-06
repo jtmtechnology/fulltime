@@ -22,6 +22,14 @@ public static class HighlightlyLeagueMap
     public const int EuropaLeague = 3337;
     public const int ConferenceLeague = 722432;
 
+    // FaCup re-added 2026-09-06 at user request after a brief removal — its non-league preliminary
+    // rounds (110+ matches kicking off simultaneously) previously left something reporting a status
+    // DeriveStatus's default case couldn't resolve away from InProgress, pinning
+    // HighlightlyMatchSyncService in its 20-30s live cadence for 11+ hours overnight and burning the
+    // entire day's RapidAPI quota. That root cause is NOT fixed - DeriveStatus still silently
+    // defaults any unrecognized status string to InProgress (see HighlightlyMatchSyncService.cs) -
+    // so the same incident can recur on the next FA Cup round with unusual (e.g. postponed/replay)
+    // match statuses.
     public static readonly HashSet<long> TrackedLeagueIds = new()
     {
         PremierLeague,

@@ -359,9 +359,59 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
 .correct-score-price {
     display: block; width: 100%; margin-top: 1rem; padding: 0.75rem; border-radius: 8px;
     border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text);
-    font-weight: 700; font-size: 1rem; cursor: pointer; text-align: center;
+    font-weight: 700; font-size: 0.85rem; cursor: pointer; text-align: center;
 }
 .correct-score-price.selected { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* Bet Builder header: team crests either side of the kickoff time, tabs, and the (cosmetic-only -
+   see BetBuilder.razor) Dynamic Odds toggle. */
+.bb-teams-row { display: flex; align-items: flex-start; justify-content: space-between; margin: 0.75rem 0; }
+.bb-team { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; width: 30%; }
+.bb-team .crest { width: 2.6rem; height: 2.6rem; }
+.bb-team span { font-size: 0.85rem; font-weight: 600; text-align: center; }
+.bb-kickoff { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding-top: 0.4rem; }
+.bb-kickoff span { font-size: 0.8rem; color: var(--text-muted); }
+
+.bb-tabs { display: flex; gap: 0.4rem; overflow-x: auto; margin: 0.75rem 0; }
+.bb-tab {
+    flex: 0 0 auto; padding: 0.5rem 1rem; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--bg-elevated); color: var(--text-muted); font-weight: 600; font-size: 0.85rem; cursor: pointer;
+}
+.bb-tab.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+.bb-toggle-row { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; margin-bottom: 0.5rem; }
+.bb-toggle-row span { font-size: 0.85rem; color: var(--text-muted); }
+.bb-toggle {
+    width: 2.6rem; height: 1.5rem; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--bg-elevated); position: relative; cursor: pointer; flex-shrink: 0; padding: 0;
+}
+.bb-toggle::after {
+    content: ""; position: absolute; top: 0.15rem; left: 0.15rem; width: 1.1rem; height: 1.1rem;
+    border-radius: 50%; background: var(--text-muted); transition: transform 0.15s ease, background 0.15s ease;
+}
+.bb-toggle.on { background: var(--accent); border-color: var(--accent); }
+.bb-toggle.on::after { transform: translateX(1.1rem); background: var(--accent-ink); }
+
+/* Collapsible market sections - replaces always-expanded .market-group for Bet Builder specifically. */
+.accordion-section { border: 1px solid var(--border); border-radius: 8px; margin-top: 0.75rem; overflow: hidden; }
+.accordion-header {
+    display: flex; align-items: center; justify-content: space-between; padding: 0.85rem 1rem;
+    cursor: pointer; background: var(--bg-elevated);
+}
+.accordion-header h4 { margin: 0; font-size: 0.95rem; font-weight: 700; text-transform: none; }
+.accordion-chevron { transition: transform 0.15s ease; color: var(--text-muted); }
+.accordion-chevron.open { transform: rotate(180deg); }
+.accordion-body { padding: 0.75rem 1rem 1rem; font-size: 0.85rem; }
+
+/* Player Bets tab: lined props (shots on target, assists) as a "1+/2+/3+" table per team */
+.player-table-wrap { overflow-x: auto; }
+.player-table { width: 100%; border-collapse: collapse; }
+.player-table th { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; text-align: right; padding: 0 0.35rem 0.5rem; }
+.player-table th:first-child { text-align: left; padding-left: 0; }
+.player-table td { padding: 0.5rem 0.35rem; border-top: 1px solid var(--border); text-align: right; font-weight: 700; font-size: 0.8rem; cursor: pointer; }
+.player-table td:first-child { text-align: left; font-weight: 600; font-size: 0.85rem; cursor: default; padding-left: 0; }
+.player-table td.picked { background: var(--accent); color: var(--accent-ink); border-radius: 6px; }
+.player-table td.locked { color: var(--text-muted); font-weight: 400; cursor: default; }
 
 .odds {
     font-variant-numeric: tabular-nums; cursor: default; flex: 1; text-align: center;

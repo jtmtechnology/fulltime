@@ -60,5 +60,7 @@
     private string LiveClockText() => Match.IsHalfTime ? "HT" : Match.Minute is { } minute ? $"{minute}'" : "";
 
     private string BetBuilderHref() =>
-        $"bet-builder/{Match.Id}?home={Uri.EscapeDataString(Match.HomeTeam)}&away={Uri.EscapeDataString(Match.AwayTeam)}&kickoff={Uri.EscapeDataString(Match.KickoffTime.ToString("O"))}";
+        $"bet-builder/{Match.Id}?home={Uri.EscapeDataString(Match.HomeTeam)}&away={Uri.EscapeDataString(Match.AwayTeam)}" +
+        $"&kickoff={Uri.EscapeDataString(Match.KickoffTime.ToString("O"))}&league={Uri.EscapeDataString(LeagueCatalog.Name(Match.LeagueId))}" +
+        $"&homeLogo={Uri.EscapeDataString(Match.HomeLogoUrl ?? "")}&awayLogo={Uri.EscapeDataString(Match.AwayLogoUrl ?? "")}";
 }

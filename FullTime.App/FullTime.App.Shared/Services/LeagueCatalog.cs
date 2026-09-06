@@ -24,11 +24,23 @@ public static class LeagueCatalog
         [2486] = "Champions League",
         [3337] = "Europa League",
         [722432] = "Conference League",
+
+        // TEMPORARY 2026-09-06: API-Football's own IDs (see AlwaysVisible) - remove alongside its
+        // other temporary entries.
+        [39] = "Premier League",
+        [481] = "Northern NSW NPL",
+        [965] = "AFC U20 Asian Cup",
+        [192] = "New South Wales NPL",
     };
 
     // Always shown regardless of preference: the domestic English pyramid only.
+    // FA Cup (39079) re-added 2026-09-06 — see HighlightlyLeagueMap.TrackedLeagueIds for the
+    // still-unfixed root cause that could bring the quota-exhaustion incident back.
+    // TEMPORARY 2026-09-06: 39/481/965/192 are API-Football's own league IDs (not Highlightly's),
+    // added only so FullTime.Api.Sandbox's data renders while ApiConfig points at it for testing -
+    // remove alongside reverting ApiConfig.BaseUrl to the real API.
     public static readonly long[] AlwaysVisible =
-        [33973, 34824, 35675, 36526, 39079, 41632, 450112];
+        [33973, 34824, 35675, 36526, 39079, 41632, 450112, 39, 481, 965, 192];
 
     // Opt-in: other countries' top flights plus the UEFA club competitions. Order here also
     // controls display order after AlwaysVisible.
@@ -52,5 +64,10 @@ public static class LeagueCatalog
 
     public static string Name(long leagueId) => Names.GetValueOrDefault(leagueId, $"League {leagueId}");
 
-    public static string LogoUrl(long leagueId) => $"https://highlightly.net/soccer/images/leagues/{leagueId}.png";
+    // TEMPORARY 2026-09-06: 39/481/965/192 are API-Football's own league IDs (see AlwaysVisible) -
+    // that provider's logo CDN uses a different domain/id-space than Highlightly's, so they need
+    // their own branch here. Remove alongside AlwaysVisible's temporary entries.
+    public static string LogoUrl(long leagueId) => leagueId is 39 or 481 or 965 or 192
+        ? $"https://media.api-sports.io/football/leagues/{leagueId}.png"
+        : $"https://highlightly.net/soccer/images/leagues/{leagueId}.png";
 }
