@@ -5,7 +5,12 @@ public class HighlightlyOptions
     public const string SectionName = "Highlightly";
 
     public required string ApiKey { get; set; }
-    public string ApiHost { get; set; } = "sport-highlights-api.p.rapidapi.com";
+
+    // Direct Highlightly account (soccer.highlightly.net), not RapidAPI's proxy - confirmed real
+    // 2026-09-06: same x-rapidapi-key/x-rapidapi-host header shape works on both, but they're
+    // separate accounts/tokens/quotas entirely (RapidAPI's own "Sport Highlights API" quota was
+    // fully exhausted; this direct "Football API" account is a fresh, separate 25,000/day bucket).
+    public string ApiHost { get; set; } = "soccer.highlightly.net";
 
     // How far ahead a match's kickoff can be and still be worth trying to price — this provider
     // only has pre-match odds for the next gameweek or so per league, same limitation every odds
