@@ -46,6 +46,16 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
     // and TotalCorners/the four player-prop types additionally need Match.PlayerStatsResolvedAt set
     // (ApiFootballSettlementSupportService.ResolvePlayerStatsAsync) — both external-data dependencies
     // that can lag behind the match itself reaching Finished.
+    // A static readonly collection (translated to a SQL IN clause via .Contains()), not a call to
+    // RequiresPlayerStats(p.MarketType) inline in the Where() below — EF Core can't translate an
+    // arbitrary C# method call into SQL (confirmed: this threw InvalidOperationException in
+    // production the first time it ran, "Translation of method ... failed").
+    private static readonly MarketType[] PlayerStatMarketTypes =
+    [
+        MarketType.TotalCorners, MarketType.PlayerGoalscorerAnytime, MarketType.PlayerCard,
+        MarketType.PlayerShotsOnTarget, MarketType.PlayerAssists,
+    ];
+
     private async Task ResolvePicksAsync(CancellationToken ct)
     {
         var pendingPicks = await db.BetLegPicks
@@ -54,7 +64,7 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
             .ThenInclude(m => m!.PlayerStats)
             .Where(p => p.Outcome == SelectionOutcome.Pending && p.BetLeg!.Match!.Result != null
                 && (p.MarketType != MarketType.FirstTeamToScore || p.BetLeg!.Match!.FirstGoalScorerSide != null)
-                && (!RequiresPlayerStats(p.MarketType) || p.BetLeg!.Match!.PlayerStatsResolvedAt != null))
+                && (!PlayerStatMarketTypes.Contains(p.MarketType) || p.BetLeg!.Match!.PlayerStatsResolvedAt != null))
             .ToListAsync(ct);
 
         if (pendingPicks.Count == 0)
@@ -71,10 +81,6 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Resolved {Count} bet pick(s)", pendingPicks.Count);
     }
-
-    private static bool RequiresPlayerStats(MarketType marketType) => marketType is
-        MarketType.TotalCorners or MarketType.PlayerGoalscorerAnytime or MarketType.PlayerCard
-        or MarketType.PlayerShotsOnTarget or MarketType.PlayerAssists;
 
     private static bool IsPickCorrect(BetLegPick pick, Match match)
     {
