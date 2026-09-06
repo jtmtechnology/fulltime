@@ -192,7 +192,10 @@ else
                                         @foreach (var row in teamGroup.Rows)
                                         {
                                             <tr>
-                                                <td>@row.PlayerName</td>
+                                                <td class="player-name-cell">
+                                                    <LogoImg Src="@teamGroup.LogoUrl" CssClass="player-team-logo" Alt="@teamGroup.Team" />
+                                                    <span>@row.PlayerName</span>
+                                                </td>
                                                 @foreach (var line in teamGroup.Lines)
                                                 {
                                                     if (row.PricesByLine.TryGetValue(line, out var price))
@@ -217,7 +220,10 @@ else
                                 @foreach (var opt in teamGroup.Options)
                                 {
                                     <div class="@ListRowClass(opt.Pick)" @onclick="() => TogglePick(opt.Pick)">
-                                        <span>@opt.Label</span>
+                                        <span class="player-name-cell">
+                                            <LogoImg Src="@teamGroup.LogoUrl" CssClass="player-team-logo" Alt="@teamGroup.Team" />
+                                            <span>@opt.Label</span>
+                                        </span>
                                         <span class="odds-list-price">@OddsCell.FormatOdds(opt.Pick.Odds)</span>
                                     </div>
                                 }
@@ -251,7 +257,7 @@ else
     private record FirstScorerOption(decimal HomePrice, decimal NonePrice, decimal AwayPrice);
     private record PickOption(string Label, SlipPick Pick);
     private record PlayerPropRow(string PlayerName, Dictionary<decimal, decimal> PricesByLine);
-    private record TeamPropGroup(string Team, List<PickOption> Options, List<decimal> Lines, List<PlayerPropRow> Rows);
+    private record TeamPropGroup(string Team, string? LogoUrl, List<PickOption> Options, List<decimal> Lines, List<PlayerPropRow> Rows);
     private record PlayerPropGroup(string MarketType, string Label, List<TeamPropGroup> Teams);
 
     // Client-only market-type strings, not shared with any server enum (BetBuilderMarketDto.MarketType
@@ -261,10 +267,10 @@ else
     // Side+Line only when present.
     private static readonly (string MarketType, string Label)[] PlayerPropMarketTypes =
     [
-        ("PlayerGoalscorerAnytime", "Anytime goalscorer"),
+        ("PlayerGoalscorerAnytime", "Player goals"),
+        ("PlayerAssists", "Player assists"),
         ("PlayerCard", "Player to be booked"),
         ("PlayerShotsOnTarget", "Shots on target"),
-        ("PlayerAssists", "Player assists"),
     ];
 
     // Shots/assists price a per-player Over/Under line rather than a single Yes/No outcome (unlike
@@ -471,26 +477,34 @@ else
                             .Select(m => m.Line!.Value).Distinct().OrderBy(l => l).ToList()
                         : [];
 
-                    var teams = new (string? Key, string Label)[] { ("Home", HomeTeam), ("Away", AwayTeam) }
+                    var teams = new (string? Key, string Label, string? Logo)[] { ("Home", HomeTeam, HomeLogo), ("Away", AwayTeam, AwayLogo) }
                         .Select(t =>
                         {
                             var teamRows = rows.Where(m => m.Team == t.Key).ToList();
                             if (isLined)
                             {
+                                // Sorted worst-odds-last: the shortest line (e.g. "1+") is each
+                                // player's most-likely-to-hit price, so that's the column used to
+                                // rank players even though every row shows several columns. A player
+                                // with no price at all for that line (locked cell) sorts to the
+                                // bottom, same as the longest odds would.
+                                var firstLine = lines.Count > 0 ? lines[0] : (decimal?)null;
                                 var propRows = teamRows.Where(m => m.Side == "Over" && m.Line is not null)
                                     .GroupBy(m => m.PlayerName!)
-                                    .OrderBy(g => g.Key)
                                     .Select(g => new PlayerPropRow(g.Key, g.ToDictionary(m => m.Line!.Value, m => m.Price)))
+                                    .OrderBy(r => firstLine is { } fl && r.PricesByLine.TryGetValue(fl, out var p) ? p : decimal.MaxValue)
                                     .ToList();
-                                return new TeamPropGroup(t.Label, [], lines, propRows);
+                                return new TeamPropGroup(t.Label, t.Logo, [], lines, propRows);
                             }
 
-                            var options = teamRows.OrderBy(m => m.PlayerName).ThenBy(m => m.Line)
+                            // Worst odds last: ascending by price, so the most-likely (shortest-odds)
+                            // player is first and the longest shot sinks to the bottom of the list.
+                            var options = teamRows.OrderBy(m => m.Price)
                                 .Select(m => new PickOption(
                                     PlayerRowLabel(m),
                                     new SlipPick(mt.MarketType, m.Line, m.Side, m.Price, PlayerName: m.PlayerName)))
                                 .ToList();
-                            return new TeamPropGroup(t.Label, options, [], []);
+                            return new TeamPropGroup(t.Label, t.Logo, options, [], []);
                         })
                         .Where(tg => tg.Options.Count > 0 || tg.Rows.Count > 0)
                         .ToList();

@@ -413,6 +413,9 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
 .player-table td.picked { background: var(--accent); color: var(--accent-ink); border-radius: 6px; }
 .player-table td.locked { color: var(--text-muted); font-weight: 400; cursor: default; }
 
+.player-name-cell { display: inline-flex; align-items: center; gap: 0.4rem; }
+.player-team-logo { width: 1.1rem; height: 1.1rem; object-fit: contain; flex-shrink: 0; }
+
 .odds {
     font-variant-numeric: tabular-nums; cursor: default; flex: 1; text-align: center;
     padding: 0.55rem 0.4rem; border: 1px solid var(--border); border-radius: 8px;

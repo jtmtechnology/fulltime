@@ -23,7 +23,26 @@ public static class BookmakerLogos
         ["Unibet"] = "https://images.fotmob.com/images/betting/unibet.png",
     };
 
+    // the-odds-api identifies each bookmaker by a stable slug ("Key") separate from its display
+    // title ("Unibet (UK)", "Betano (UK)") — matching fotmob's asset path needs the slug, not the
+    // title, since the title carries a regional suffix fotmob's path doesn't. Checked one by one
+    // against every real UK bookmaker the-odds-api actually returned during the cutover (2026-09-06)
+    // — most guessed slugs still 403 (fotmob simply doesn't have every bookmaker), so this stays a
+    // short confirmed-working list rather than a formula, same reasoning as the Highlightly-era set
+    // above.
+    private static readonly Dictionary<string, string> UrlsByOddsApiKey = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["unibet_uk"] = "https://images.fotmob.com/images/betting/unibet.png",
+        ["paddypower"] = "https://images.fotmob.com/images/betting/paddypower.png",
+        ["betfair_ex_uk"] = "https://images.fotmob.com/images/betting/betfair.png",
+        ["betfair_sb_uk"] = "https://images.fotmob.com/images/betting/betfair.png",
+        ["betway"] = "https://images.fotmob.com/images/betting/betway.png",
+        ["betano_uk"] = "https://images.fotmob.com/images/betting/betano.png",
+    };
+
     public static string? UrlFor(string bookmakerName) => Urls.GetValueOrDefault(bookmakerName);
 
     public static bool HasLogo(string bookmakerName) => Urls.ContainsKey(bookmakerName);
+
+    public static string? UrlForOddsApiKey(string bookmakerKey) => UrlsByOddsApiKey.GetValueOrDefault(bookmakerKey);
 }

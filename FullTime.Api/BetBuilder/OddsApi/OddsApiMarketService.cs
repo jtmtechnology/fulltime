@@ -1,5 +1,6 @@
 using System.Globalization;
 using FullTime.Api.BetBuilder.ApiFootball;
+using FullTime.Api.BetBuilder;
 using FullTime.Api.BetBuilder.Dtos;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
@@ -218,9 +219,12 @@ public class OddsApiMarketService(
             return;
         }
 
+        var logoUrl = BookmakerLogos.UrlForOddsApiKey(bookmaker!.Key);
+
         var latest = await db.OddsSnapshots.Where(o => o.MatchId == match.Id).OrderByDescending(o => o.FetchedAt).FirstOrDefaultAsync(ct);
         var changed = latest is null || latest.HomeOdds != home.Value || latest.DrawOdds != draw.Value || latest.AwayOdds != away.Value
-            || !string.Equals(latest.Bookmaker, bookmaker!.Title, StringComparison.OrdinalIgnoreCase);
+            || !string.Equals(latest.Bookmaker, bookmaker.Title, StringComparison.OrdinalIgnoreCase)
+            || latest.BookmakerLogoUrl != logoUrl;
         if (!changed)
         {
             return;
@@ -233,8 +237,8 @@ public class OddsApiMarketService(
             HomeOdds = home.Value,
             DrawOdds = draw.Value,
             AwayOdds = away.Value,
-            Bookmaker = bookmaker!.Title,
-            BookmakerLogoUrl = null,
+            Bookmaker = bookmaker.Title,
+            BookmakerLogoUrl = logoUrl,
             FetchedAt = DateTime.UtcNow,
         });
     }
