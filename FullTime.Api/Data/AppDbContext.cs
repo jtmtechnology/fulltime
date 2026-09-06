@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<LeagueMembership> LeagueMemberships => Set<LeagueMembership>();
     public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
     public DbSet<BetBuilderMarket> BetBuilderMarkets => Set<BetBuilderMarket>();
+    public DbSet<MatchPlayerStat> MatchPlayerStats => Set<MatchPlayerStat>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -136,5 +137,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Property(m => m.Line).HasPrecision(5, 2);
         modelBuilder.Entity<BetBuilderMarket>()
             .Property(m => m.Price).HasPrecision(10, 2);
+
+        modelBuilder.Entity<MatchPlayerStat>()
+            .HasOne(s => s.Match)
+            .WithMany(m => m.PlayerStats)
+            .HasForeignKey(s => s.MatchId);
     }
 }

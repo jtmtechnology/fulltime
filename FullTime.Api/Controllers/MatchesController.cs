@@ -1,4 +1,5 @@
 using FullTime.Api.BetBuilder;
+using FullTime.Api.BetBuilder.OddsApi;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -28,17 +29,23 @@ public record UpcomingMatchDto(
     bool BetBuilderAvailable);
 
 public record BetBuilderMarketDto(
-    string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore, decimal Price);
+    string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore, decimal Price,
+    string? PlayerName = null, string? Team = null);
 public record BetBuilderMarketsResponse(bool Available, List<BetBuilderMarketDto> Markets, string? Bookmaker, string? BookmakerLogoUrl);
 
 [ApiController]
 [Route("api/matches")]
-public class MatchesController(AppDbContext db, IOptions<HighlightlyOptions> highlightlyOptions) : ControllerBase
+public class MatchesController(
+    AppDbContext db,
+    IOptions<HighlightlyOptions> highlightlyOptions,
+    IOptions<ProvidersOptions> providersOptions,
+    OddsApiMarketService oddsApiMarkets) : ControllerBase
 {
-    // Pure DB read regardless of the date/league filter — HighlightlyMatchSyncBackgroundService's
-    // timer is the only thing that calls the external odds/scores provider. A date outside its
-    // synced window (today .. today+MatchSyncDaysAhead-1) will simply come back empty rather than
-    // triggering a fetch.
+    // Pure DB read for Highlightly (its background sync is the only thing that calls the provider),
+    // but ensures h2h freshness on-demand first when Providers:MarketsSource == "OddsApi" — scoped
+    // to just the matches this specific call is about to return, not every tracked match, per the
+    // standing no-background-polling preference. A date outside the synced window will simply come
+    // back empty rather than triggering a fetch.
     [HttpGet("upcoming")]
     public async Task<ActionResult<List<UpcomingMatchDto>>> GetUpcoming(
         [FromQuery] DateOnly? date, [FromQuery] long? leagueId, CancellationToken ct)
@@ -61,6 +68,12 @@ public class MatchesController(AppDbContext db, IOptions<HighlightlyOptions> hig
         if (leagueId is { } selectedLeagueId)
         {
             query = query.Where(m => m.LeagueId == selectedLeagueId);
+        }
+
+        if (providersOptions.Value.MarketsSource == "OddsApi")
+        {
+            var candidateMatches = await query.ToListAsync(ct);
+            await oddsApiMarkets.EnsureH2hFreshAsync(candidateMatches, ct);
         }
 
         var matches = await query
@@ -90,12 +103,40 @@ public class MatchesController(AppDbContext db, IOptions<HighlightlyOptions> hig
         return Ok(matches);
     }
 
-    // Reads whatever BetBuilderSyncBackgroundService's timer has already stored — most matches will
-    // come back Available: false, since the odds-feed provider only prices the next gameweek or so
-    // per league. The client uses this to decide whether to offer the Bet Builder entry point at all.
+    // For Highlightly, reads whatever BetBuilderSyncBackgroundService's timer has already stored.
+    // For the-odds-api, ensures a fresh full 9-market pull first (on-demand, cache-miss only — see
+    // OddsApiMarketService) since there's no background sync for this any more. Most matches will
+    // still come back Available: false either way, since neither provider prices every fixture. The
+    // client uses this to decide whether to offer the Bet Builder entry point at all.
     [HttpGet("{id:guid}/bet-builder-markets")]
     public async Task<ActionResult<BetBuilderMarketsResponse>> GetBetBuilderMarkets(Guid id, CancellationToken ct)
     {
+        string? bookmaker;
+        string? bookmakerLogoUrl;
+
+        if (providersOptions.Value.MarketsSource == "OddsApi")
+        {
+            var match = await db.Matches.FindAsync([id], ct);
+            if (match is not null)
+            {
+                await oddsApiMarkets.EnsureBetBuilderMarketsFreshAsync(match, ct);
+            }
+
+            // the-odds-api aggregates several bookmakers; the h2h snapshot (fetched in the same
+            // pull) already records which one was actually used for this match, so that's reused
+            // here as a single consistent label for the whole response rather than a fixed config
+            // value like Highlightly's BookmakerName.
+            var latestSnapshot = await db.OddsSnapshots
+                .Where(o => o.MatchId == id).OrderByDescending(o => o.FetchedAt).FirstOrDefaultAsync(ct);
+            bookmaker = latestSnapshot?.Bookmaker;
+            bookmakerLogoUrl = latestSnapshot?.BookmakerLogoUrl;
+        }
+        else
+        {
+            bookmaker = highlightlyOptions.Value.BookmakerName;
+            bookmakerLogoUrl = BookmakerLogos.UrlFor(bookmaker);
+        }
+
         var markets = await db.BetBuilderMarkets
             .Where(m => m.MatchId == id)
             .OrderBy(m => m.MarketType)
@@ -104,12 +145,9 @@ public class MatchesController(AppDbContext db, IOptions<HighlightlyOptions> hig
             .ThenBy(m => m.PredictedAwayScore)
             .Select(m => new BetBuilderMarketDto(
                 m.MarketType.ToString(), m.Line, m.Side.HasValue ? m.Side.ToString() : null,
-                m.PredictedHomeScore, m.PredictedAwayScore, m.Price))
+                m.PredictedHomeScore, m.PredictedAwayScore, m.Price, m.PlayerName, m.Team))
             .ToListAsync(ct);
 
-        var bookmaker = highlightlyOptions.Value.BookmakerName;
-        var logoUrl = BookmakerLogos.UrlFor(bookmaker);
-
-        return Ok(new BetBuilderMarketsResponse(markets.Count > 0, markets, bookmaker, logoUrl));
+        return Ok(new BetBuilderMarketsResponse(markets.Count > 0, markets, bookmaker, bookmakerLogoUrl));
     }
 }

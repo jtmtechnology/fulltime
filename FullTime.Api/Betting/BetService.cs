@@ -5,7 +5,8 @@ using Microsoft.EntityFrameworkCore;
 namespace FullTime.Api.Betting;
 
 public record LegPickInput(
-    MarketType MarketType, decimal? Line, SelectionSide? Side, int? PredictedHomeScore = null, int? PredictedAwayScore = null);
+    MarketType MarketType, decimal? Line, SelectionSide? Side, int? PredictedHomeScore = null, int? PredictedAwayScore = null,
+    string? PlayerName = null);
 public record LegInput(Guid MatchId, List<LegPickInput> Picks);
 
 public class BetService(AppDbContext db, ILogger<BetService> logger)
@@ -76,9 +77,12 @@ public class BetService(AppDbContext db, ILogger<BetService> logger)
 
             foreach (var pickInput in legInput.Picks)
             {
-                var odds = await GetCurrentOddsAsync(
+                var market = await FindMarketAsync(
                     legInput.MatchId, pickInput.MarketType, pickInput.Line, pickInput.Side,
-                    pickInput.PredictedHomeScore, pickInput.PredictedAwayScore, ct);
+                    pickInput.PredictedHomeScore, pickInput.PredictedAwayScore, pickInput.PlayerName, ct);
+                var odds = market is null
+                    ? await GetMatchResultOddsAsync(legInput.MatchId, pickInput.MarketType, pickInput.Side, ct)
+                    : market.Price;
                 if (odds is null)
                 {
                     return new PlaceBetResult(PlaceBetOutcome.MatchNotAvailable);
@@ -95,6 +99,11 @@ public class BetService(AppDbContext db, ILogger<BetService> logger)
                     PredictedAwayScore = pickInput.PredictedAwayScore,
                     OddsAtPlacement = odds.Value,
                     Outcome = SelectionOutcome.Pending,
+                    // Copied from the matched market row, never trusted from raw client input — a
+                    // client could otherwise claim any PlayerName/Team for a pick it didn't actually
+                    // price.
+                    PlayerName = market?.PlayerName,
+                    Team = market?.Team,
                 });
             }
 
@@ -146,36 +155,57 @@ public class BetService(AppDbContext db, ILogger<BetService> logger)
         return new PlaceBetResult(PlaceBetOutcome.Success, bet);
     }
 
-    private async Task<decimal?> GetCurrentOddsAsync(
+    private async Task<decimal?> GetMatchResultOddsAsync(Guid matchId, MarketType marketType, SelectionSide? side, CancellationToken ct)
+    {
+        if (marketType != MarketType.MatchResult)
+        {
+            return null;
+        }
+
+        var latestOdds = await db.OddsSnapshots
+            .Where(o => o.MatchId == matchId)
+            .OrderByDescending(o => o.FetchedAt)
+            .FirstOrDefaultAsync(ct);
+        if (latestOdds is null) return null;
+
+        return side switch
+        {
+            SelectionSide.Home => latestOdds.HomeOdds,
+            SelectionSide.Draw => latestOdds.DrawOdds,
+            SelectionSide.Away => latestOdds.AwayOdds,
+            _ => null,
+        };
+    }
+
+    // BetBuilderMarket is one row per priced outcome, so this is a direct lookup by whichever key
+    // fields the market type actually uses — Side for OverUnder/BothTeamsToScore/FirstTeamToScore/
+    // TotalCorners, PredictedHomeScore/PredictedAwayScore for CorrectScore, and additionally
+    // PlayerName for the four player-prop types (PlayerGoalscorerAnytime/PlayerCard/
+    // PlayerShotsOnTarget/PlayerAssists) — without it, two different players both priced e.g.
+    // "Over 0.5 shots on target" under the same MarketType/Line/Side would be an ambiguous lookup
+    // (confirmed a real bug during the cutover plan's research; this is the fix).
+    private async Task<BetBuilderMarket?> FindMarketAsync(
         Guid matchId, MarketType marketType, decimal? line, SelectionSide? side,
-        int? predictedHomeScore, int? predictedAwayScore, CancellationToken ct)
+        int? predictedHomeScore, int? predictedAwayScore, string? playerName, CancellationToken ct)
     {
         if (marketType == MarketType.MatchResult)
         {
-            var latestOdds = await db.OddsSnapshots
-                .Where(o => o.MatchId == matchId)
-                .OrderByDescending(o => o.FetchedAt)
-                .FirstOrDefaultAsync(ct);
-            if (latestOdds is null) return null;
-
-            return side switch
-            {
-                SelectionSide.Home => latestOdds.HomeOdds,
-                SelectionSide.Draw => latestOdds.DrawOdds,
-                SelectionSide.Away => latestOdds.AwayOdds,
-                _ => null,
-            };
+            return null;
         }
 
-        // BetBuilderMarket is one row per priced outcome, so this is a direct lookup by whichever
-        // key fields the market type actually uses — Side for OverUnder/BothTeamsToScore/
-        // FirstTeamToScore, PredictedHomeScore/PredictedAwayScore for CorrectScore.
         var query = db.BetBuilderMarkets.Where(m => m.MatchId == matchId && m.MarketType == marketType && m.Line == line);
         query = marketType == MarketType.CorrectScore
             ? query.Where(m => m.PredictedHomeScore == predictedHomeScore && m.PredictedAwayScore == predictedAwayScore)
             : query.Where(m => m.Side == side);
 
-        var market = await query.OrderByDescending(m => m.FetchedAt).FirstOrDefaultAsync(ct);
-        return market?.Price;
+        if (IsPlayerPropMarket(marketType))
+        {
+            query = query.Where(m => m.PlayerName == playerName);
+        }
+
+        return await query.OrderByDescending(m => m.FetchedAt).FirstOrDefaultAsync(ct);
     }
+
+    private static bool IsPlayerPropMarket(MarketType marketType) => marketType is
+        MarketType.PlayerGoalscorerAnytime or MarketType.PlayerCard or MarketType.PlayerShotsOnTarget or MarketType.PlayerAssists;
 }

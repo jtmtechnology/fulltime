@@ -9,13 +9,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullTime.Api.Controllers;
 
-public record PickRequest(string MarketType, decimal? Line, string? Side, int? PredictedHomeScore = null, int? PredictedAwayScore = null);
+public record PickRequest(string MarketType, decimal? Line, string? Side, int? PredictedHomeScore = null, int? PredictedAwayScore = null, string? PlayerName = null);
 public record LegRequest(Guid MatchId, List<PickRequest> Picks);
 public record PlaceBetRequest(decimal Stake, List<LegRequest> Legs, Guid? LeagueId);
 
 public record BetLegPickDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore,
-    decimal OddsAtPlacement, string Outcome);
+    decimal OddsAtPlacement, string Outcome, string? PlayerName, string? Team);
 public record BetLegDto(
     Guid MatchId, string HomeTeam, string AwayTeam, string? HomeLogoUrl, string? AwayLogoUrl,
     DateTime KickoffTime, decimal OddsAtPlacement, string Outcome, List<BetLegPickDto> Picks);
@@ -58,7 +58,7 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
                     side = parsedSide;
                 }
 
-                picks.Add(new LegPickInput(marketType, pickRequest.Line, side, pickRequest.PredictedHomeScore, pickRequest.PredictedAwayScore));
+                picks.Add(new LegPickInput(marketType, pickRequest.Line, side, pickRequest.PredictedHomeScore, pickRequest.PredictedAwayScore, pickRequest.PlayerName));
             }
 
             legs.Add(new LegInput(legRequest.MatchId, picks));
@@ -126,7 +126,8 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
             l.Outcome.ToString(),
             l.Picks.Select(p => new BetLegPickDto(
                 p.MarketType.ToString(), p.Line, p.Side.HasValue ? p.Side.ToString() : null,
-                p.PredictedHomeScore, p.PredictedAwayScore, p.OddsAtPlacement, p.Outcome.ToString())).ToList()
+                p.PredictedHomeScore, p.PredictedAwayScore, p.OddsAtPlacement, p.Outcome.ToString(),
+                p.PlayerName, p.Team)).ToList()
         )).ToList());
 
     private Guid CurrentUserId =>

@@ -49,4 +49,25 @@ public class Match
     // call needed for that case). Needed to settle MarketType.FirstTeamToScore picks, which can't
     // be derived from the final score alone. See BetBuilderSyncService.ResolveFirstGoalScorersAsync.
     public SelectionSide? FirstGoalScorerSide { get; set; }
+
+    // Corner kicks summed across both teams from API-Football's fixtures/statistics endpoint — null
+    // until a finished match's player-stats resolution pass has run. Settles MarketType.TotalCorners
+    // the same way OverUnder settles off HomeScore+AwayScore (see SettlementService.IsPickCorrect).
+    public int? TotalCorners { get; set; }
+
+    // Set once ApiFootballPlayerStatsService has attempted (successfully or not) to fetch and store
+    // this match's MatchPlayerStats/TotalCorners — a timestamp rather than a bool so a match whose
+    // provider data never backfills (some lower-league/qualifying fixtures never get one) can still
+    // age out of being re-queried every tick forever, same reasoning as FirstGoalScorerSide's cutoff
+    // in BetBuilderSyncService.ResolveFirstGoalScorersAsync.
+    public DateTime? PlayerStatsResolvedAt { get; set; }
+
+    public List<MatchPlayerStat> PlayerStats { get; set; } = [];
+
+    // Last time OddsApiMarketService.EnsureBetBuilderMarketsFreshAsync attempted a full market pull
+    // for this match — set even on a cache miss with no the-odds-api event found, so a TTL check has
+    // something to compare against without depending on BetBuilderMarket rows existing (an unpriced
+    // match has none). Drives that method's TTL gating; OddsSnapshot.FetchedAt already serves the
+    // same purpose for the cheaper h2h-only refresh (MatchesController.Upcoming).
+    public DateTime? OddsLastFetchedAt { get; set; }
 }

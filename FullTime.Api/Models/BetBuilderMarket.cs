@@ -19,4 +19,15 @@ public class BetBuilderMarket
 
     public decimal Price { get; set; }
     public DateTime FetchedAt { get; set; }
+
+    // Null for match-level markets (everything Highlightly ever priced, plus TotalCorners) — set
+    // for the-odds-api's per-player markets (PlayerGoalscorerAnytime/PlayerCard/
+    // PlayerShotsOnTarget/PlayerAssists), which two different players can both be priced under the
+    // same MarketType/Line/Side — see BetService.GetCurrentOddsAsync, which needs PlayerName to
+    // disambiguate those lookups.
+    public string? PlayerName { get; set; }
+
+    // "Home"/"Away" — descriptive metadata for display, not a settlement selection (Side already
+    // carries Over/Under/Yes/No). Null for match-level markets.
+    public string? Team { get; set; }
 }

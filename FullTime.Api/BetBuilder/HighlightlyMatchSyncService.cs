@@ -187,7 +187,7 @@ public class HighlightlyMatchSyncService(
         match.KickoffTime = dto.Date;
 
         var (homeScore, awayScore) = ParseScore(dto.State.Score?.Current);
-        var newStatus = DeriveStatus(dto.State.Description);
+        var newStatus = DeriveStatus(dto.State.Description, match.Status, match.ExternalId);
         // Confirmed via a real live match: the in-play description is "First half" (and presumably
         // "Second half"), which a bare "half" substring check wrongly flags as HT too — every
         // currently-playing match was showing as half-time. Match on "half time" specifically.
@@ -233,20 +233,36 @@ public class HighlightlyMatchSyncService(
     }
 
     // Confirmed status strings from real data: "Not started", "Finished", "Finished after extra
-    // time", "Finished after penalties", "Postponed". No live match was observed while building
-    // this, so anything else (including any yet-unseen live-state string) defaults to InProgress
-    // rather than requiring an exact match — verify against a real live match once deployed.
-    // Postponed maps to Upcoming (no dedicated MatchStatus for it); its score naturally parses to
-    // null since the provider reports none.
-    private static MatchStatus DeriveStatus(string description)
+    // time", "Finished after penalties", "Postponed", "First half", "Second half", and anything
+    // containing "half time". Root cause of the 2026-09-06 FA Cup quota-exhaustion incident: this
+    // used to default any unrecognized string (including one from that batch never identified) to
+    // InProgress, which pinned the live-poll loop at its 15-30s cadence for 11+ hours overnight.
+    // Now only the confirmed live-state strings map to InProgress explicitly; anything still
+    // unrecognized logs a warning and keeps whatever status the match already had, so an unknown
+    // string can never itself force (or keep) a match falsely "live". Postponed maps to Upcoming
+    // (no dedicated MatchStatus for it); its score naturally parses to null since the provider
+    // reports none.
+    private MatchStatus DeriveStatus(string description, MatchStatus previousStatus, string externalId)
     {
         if (description is "Not started" or "Postponed")
         {
             return MatchStatus.Upcoming;
         }
 
-        return description.StartsWith("Finished", StringComparison.Ordinal)
-            ? MatchStatus.Finished
-            : MatchStatus.InProgress;
+        if (description.StartsWith("Finished", StringComparison.Ordinal))
+        {
+            return MatchStatus.Finished;
+        }
+
+        if (description is "First half" or "Second half"
+            || description.Contains("half time", StringComparison.OrdinalIgnoreCase))
+        {
+            return MatchStatus.InProgress;
+        }
+
+        logger.LogWarning(
+            "Unrecognized Highlightly match status {Description} for match {ExternalId}, keeping previous status {PreviousStatus}",
+            description, externalId, previousStatus);
+        return previousStatus;
     }
 }

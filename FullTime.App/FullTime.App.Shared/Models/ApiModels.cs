@@ -45,13 +45,13 @@ public record UpcomingMatchDto(
 
 public record ConfigResponse(int RefreshIntervalSeconds);
 
-public record PickRequest(string MarketType, decimal? Line, string? Side, int? PredictedHomeScore = null, int? PredictedAwayScore = null);
+public record PickRequest(string MarketType, decimal? Line, string? Side, int? PredictedHomeScore = null, int? PredictedAwayScore = null, string? PlayerName = null);
 public record LegRequest(Guid MatchId, List<PickRequest> Picks);
 public record PlaceBetRequest(decimal Stake, List<LegRequest> Legs, Guid? LeagueId);
 
 public record BetLegPickDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore,
-    decimal OddsAtPlacement, string Outcome);
+    decimal OddsAtPlacement, string Outcome, string? PlayerName = null, string? Team = null);
 public record BetLegDto(
     Guid MatchId, string HomeTeam, string AwayTeam, string? HomeLogoUrl, string? AwayLogoUrl,
     DateTime KickoffTime, decimal OddsAtPlacement, string Outcome, List<BetLegPickDto> Picks);

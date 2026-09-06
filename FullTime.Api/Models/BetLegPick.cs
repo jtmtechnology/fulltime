@@ -23,4 +23,9 @@ public class BetLegPick
 
     public decimal OddsAtPlacement { get; set; }
     public SelectionOutcome Outcome { get; set; }
+
+    // Copied from the matched BetBuilderMarket row at placement time (never trusted from raw client
+    // input — see BetService.PlaceBetAsync) — set only for the four player-prop market types.
+    public string? PlayerName { get; set; }
+    public string? Team { get; set; }
 }

@@ -2,6 +2,8 @@ using System.Text;
 using FirebaseAdmin;
 using FullTime.Api.Auth;
 using FullTime.Api.BetBuilder;
+using FullTime.Api.BetBuilder.ApiFootball;
+using FullTime.Api.BetBuilder.OddsApi;
 using FullTime.Api.Betting;
 using FullTime.Api.Data;
 using FullTime.Api.Leagues;
@@ -54,6 +56,14 @@ builder.Services.Configure<BettingOptions>(builder.Configuration.GetSection(Bett
 builder.Services.AddScoped<AuthService>();
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+// Rollback-by-config toggle (see ProvidersOptions) — both Highlightly and its API-Football/
+// the-odds-api replacements stay compiled in and DI-registered regardless of which is active; only
+// the *hosted services* (the background loops that actually call out) are conditional, read
+// straight from configuration since hosted-service registration happens before DI is built.
+var providers = builder.Configuration.GetSection(ProvidersOptions.SectionName).Get<ProvidersOptions>()
+    ?? new ProvidersOptions();
+builder.Services.Configure<ProvidersOptions>(builder.Configuration.GetSection(ProvidersOptions.SectionName));
+
 builder.Services.Configure<HighlightlyOptions>(builder.Configuration.GetSection(HighlightlyOptions.SectionName));
 builder.Services.AddHttpClient<HighlightlyClient>((sp, client) =>
 {
@@ -63,11 +73,48 @@ builder.Services.AddHttpClient<HighlightlyClient>((sp, client) =>
     client.DefaultRequestHeaders.Add("x-rapidapi-key", opts.ApiKey);
 });
 builder.Services.AddScoped<HighlightlyMatchSyncService>();
-builder.Services.AddHostedService<HighlightlyMatchSyncBackgroundService>();
-builder.Services.AddHostedService<HighlightlyFixtureDiscoveryBackgroundService>();
 builder.Services.AddScoped<BetBuilderSyncService>();
-builder.Services.AddHostedService<BetBuilderSyncBackgroundService>();
-builder.Services.AddHostedService<GoalScorerResolutionBackgroundService>();
+
+builder.Services.Configure<ApiFootballOptions>(builder.Configuration.GetSection(ApiFootballOptions.SectionName));
+builder.Services.AddHttpClient<ApiFootballClient>((sp, client) =>
+{
+    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiFootballOptions>>().Value;
+    client.BaseAddress = new Uri($"https://{opts.ApiHost}/");
+    client.DefaultRequestHeaders.Add("x-apisports-key", opts.ApiKey);
+});
+builder.Services.AddScoped<ApiFootballMatchSyncService>();
+builder.Services.AddScoped<ApiFootballSettlementSupportService>();
+
+builder.Services.Configure<OddsApiOptions>(builder.Configuration.GetSection(OddsApiOptions.SectionName));
+// The-odds-api's key is a query-string param per request, not a header (unlike Highlightly/
+// API-Football) — no default-header setup needed here, OddsApiClient appends it itself.
+builder.Services.AddHttpClient<OddsApiClient>((sp, client) =>
+{
+    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OddsApiOptions>>().Value;
+    client.BaseAddress = new Uri($"https://{opts.ApiHost}/");
+});
+builder.Services.AddScoped<OddsApiMarketService>();
+
+if (providers.LiveScoreSource == "ApiFootball")
+{
+    builder.Services.AddHostedService<ApiFootballMatchSyncBackgroundService>();
+    builder.Services.AddHostedService<ApiFootballFixtureDiscoveryBackgroundService>();
+    builder.Services.AddHostedService<ApiFootballSettlementSupportBackgroundService>();
+}
+else
+{
+    builder.Services.AddHostedService<HighlightlyMatchSyncBackgroundService>();
+    builder.Services.AddHostedService<HighlightlyFixtureDiscoveryBackgroundService>();
+    builder.Services.AddHostedService<GoalScorerResolutionBackgroundService>();
+}
+
+// BetBuilderSyncBackgroundService is Highlightly's own timer-driven odds sync — only needed when
+// Highlightly is still the markets source. the-odds-api's replacement (OddsApiMarketService) is
+// called on-demand from MatchesController instead, never from a timer.
+if (providers.MarketsSource != "OddsApi")
+{
+    builder.Services.AddHostedService<BetBuilderSyncBackgroundService>();
+}
 
 builder.Services.AddScoped<BetService>();
 builder.Services.AddScoped<SettlementService>();

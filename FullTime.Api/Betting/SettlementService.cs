@@ -40,17 +40,21 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
         logger.LogInformation("Derived results for {Count} newly finished match(es)", newlyFinished.Count);
     }
 
-    // Resolves each individual market pick (MatchResult, OverUnder, BothTeamsToScore, CorrectScore,
-    // or FirstTeamToScore) once its match has a final score — pure DB reads for every market type
-    // except FirstTeamToScore, which additionally needs Match.FirstGoalScorerSide to have been
-    // resolved by BetBuilderSyncService first (see the extra guard below).
+    // Resolves each individual market pick once its match has a final score — pure DB reads for
+    // most market types, plus two extra provider-dependent guards: FirstTeamToScore additionally
+    // needs Match.FirstGoalScorerSide resolved (BetBuilderSyncService/ApiFootballSettlementSupportService),
+    // and TotalCorners/the four player-prop types additionally need Match.PlayerStatsResolvedAt set
+    // (ApiFootballSettlementSupportService.ResolvePlayerStatsAsync) — both external-data dependencies
+    // that can lag behind the match itself reaching Finished.
     private async Task ResolvePicksAsync(CancellationToken ct)
     {
         var pendingPicks = await db.BetLegPicks
             .Include(p => p.BetLeg)
             .ThenInclude(l => l!.Match)
+            .ThenInclude(m => m!.PlayerStats)
             .Where(p => p.Outcome == SelectionOutcome.Pending && p.BetLeg!.Match!.Result != null
-                && (p.MarketType != MarketType.FirstTeamToScore || p.BetLeg!.Match!.FirstGoalScorerSide != null))
+                && (p.MarketType != MarketType.FirstTeamToScore || p.BetLeg!.Match!.FirstGoalScorerSide != null)
+                && (!RequiresPlayerStats(p.MarketType) || p.BetLeg!.Match!.PlayerStatsResolvedAt != null))
             .ToListAsync(ct);
 
         if (pendingPicks.Count == 0)
@@ -68,37 +72,92 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
         logger.LogInformation("Resolved {Count} bet pick(s)", pendingPicks.Count);
     }
 
+    private static bool RequiresPlayerStats(MarketType marketType) => marketType is
+        MarketType.TotalCorners or MarketType.PlayerGoalscorerAnytime or MarketType.PlayerCard
+        or MarketType.PlayerShotsOnTarget or MarketType.PlayerAssists;
+
     private static bool IsPickCorrect(BetLegPick pick, Match match)
     {
         var home = match.HomeScore!.Value;
         var away = match.AwayScore!.Value;
 
-        return pick.MarketType switch
+        switch (pick.MarketType)
         {
-            MarketType.MatchResult => pick.Side switch
+            case MarketType.MatchResult:
+                return pick.Side switch
+                {
+                    SelectionSide.Home => match.Result == MatchOutcome.Home,
+                    SelectionSide.Draw => match.Result == MatchOutcome.Draw,
+                    SelectionSide.Away => match.Result == MatchOutcome.Away,
+                    _ => false,
+                };
+            case MarketType.OverUnder:
+                return pick.Side switch
+                {
+                    SelectionSide.Over => home + away > pick.Line!.Value,
+                    SelectionSide.Under => home + away < pick.Line!.Value,
+                    _ => false,
+                };
+            case MarketType.BothTeamsToScore:
+                return pick.Side switch
+                {
+                    SelectionSide.Yes => home > 0 && away > 0,
+                    SelectionSide.No => !(home > 0 && away > 0),
+                    _ => false,
+                };
+            case MarketType.CorrectScore:
+                return home == pick.PredictedHomeScore && away == pick.PredictedAwayScore;
+            case MarketType.FirstTeamToScore:
+                return pick.Side == match.FirstGoalScorerSide;
+            case MarketType.TotalCorners:
+                var corners = match.TotalCorners ?? 0;
+                return pick.Side switch
+                {
+                    SelectionSide.Over => corners > pick.Line!.Value,
+                    SelectionSide.Under => corners < pick.Line!.Value,
+                    _ => false,
+                };
+            case MarketType.PlayerGoalscorerAnytime:
             {
-                SelectionSide.Home => match.Result == MatchOutcome.Home,
-                SelectionSide.Draw => match.Result == MatchOutcome.Draw,
-                SelectionSide.Away => match.Result == MatchOutcome.Away,
-                _ => false,
-            },
-            MarketType.OverUnder => pick.Side switch
+                var scored = (FindPlayerStat(match, pick.PlayerName)?.Goals ?? 0) > 0;
+                return pick.Side switch { SelectionSide.Yes => scored, SelectionSide.No => !scored, _ => false };
+            }
+            case MarketType.PlayerCard:
             {
-                SelectionSide.Over => home + away > pick.Line!.Value,
-                SelectionSide.Under => home + away < pick.Line!.Value,
-                _ => false,
-            },
-            MarketType.BothTeamsToScore => pick.Side switch
+                var booked = (FindPlayerStat(match, pick.PlayerName)?.YellowCards ?? 0) > 0;
+                return pick.Side switch { SelectionSide.Yes => booked, SelectionSide.No => !booked, _ => false };
+            }
+            case MarketType.PlayerShotsOnTarget:
             {
-                SelectionSide.Yes => home > 0 && away > 0,
-                SelectionSide.No => !(home > 0 && away > 0),
-                _ => false,
-            },
-            MarketType.CorrectScore => home == pick.PredictedHomeScore && away == pick.PredictedAwayScore,
-            MarketType.FirstTeamToScore => pick.Side == match.FirstGoalScorerSide,
-            _ => false,
-        };
+                var shots = FindPlayerStat(match, pick.PlayerName)?.ShotsOnTarget ?? 0;
+                return pick.Side switch
+                {
+                    SelectionSide.Over => shots > pick.Line!.Value,
+                    SelectionSide.Under => shots < pick.Line!.Value,
+                    _ => false,
+                };
+            }
+            case MarketType.PlayerAssists:
+            {
+                var assists = FindPlayerStat(match, pick.PlayerName)?.Assists ?? 0;
+                return pick.Side switch
+                {
+                    SelectionSide.Over => assists > pick.Line!.Value,
+                    SelectionSide.Under => assists < pick.Line!.Value,
+                    _ => false,
+                };
+            }
+            default:
+                return false;
+        }
     }
+
+    // A player who took no shots/never touched the ball at all has no MatchPlayerStat row (API-
+    // Football's fixtures/players response only lists players who actually featured) — that's a
+    // legitimate 0/No outcome, not "still unresolved" (the ResolvePicksAsync guard above already
+    // ensures PlayerStatsResolvedAt is set before any pick here is evaluated at all).
+    private static MatchPlayerStat? FindPlayerStat(Match match, string? playerName) =>
+        match.PlayerStats.FirstOrDefault(s => s.PlayerName == playerName);
 
     private async Task ResolveLegsAsync(CancellationToken ct)
     {
