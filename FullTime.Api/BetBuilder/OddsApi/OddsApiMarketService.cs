@@ -163,16 +163,47 @@ public class OddsApiMarketService(
     private async Task<DateTime?> LatestSnapshotFetchedAtAsync(Guid matchId, CancellationToken ct) =>
         await db.OddsSnapshots.Where(o => o.MatchId == matchId).OrderByDescending(o => o.FetchedAt).Select(o => (DateTime?)o.FetchedAt).FirstOrDefaultAsync(ct);
 
+    // Every match in the same league shares the exact same the-odds-api events list, but
+    // EnsureBetBuilderMarketsFreshAsync is invoked once per match, from a separate HTTP request each
+    // time (no shared scope to reuse across calls the way EnsureH2hFreshAsync's own per-batch
+    // eventsBySport dictionary does) - without this, priming ~10-15 matches in the same league
+    // meant 10-15x more calls than necessary, all competing for the same rate-limited throttle slot
+    // (confirmed contributing to real 429s during the 2026-09-06 cutover's bulk prime). Static since
+    // OddsApiMarketService itself is Scoped (a new instance per request) - the cache needs to
+    // outlive any single request to actually help. Short TTL since this is a genuine data cache, not
+    // just throttle relief - GetEventsAsync itself is free (doesn't cost quota), so there's no
+    // pressure to cache it for long, just long enough to collapse a burst of same-league requests.
+    private static readonly Dictionary<string, (DateTime FetchedAt, List<OddsApiEventDto> Events)> EventsCache = new();
+    private static readonly SemaphoreSlim EventsCacheLock = new(1, 1);
+    private static readonly TimeSpan EventsCacheTtl = TimeSpan.FromMinutes(2);
+
     private async Task<List<OddsApiEventDto>> TryGetEventsAsync(string sportKey, CancellationToken ct)
     {
+        await EventsCacheLock.WaitAsync(ct);
         try
         {
-            return await oddsApi.GetEventsAsync(sportKey, ct);
+            if (EventsCache.TryGetValue(sportKey, out var cached) && DateTime.UtcNow - cached.FetchedAt < EventsCacheTtl)
+            {
+                return cached.Events;
+            }
+
+            List<OddsApiEventDto> events;
+            try
+            {
+                events = await oddsApi.GetEventsAsync(sportKey, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to fetch the-odds-api events for sport {SportKey}", sportKey);
+                events = [];
+            }
+
+            EventsCache[sportKey] = (DateTime.UtcNow, events);
+            return events;
         }
-        catch (Exception ex)
+        finally
         {
-            logger.LogWarning(ex, "Failed to fetch the-odds-api events for sport {SportKey}", sportKey);
-            return [];
+            EventsCacheLock.Release();
         }
     }
 
