@@ -16,7 +16,13 @@ public class OddsApiClient(HttpClient httpClient, IOptions<OddsApiOptions> optio
     // both already serialize their own calls). AddHttpClient<OddsApiClient> makes this a transient
     // typed client (a new instance per resolution), so the gate has to be static to actually
     // serialize every outbound call process-wide, same reasoning as the other two clients.
-    private static readonly TimeSpan MinRequestInterval = TimeSpan.FromMilliseconds(150);
+    // 150ms (~6.7 req/sec) still produced real 429s under the concurrent load of priming many
+    // matches at once (confirmed 2026-09-06: 64 residual throttle hits even with the one-retry
+    // fallback) - the-odds-api's actual per-second cap is evidently tighter than assumed. Widened to
+    // a more conservative gap; normal on-demand usage (one match's ~10 calls when a single user
+    // opens Bet Builder) is nowhere near either interval, so this only slows down a bulk operation
+    // like priming many matches at once, never a real user's single request.
+    private static readonly TimeSpan MinRequestInterval = TimeSpan.FromMilliseconds(400);
     private static readonly SemaphoreSlim ThrottleGate = new(1, 1);
     private static DateTime _lastRequestUtc = DateTime.MinValue;
 
