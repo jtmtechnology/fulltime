@@ -23,7 +23,10 @@ public class ApiFootballMatchSyncService(
     public async Task RefreshLiveAsync(CancellationToken ct = default)
     {
         var fixtures = await client.GetLiveFixturesAsync(ct);
-        var tracked = fixtures.Where(f => ApiFootballLeagueMap.TrackedLeagueIds.Contains(f.League.Id)).ToList();
+        var tracked = fixtures
+            .Where(f => ApiFootballLeagueMap.TrackedLeagueIds.Contains(f.League.Id))
+            .Where(f => IsEligibleFaCupRound(f.League))
+            .ToList();
 
         var upsertedCount = 0;
         foreach (var fixture in tracked)
@@ -62,7 +65,7 @@ public class ApiFootballMatchSyncService(
                 continue;
             }
 
-            foreach (var fixture in fixtures)
+            foreach (var fixture in fixtures.Where(f => IsEligibleFaCupRound(f.League)))
             {
                 await UpsertMatchAsync(fixture, ct);
                 upsertedCount++;
@@ -131,6 +134,7 @@ public class ApiFootballMatchSyncService(
         }
 
         match.LeagueId = dto.League.Id;
+        match.Round = dto.League.Round;
         match.HomeTeam = dto.Teams.Home.Name;
         match.AwayTeam = dto.Teams.Away.Name;
         match.HomeTeamId = dto.Teams.Home.Id;
@@ -181,5 +185,37 @@ public class ApiFootballMatchSyncService(
             "Unrecognized API-Football status {StatusShort} for fixture {ExternalId}, keeping previous status {PreviousStatus}",
             statusShort, externalId, previousStatus);
         return previousStatus;
+    }
+
+    // FA Cup's qualifying rounds and 1st/2nd Round Proper are entirely non-league/lower-league
+    // clubs API-Football's own live-status and the-odds-api's bookmaker coverage both handle poorly
+    // (confirmed repeatedly during the cutover: matches stuck at "NS" long past their real kickoff,
+    // zero odds coverage) - requested to only show FA Cup from the 3rd Round Proper onwards, which
+    // is also when Championship/Premier League clubs actually enter the competition. Every other
+    // tracked league is unaffected (round only matters for a knockout competition's early rounds).
+    // Matched by exclusion rather than an exact-string allow-list since API-Football hadn't
+    // published this season's later round names yet when this was written (only "1st Round
+    // Qualifying" existed) - "contains Qualifying" or "starts with 1st/2nd Round" (its own Replays
+    // included) covers every round before 3rd Round Proper regardless of exact suffix formatting.
+    private static bool IsEligibleFaCupRound(LeagueInfo league)
+    {
+        if (league.Id != ApiFootballLeagueMap.FaCup)
+        {
+            return true;
+        }
+
+        var round = league.Round;
+        if (string.IsNullOrEmpty(round))
+        {
+            return true;
+        }
+
+        if (round.Contains("Qualifying", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !round.StartsWith("1st Round", StringComparison.OrdinalIgnoreCase)
+            && !round.StartsWith("2nd Round", StringComparison.OrdinalIgnoreCase);
     }
 }

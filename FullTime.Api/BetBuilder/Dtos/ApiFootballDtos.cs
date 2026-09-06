@@ -67,6 +67,12 @@ public class LeagueInfo
 
     [JsonPropertyName("season")]
     public int Season { get; set; }
+
+    // e.g. "1st Round Qualifying", "3rd Round Proper", "Quarter-finals" - only meaningful for
+    // knockout competitions (FA Cup, EFL Cup, etc.); null/unused for league competitions. See
+    // ApiFootballMatchSyncService.IsEligibleFaCupRound for why this matters for FA Cup specifically.
+    [JsonPropertyName("round")]
+    public string? Round { get; set; }
 }
 
 public class TeamsInfo

@@ -9,6 +9,12 @@ public class Match
     // separate primary provider before Highlightly became the only data source).
     public required string ExternalId { get; set; }
     public long LeagueId { get; set; }
+
+    // API-Football's own round label for knockout competitions (e.g. "1st Round Qualifying",
+    // "3rd Round Proper") - null for league competitions where it isn't meaningful. Only actually
+    // used to filter FA Cup's early non-league rounds out of sync entirely - see
+    // ApiFootballMatchSyncService.IsEligibleFaCupRound.
+    public string? Round { get; set; }
     public required string HomeTeam { get; set; }
     public required string AwayTeam { get; set; }
     public long HomeTeamId { get; set; }
