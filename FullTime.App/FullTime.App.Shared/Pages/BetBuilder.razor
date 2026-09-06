@@ -25,13 +25,6 @@
     </div>
 </div>
 
-@if (_bookmaker is not null)
-{
-    <div class="bet-builder-bookmaker-row muted">
-        Prices from <BookmakerLogo Name="@_bookmaker" LogoUrl="@_bookmakerLogoUrl" />
-    </div>
-}
-
 @if (_status == "Loading…")
 {
     <LoadingSpinner />
@@ -306,8 +299,6 @@ else
     private readonly List<OverUnderLine> _totalCorners = [];
     private BttsOption? _btts;
     private FirstScorerOption? _firstScorer;
-    private string? _bookmaker;
-    private string? _bookmakerLogoUrl;
 
     private readonly Dictionary<(int Home, int Away), decimal> _correctScoreLookup = [];
     private List<PlayerPropGroup> _playerPropGroups = [];
@@ -421,8 +412,6 @@ else
         {
             var response = await Api.GetBetBuilderMarketsAsync(MatchId);
             _markets = response.Markets;
-            _bookmaker = response.Bookmaker;
-            _bookmakerLogoUrl = response.BookmakerLogoUrl;
 
             _overUnderLines.AddRange(_markets
                 .Where(m => m.MarketType == "OverUnder" && m.Line is not null)

@@ -39,13 +39,19 @@ public class MatchesController(
     AppDbContext db,
     IOptions<HighlightlyOptions> highlightlyOptions,
     IOptions<ProvidersOptions> providersOptions,
-    OddsApiMarketService oddsApiMarkets) : ControllerBase
+    OddsApiMarketService oddsApiMarkets,
+    IServiceScopeFactory scopeFactory,
+    ILogger<MatchesController> logger) : ControllerBase
 {
-    // Pure DB read for Highlightly (its background sync is the only thing that calls the provider),
-    // but ensures h2h freshness on-demand first when Providers:MarketsSource == "OddsApi" — scoped
-    // to just the matches this specific call is about to return, not every tracked match, per the
-    // standing no-background-polling preference. A date outside the synced window will simply come
-    // back empty rather than triggering a fetch.
+    // Pure DB read for Highlightly (its background sync is the only thing that calls the provider).
+    // For the-odds-api, h2h freshness is kicked off on-demand but NOT awaited — this endpoint always
+    // returns whatever's already cached immediately, refreshing in the background for the *next*
+    // request to pick up. Confirmed in production 2026-09-06 that awaiting it inline made selecting
+    // a day noticeably slow: each match needing a refresh is a real external call serialized through
+    // OddsApiClient's rate-limit throttle (added the same day to stop real 429s under heavy
+    // concurrent load), so a day with several stale matches meant several seconds of blocking before
+    // the page could respond at all. Still "on demand, triggered by an actual view" per the standing
+    // no-background-polling preference - it's just not this specific request's problem to wait on.
     [HttpGet("upcoming")]
     public async Task<ActionResult<List<UpcomingMatchDto>>> GetUpcoming(
         [FromQuery] DateOnly? date, [FromQuery] long? leagueId, CancellationToken ct)
@@ -72,8 +78,8 @@ public class MatchesController(
 
         if (providersOptions.Value.MarketsSource == "OddsApi")
         {
-            var candidateMatches = await query.ToListAsync(ct);
-            await oddsApiMarkets.EnsureH2hFreshAsync(candidateMatches, ct);
+            var candidateMatchIds = await query.Select(m => m.Id).ToListAsync(ct);
+            TriggerH2hRefreshInBackground(candidateMatchIds);
         }
 
         var matches = await query
@@ -101,6 +107,29 @@ public class MatchesController(
             .ToListAsync(ct);
 
         return Ok(matches);
+    }
+
+    // Runs on a detached scope/CancellationToken since the request's own db/ct are disposed and
+    // cancelled the moment this HTTP response is sent - the whole point is this outlives the
+    // request that triggered it. Best-effort: a failure here just means the next view of this date
+    // tries again, same as any other on-demand cache miss.
+    private void TriggerH2hRefreshInBackground(List<Guid> matchIds)
+    {
+        _ = Task.Run(async () =>
+        {
+            using var scope = scopeFactory.CreateScope();
+            try
+            {
+                var scopedDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var scopedOddsApiMarkets = scope.ServiceProvider.GetRequiredService<OddsApiMarketService>();
+                var matches = await scopedDb.Matches.Where(m => matchIds.Contains(m.Id)).ToListAsync();
+                await scopedOddsApiMarkets.EnsureH2hFreshAsync(matches, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Background h2h refresh failed for {Count} match(es)", matchIds.Count);
+            }
+        });
     }
 
     // For Highlightly, reads whatever BetBuilderSyncBackgroundService's timer has already stored.
