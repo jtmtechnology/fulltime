@@ -31,12 +31,10 @@ public class MatchDto
     [JsonPropertyName("league")]
     public required LeagueDto League { get; set; }
 
-    // UNVERIFIED field name - Highlightly's RapidAPI quota was exhausted when this was added
-    // (2026-09-06), so this couldn't be confirmed against a real response the way every other field
-    // on this DTO was. Used only by HighlightlyMatchSyncService.IsEligibleFaCupRound to filter FA
-    // Cup's early non-league rounds; if this name is wrong, System.Text.Json just leaves it null and
-    // that filter fails open (shows everything, same as not having it) rather than breaking anything
-    // - confirm the real field name once quota resets and correct this if needed.
+    // Confirmed real 2026-09-06 against the direct Highlightly account (soccer.highlightly.net) -
+    // a bare top-level string, e.g. "Regular Season - 3" for league matches, "1st Round Qualifying"
+    // for FA Cup. Used by HighlightlyMatchSyncService.IsEligibleFaCupRound to filter FA Cup's early
+    // non-league rounds out of sync entirely.
     [JsonPropertyName("round")]
     public string? Round { get; set; }
 }

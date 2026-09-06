@@ -36,12 +36,13 @@
                   HomeTeam="@Match.HomeTeam" AwayTeam="@Match.AwayTeam" KickoffTime="@Match.KickoffTime" />
     </div>
 
-    @if (Match.Status == "Upcoming" && Match.BetBuilderAvailable)
-    {
-        <div class="bookmaker-row">
+    <div class="bookmaker-row">
+        <BookmakerLogo Name="@Match.Bookmaker" LogoUrl="@Match.BookmakerLogoUrl" />
+        @if (Match.Status == "Upcoming" && Match.BetBuilderAvailable)
+        {
             <a class="bet-builder-link" href="@BetBuilderHref()">Bet Builder</a>
-        </div>
-    }
+        }
+    </div>
 </div>
 
 @code {

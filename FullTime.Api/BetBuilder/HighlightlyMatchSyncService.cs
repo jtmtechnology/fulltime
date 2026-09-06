@@ -271,10 +271,8 @@ public class HighlightlyMatchSyncService(
     // clubs (this is what the 110+-simultaneous-match preliminary-round batch that originally
     // pinned DeriveStatus at InProgress for 11+ hours was) - requested to only track FA Cup from
     // the 3rd Round Proper onwards, which is also when Championship/Premier League clubs actually
-    // enter. Every other tracked league is unaffected. MatchDto.Round's exact field name is
-    // UNVERIFIED (see its own comment) - if it's wrong, Round is always null here and this always
-    // returns true (fails open, shows everything, same as not having this filter at all) rather
-    // than silently hiding real matches.
+    // enter. Every other tracked league is unaffected. Confirmed real 2026-09-06: Highlightly
+    // returned 4 real "1st Round Qualifying" fixtures for today, all correctly excluded by this.
     private static bool IsEligibleFaCupRound(MatchDto dto)
     {
         if (dto.League.Id != HighlightlyLeagueMap.FaCup)

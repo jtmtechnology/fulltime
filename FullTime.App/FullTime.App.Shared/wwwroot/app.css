@@ -311,6 +311,8 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
     cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0 0 0.1rem; line-height: 1;
 }
 
+.bet-builder-bookmaker-row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.3rem; }
+
 .market-group { margin-top: 1.25rem; }
 .market-group h4 { margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; }
 .market-picks { display: flex; gap: 0.5rem; flex-wrap: wrap; }
@@ -426,6 +428,7 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
 
 .team-logo { width: 18px; height: 18px; vertical-align: middle; margin-right: 0.3rem; object-fit: contain; }
 .league-logo { width: 22px; height: 22px; vertical-align: middle; margin-right: 0.5rem; object-fit: contain; }
+.bookmaker-logo { max-width: 80px; max-height: 18px; vertical-align: middle; object-fit: contain; }
 
 /* ===== Bet slip bottom sheet ===== */
 .slip-fab {
