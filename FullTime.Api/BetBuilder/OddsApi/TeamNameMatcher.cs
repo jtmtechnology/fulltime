@@ -19,7 +19,29 @@ public static class TeamNameMatcher
     // real matches as barely related. Confirmed missing during the 2026-09-06 cutover: Blackburn v
     // Sheffield Utd never linked to the real the-odds-api event for it despite an exact kickoff-time
     // match, purely because of this spelling difference.
-    private static readonly Dictionary<string, string> TokenSynonyms = new() { ["utd"] = "united" };
+    // "st" -> "stanley" is intentionally narrow (Accrington Stanley is the only "___ Stanley" club
+    // in any tracked league, confirmed real 2026-09-06: API-Football's "Accrington ST" never linked
+    // to the-odds-api's "Accrington Stanley") - a 2-letter token synonym is too easy to false-match
+    // elsewhere (e.g. "St" as an abbreviation for "Saint"/"Street"), so this only exists because no
+    // tracked league currently has that competing case.
+    // "brom" -> "bromwich": API-Football's own name for the club is literally "West Brom" (confirmed
+    // via its /teams search 2026-09-06), where the-odds-api always spells out "West Bromwich
+    // Albion" - same reasoning as "utd" above, "brom" is the distinguishing word, can't be stripped.
+    private static readonly Dictionary<string, string> TokenSynonyms = new()
+    {
+        ["utd"] = "united",
+        ["brom"] = "bromwich",
+        ["st"] = "stanley",
+    };
+
+    // Whole-name acronym expansions, checked before tokenizing (unlike TokenSynonyms, these acronyms
+    // have no spaces of their own to split on) - confirmed real 2026-09-06: API-Football's "QPR"
+    // never linked to the-odds-api's "Queens Park Rangers" (zero shared tokens, nothing for the
+    // Jaccard/subset logic to work with at all).
+    private static readonly Dictionary<string, string> WholeNameSynonyms = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["qpr"] = "queens park rangers",
+    };
 
     public record MatchCandidate(string HomeTeam, string AwayTeam, DateTime KickoffTime);
 
@@ -74,6 +96,11 @@ public static class TeamNameMatcher
 
     private static List<string> Normalize(string name)
     {
+        if (WholeNameSynonyms.TryGetValue(name.Trim(), out var expanded))
+        {
+            name = expanded;
+        }
+
         var decomposed = name.Normalize(NormalizationForm.FormD);
         var sb = new StringBuilder();
         foreach (var ch in decomposed)
@@ -90,6 +117,13 @@ public static class TeamNameMatcher
 
         return cleaned
             .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            // Purely-numeric tokens ("1899 Hoffenheim" vs the-odds-api's "TSG Hoffenheim", "Bayer 04
+            // Leverkusen" vs "Bayer Leverkusen") - confirmed real 2026-09-06: several German clubs'
+            // year/number suffixes are included inconsistently between the two providers. A bare
+            // number essentially never distinguishes one real fixture from another on the same day
+            // in the same competition, so it's dropped the same way NoiseTokens are rather than
+            // scored as a mismatch.
+            .Where(t => !t.All(char.IsDigit))
             .Where(t => !NoiseTokens.Contains(t))
             .Select(t => TokenSynonyms.GetValueOrDefault(t, t))
             .ToList();
