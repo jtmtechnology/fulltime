@@ -40,7 +40,7 @@ public class MatchesController(
     IOptions<HighlightlyOptions> highlightlyOptions,
     IOptions<ProvidersOptions> providersOptions,
     OddsApiMarketService oddsApiMarkets,
-    AnytimeGoalscorerService anytimeGoalscorer,
+    PlayerPropsService playerProps,
     IServiceScopeFactory scopeFactory,
     ILogger<MatchesController> logger) : ControllerBase
 {
@@ -144,18 +144,18 @@ public class MatchesController(
         string? bookmaker;
         string? bookmakerLogoUrl;
 
-        // Independent of MarketsSource - EPL anytime-goalscorer runs regardless of whether
-        // Highlightly or OddsApi is the active markets source, since Highlightly has no
-        // player-prop markets of its own (see AnytimeGoalscorerService).
-        var matchForGoalscorer = await db.Matches.FindAsync([id], ct);
-        if (matchForGoalscorer is not null)
+        // Independent of MarketsSource - EPL player props run regardless of whether Highlightly or
+        // OddsApi is the active markets source, since Highlightly has no player-prop markets of its
+        // own (see PlayerPropsService).
+        var matchForPlayerProps = await db.Matches.FindAsync([id], ct);
+        if (matchForPlayerProps is not null)
         {
-            await anytimeGoalscorer.EnsureFreshAsync(matchForGoalscorer, ct);
+            await playerProps.EnsureFreshAsync(matchForPlayerProps, ct);
         }
 
         if (providersOptions.Value.MarketsSource == "OddsApi")
         {
-            var match = matchForGoalscorer ?? await db.Matches.FindAsync([id], ct);
+            var match = matchForPlayerProps ?? await db.Matches.FindAsync([id], ct);
             if (match is not null)
             {
                 await oddsApiMarkets.EnsureBetBuilderMarketsFreshAsync(match, ct);

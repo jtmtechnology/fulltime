@@ -77,8 +77,9 @@ public class Match
     // same purpose for the cheaper h2h-only refresh (MatchesController.Upcoming).
     public DateTime? OddsLastFetchedAt { get; set; }
 
-    // Last time AnytimeGoalscorerService attempted a fetch for this match - separate from
-    // OddsLastFetchedAt (that one belongs to the dormant full OddsApi cutover) since this is an
-    // independent, always-on EPL-only feature that runs regardless of Providers:MarketsSource.
-    public DateTime? GoalscorerPropsFetchedAt { get; set; }
+    // Last time PlayerPropsService attempted a fetch for this match (any of its tracked player-prop
+    // markets) - separate from OddsLastFetchedAt (that one belongs to the dormant full OddsApi
+    // cutover) since this is an independent, always-on EPL-only feature that runs regardless of
+    // Providers:MarketsSource.
+    public DateTime? PlayerPropsFetchedAt { get; set; }
 }
