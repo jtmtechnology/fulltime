@@ -20,6 +20,7 @@ public static class BetDisplay
         "BothTeamsToScore" => pick.Side == "Yes" ? "BTTS Yes" : "BTTS No",
         "CorrectScore" => $"{pick.PredictedHomeScore} - {pick.PredictedAwayScore}",
         "FirstTeamToScore" => $"First to score: {pick.Side switch { "Home" => homeTeam, "Away" => awayTeam, _ => "None" }}",
+        "PlayerGoalscorerAnytime" => $"{pick.PlayerName} to score anytime",
         _ => pick.Side ?? "",
     };
 }

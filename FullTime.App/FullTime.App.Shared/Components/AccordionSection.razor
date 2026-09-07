@@ -3,7 +3,13 @@
    can decide defaults (e.g. the first section open on load) without reaching into this component. *@
 <div class="accordion-section">
     <div class="accordion-header" @onclick="() => OnToggle.InvokeAsync(Id)">
-        <h4>@Title</h4>
+        <h4>
+            @if (TitleIconUrl is not null)
+            {
+                <LogoImg Src="@TitleIconUrl" CssClass="accordion-title-icon" Alt="@Title" />
+            }
+            @Title
+        </h4>
         <span class="accordion-chevron @(IsOpen ? "open" : "")">▾</span>
     </div>
     @if (IsOpen)
@@ -17,6 +23,7 @@
 @code {
     [Parameter, EditorRequired] public string Id { get; set; } = "";
     [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? TitleIconUrl { get; set; }
     [Parameter, EditorRequired] public HashSet<string> Expanded { get; set; } = [];
     [Parameter, EditorRequired] public EventCallback<string> OnToggle { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }

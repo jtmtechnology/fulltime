@@ -42,12 +42,15 @@ else if (!string.IsNullOrEmpty(_status))
 }
 else
 {
-    <div class="bb-tabs">
-        @foreach (var tab in Tabs)
-        {
-            <button type="button" class="bb-tab @(_activeTab == tab ? "active" : "")" @onclick="() => _activeTab = tab">@tab</button>
-        }
-    </div>
+    @if (_playerPropGroups.Count > 0)
+    {
+        <div class="bb-tabs">
+            @foreach (var tab in Tabs)
+            {
+                <button type="button" class="bb-tab @(_activeTab == tab ? "active" : "")" @onclick="() => _activeTab = tab">@tab</button>
+            }
+        </div>
+    }
 
     @if (_activeTab == "Popular")
     {
@@ -174,7 +177,7 @@ else
             <AccordionSection Id="@group.MarketType" Title="@group.Label" Expanded="_expanded" OnToggle="ToggleSection">
                 @foreach (var teamGroup in group.Teams)
                 {
-                    <AccordionSection Id="@($"{group.MarketType}-{teamGroup.Team}")" Title="@teamGroup.Team" Expanded="_expanded" OnToggle="ToggleSection">
+                    <AccordionSection Id="@($"{group.MarketType}-{teamGroup.Team}")" Title="@teamGroup.Team" TitleIconUrl="@teamGroup.LogoUrl" Expanded="_expanded" OnToggle="ToggleSection">
                         @if (teamGroup.Rows.Count > 0)
                         {
                             <div class="player-table-wrap">
@@ -267,7 +270,7 @@ else
     // Side+Line only when present.
     private static readonly (string MarketType, string Label)[] PlayerPropMarketTypes =
     [
-        ("PlayerGoalscorerAnytime", "Player goals"),
+        ("PlayerGoalscorerAnytime", "Goal scorer"),
         ("PlayerAssists", "Player assists"),
         ("PlayerCard", "Player to be booked"),
         ("PlayerShotsOnTarget", "Shots on target"),
@@ -497,8 +500,8 @@ else
                                 return new TeamPropGroup(t.Label, t.Logo, [], lines, propRows);
                             }
 
-                            // Worst odds last: ascending by price, so the most-likely (shortest-odds)
-                            // player is first and the longest shot sinks to the bottom of the list.
+                            // Lowest price first: ascending by price, so the most-likely (shortest-
+                            // odds) player leads the list and the longest shot sinks to the bottom.
                             var options = teamRows.OrderBy(m => m.Price)
                                 .Select(m => new PickOption(
                                     PlayerRowLabel(m),
@@ -519,6 +522,13 @@ else
                 && _correctScoreLookup.Count == 0 && _totalCorners.Count == 0 && _playerPropGroups.Count > 0)
             {
                 _activeTab = "Player Bets";
+            }
+            else if (_playerPropGroups.Count == 0)
+            {
+                // No player props at all - the tab bar itself is hidden (see markup), so make sure a
+                // stale "Player Bets" selection from a previous match can't strand the view with no
+                // way back to Popular.
+                _activeTab = "Popular";
             }
 
             _status = "";

@@ -94,6 +94,7 @@ builder.Services.AddHttpClient<OddsApiClient>((sp, client) =>
     client.BaseAddress = new Uri($"https://{opts.ApiHost}/");
 });
 builder.Services.AddScoped<OddsApiMarketService>();
+builder.Services.AddScoped<AnytimeGoalscorerService>();
 
 if (providers.LiveScoreSource == "ApiFootball")
 {
