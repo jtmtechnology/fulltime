@@ -216,11 +216,16 @@ public class BetBuilderSyncService(
     // gets its own events fetch now for its card/substitution timeline (Highlightly's quota is
     // generous - 25,000/day direct account - unlike the-odds-api's free tier, so this small broadening
     // was a deliberate call, not an oversight).
+    //
+    // Gated on EventsFinalizedAt, not EventsFetchedAt - a match that was refreshed live right up to
+    // the final whistle (see RefreshLiveMatchEventsAsync below) already has EventsFetchedAt set from
+    // its last live tick, but still needs exactly one more authoritative fetch once Finished, in case
+    // the last live tick (up to 30s before the actual end) missed a very late goal/card.
     public async Task ResolveMatchEventsAsync(CancellationToken ct)
     {
         var cutoff = DateTime.UtcNow.AddDays(-3);
         var candidates = await db.Matches
-            .Where(m => m.Status == MatchStatus.Finished && m.EventsFetchedAt == null && m.KickoffTime >= cutoff)
+            .Where(m => m.Status == MatchStatus.Finished && m.EventsFinalizedAt == null && m.KickoffTime >= cutoff)
             .ToListAsync(ct);
 
         if (candidates.Count == 0)
@@ -233,13 +238,14 @@ public class BetBuilderSyncService(
         foreach (var match in candidates)
         {
             match.EventsFetchedAt = DateTime.UtcNow;
+            match.EventsFinalizedAt = DateTime.UtcNow;
 
             if (match.HomeScore == 0 && match.AwayScore == 0)
             {
                 match.FirstGoalScorerSide = SelectionSide.None;
             }
 
-            var events = await client.GetEventsAsync(long.Parse(match.ExternalId), ct);
+            var events = await FetchAndStoreEventsAsync(match, ct);
 
             if (match.FirstGoalScorerSide is null)
             {
@@ -258,23 +264,6 @@ public class BetBuilderSyncService(
                 }
             }
 
-            await db.MatchEvents.Where(e => e.MatchId == match.Id).ExecuteDeleteAsync(ct);
-            db.MatchEvents.AddRange(events.Select(e => new MatchEvent
-            {
-                Id = Guid.NewGuid(),
-                MatchId = match.Id,
-                Team = e.Team.Id == match.HomeTeamId ? SelectionSide.Home
-                    : e.Team.Id == match.AwayTeamId ? SelectionSide.Away
-                    : SelectionSide.None,
-                Minute = e.Time,
-                Type = e.Type,
-                PlayerName = e.Player,
-                PlayerExternalId = e.PlayerId,
-                AssistPlayerName = e.Assist,
-                AssistPlayerExternalId = e.AssistingPlayerId,
-                SubstitutedPlayerName = e.Substituted,
-            }));
-
             resolvedCount++;
         }
 
@@ -285,6 +274,60 @@ public class BetBuilderSyncService(
 
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Resolved match events for {Count} match(es)", resolvedCount);
+    }
+
+    private static readonly TimeSpan LiveEventsRefreshInterval = TimeSpan.FromSeconds(30);
+
+    // Keeps Match Summary current while a match is still being played, at the same 30s cadence as
+    // the live score/clock sync - called from the same tick as HighlightlyMatchSyncService.RefreshLiveAsync
+    // (see HighlightlyMatchSyncBackgroundService), not its own timer, since there's no point
+    // refreshing events faster than the score itself updates. Doesn't touch FirstGoalScorerSide -
+    // that's a settlement concern, resolved exactly once by ResolveMatchEventsAsync after the match
+    // actually finishes, not a display-freshness one.
+    public async Task RefreshLiveMatchEventsAsync(CancellationToken ct)
+    {
+        var staleCutoff = DateTime.UtcNow - LiveEventsRefreshInterval;
+        var candidates = await db.Matches
+            .Where(m => m.Status == MatchStatus.InProgress && (m.EventsFetchedAt == null || m.EventsFetchedAt <= staleCutoff))
+            .ToListAsync(ct);
+
+        if (candidates.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var match in candidates)
+        {
+            match.EventsFetchedAt = DateTime.UtcNow;
+            await FetchAndStoreEventsAsync(match, ct);
+        }
+
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation("Refreshed live match events for {Count} match(es)", candidates.Count);
+    }
+
+    private async Task<List<Dtos.MatchEventDto>> FetchAndStoreEventsAsync(Match match, CancellationToken ct)
+    {
+        var events = await client.GetEventsAsync(long.Parse(match.ExternalId), ct);
+
+        await db.MatchEvents.Where(e => e.MatchId == match.Id).ExecuteDeleteAsync(ct);
+        db.MatchEvents.AddRange(events.Select(e => new MatchEvent
+        {
+            Id = Guid.NewGuid(),
+            MatchId = match.Id,
+            Team = e.Team.Id == match.HomeTeamId ? SelectionSide.Home
+                : e.Team.Id == match.AwayTeamId ? SelectionSide.Away
+                : SelectionSide.None,
+            Minute = e.Time,
+            Type = e.Type,
+            PlayerName = e.Player,
+            PlayerExternalId = e.PlayerId,
+            AssistPlayerName = e.Assist,
+            AssistPlayerExternalId = e.AssistingPlayerId,
+            SubstitutedPlayerName = e.Substituted,
+        }));
+
+        return events;
     }
 
     // Event minutes come as "45" or "45+1"/"90+7" (stoppage time) — split on '+' and sort by

@@ -83,12 +83,20 @@ public class Match
     // Providers:MarketsSource.
     public DateTime? PlayerPropsFetchedAt { get; set; }
 
-    // Last time BetBuilderSyncService.ResolveMatchEventsAsync fetched this match's full Highlightly
-    // event timeline (goals/cards/subs) - once a finished match has this set, its MatchEvents rows
-    // are permanent and it's never refetched. Separate from FirstGoalScorerSide (derived from the
-    // same fetch) since a 0-0 match resolves that immediately without needing events, but still
-    // gets its own events fetch now for the card/substitution timeline.
+    // Last time the event timeline (goals/cards/subs) was fetched for this match at all - while
+    // InProgress this updates every ~30s (BetBuilderSyncService.RefreshLiveMatchEventsAsync, same
+    // cadence as the live score/clock sync) so Match Summary stays current during the game. Once a
+    // match reaches Finished, EventsFinalizedAt below takes over and this stops changing.
     public DateTime? EventsFetchedAt { get; set; }
+
+    // Set once BetBuilderSyncService.ResolveMatchEventsAsync has done the final, authoritative
+    // post-match events fetch - separate from EventsFetchedAt so a match that was refreshed live
+    // right up to the final whistle still gets exactly one more fetch afterwards (catching a very
+    // late goal/card the last live tick might have just missed), rather than treating its last live
+    // timestamp as good enough forever. FirstGoalScorerSide is derived from this same fetch; a 0-0
+    // match resolves it immediately without needing events, but still gets its own fetch for the
+    // card/substitution timeline.
+    public DateTime? EventsFinalizedAt { get; set; }
 
     public List<MatchEvent> Events { get; set; } = [];
 }
