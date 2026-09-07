@@ -41,19 +41,27 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
     }
 
     // Resolves each individual market pick once its match has a final score — pure DB reads for
-    // most market types, plus two extra provider-dependent guards: FirstTeamToScore additionally
-    // needs Match.FirstGoalScorerSide resolved (BetBuilderSyncService/ApiFootballSettlementSupportService),
-    // and TotalCorners/the four player-prop types additionally need Match.PlayerStatsResolvedAt set
-    // (ApiFootballSettlementSupportService.ResolvePlayerStatsAsync) — both external-data dependencies
-    // that can lag behind the match itself reaching Finished.
-    // A static readonly collection (translated to a SQL IN clause via .Contains()), not a call to
+    // most market types, plus provider-dependent guards: FirstTeamToScore additionally needs
+    // Match.FirstGoalScorerSide resolved; TotalCorners/goalscorer/card/red-card/assists additionally
+    // need Match.EventsFinalizedAt set (BetBuilderSyncService.ResolveMatchEventsAsync, Highlightly's
+    // events/statistics endpoints); the two shots markets additionally need
+    // Match.PlayerStatsResolvedAt set (ApiFootballSettlementSupportService.ResolvePlayerStatsAsync) -
+    // Highlightly has no per-player shots data at all (checked for real 2026-09-07), so those two
+    // still settle off API-Football, kept wired in for exactly this on top of its squad-lookup use
+    // in PlayerPropsService.
+    // Static readonly collections (translated to SQL IN clauses via .Contains()), not a call to
     // RequiresPlayerStats(p.MarketType) inline in the Where() below — EF Core can't translate an
     // arbitrary C# method call into SQL (confirmed: this threw InvalidOperationException in
     // production the first time it ran, "Translation of method ... failed").
-    private static readonly MarketType[] PlayerStatMarketTypes =
+    private static readonly MarketType[] EventsDerivedMarketTypes =
     [
         MarketType.TotalCorners, MarketType.PlayerGoalscorerAnytime, MarketType.PlayerCard,
-        MarketType.PlayerShotsOnTarget, MarketType.PlayerAssists,
+        MarketType.PlayerRedCard, MarketType.PlayerAssists,
+    ];
+
+    private static readonly MarketType[] PlayerStatMarketTypes =
+    [
+        MarketType.PlayerShotsOnTarget, MarketType.PlayerShots,
     ];
 
     private async Task ResolvePicksAsync(CancellationToken ct)
@@ -61,9 +69,13 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
         var pendingPicks = await db.BetLegPicks
             .Include(p => p.BetLeg)
             .ThenInclude(l => l!.Match)
+            .ThenInclude(m => m!.Events)
+            .Include(p => p.BetLeg)
+            .ThenInclude(l => l!.Match)
             .ThenInclude(m => m!.PlayerStats)
             .Where(p => p.Outcome == SelectionOutcome.Pending && p.BetLeg!.Match!.Result != null
                 && (p.MarketType != MarketType.FirstTeamToScore || p.BetLeg!.Match!.FirstGoalScorerSide != null)
+                && (!EventsDerivedMarketTypes.Contains(p.MarketType) || p.BetLeg!.Match!.EventsFinalizedAt != null)
                 && (!PlayerStatMarketTypes.Contains(p.MarketType) || p.BetLeg!.Match!.PlayerStatsResolvedAt != null))
             .ToListAsync(ct);
 
@@ -125,13 +137,28 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
                 };
             case MarketType.PlayerGoalscorerAnytime:
             {
-                var scored = (FindPlayerStat(match, pick)?.Goals ?? 0) > 0;
+                var scored = FindPlayerEvent(match, pick, "Goal") is not null;
                 return pick.Side switch { SelectionSide.Yes => scored, SelectionSide.No => !scored, _ => false };
             }
             case MarketType.PlayerCard:
             {
-                var booked = (FindPlayerStat(match, pick)?.YellowCards ?? 0) > 0;
+                var booked = FindPlayerEvent(match, pick, "Yellow Card") is not null;
                 return pick.Side switch { SelectionSide.Yes => booked, SelectionSide.No => !booked, _ => false };
+            }
+            case MarketType.PlayerRedCard:
+            {
+                var sentOff = FindPlayerEvent(match, pick, "Red Card") is not null;
+                return pick.Side switch { SelectionSide.Yes => sentOff, SelectionSide.No => !sentOff, _ => false };
+            }
+            case MarketType.PlayerAssists:
+            {
+                var assists = CountAssists(match, pick);
+                return pick.Side switch
+                {
+                    SelectionSide.Over => assists > pick.Line!.Value,
+                    SelectionSide.Under => assists < pick.Line!.Value,
+                    _ => false,
+                };
             }
             case MarketType.PlayerShotsOnTarget:
             {
@@ -143,13 +170,13 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
                     _ => false,
                 };
             }
-            case MarketType.PlayerAssists:
+            case MarketType.PlayerShots:
             {
-                var assists = FindPlayerStat(match, pick)?.Assists ?? 0;
+                var shots = FindPlayerStat(match, pick)?.TotalShots ?? 0;
                 return pick.Side switch
                 {
-                    SelectionSide.Over => assists > pick.Line!.Value,
-                    SelectionSide.Under => assists < pick.Line!.Value,
+                    SelectionSide.Over => shots > pick.Line!.Value,
+                    SelectionSide.Under => shots < pick.Line!.Value,
                     _ => false,
                 };
             }
@@ -158,18 +185,8 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
         }
     }
 
-    // Matched by surname + team side, not exact PlayerName equality - the-odds-api (where
-    // BetLegPick.PlayerName comes from, copied from BetBuilderMarket at placement time) and
-    // API-Football (where MatchPlayerStat.PlayerName comes from) format player names differently
-    // ("Bukayo Saka" vs "B. Saka", confirmed real 2026-09-07), so an exact match would silently miss
-    // most players and settle every pick as "didn't happen" rather than resolving correctly. Same
-    // surname heuristic PlayerPropsService already uses for team assignment. Team side is included
-    // to disambiguate the rare case of two same-surnamed players on opposite sides in one match.
-    //
-    // A player who took no shots/never touched the ball at all has no MatchPlayerStat row (API-
-    // Football's fixtures/players response only lists players who actually featured) — that's a
-    // legitimate 0/No outcome, not "still unresolved" (the ResolvePicksAsync guard above already
-    // ensures PlayerStatsResolvedAt is set before any pick here is evaluated at all).
+    // Matched by surname + team side, same reasoning as FindPlayerEvent below - API-Football's
+    // player names ("B. Saka") and the-odds-api's ("Bukayo Saka") format differently.
     private static MatchPlayerStat? FindPlayerStat(Match match, BetLegPick pick)
     {
         var surname = Surname(pick.PlayerName);
@@ -178,9 +195,44 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
             string.Equals(Surname(s.PlayerName), surname, StringComparison.OrdinalIgnoreCase) && (team is null || s.Team == team));
     }
 
+    // Matched by surname + team side, not exact PlayerName equality - the-odds-api (where
+    // BetLegPick.PlayerName comes from, copied from BetBuilderMarket at placement time) and
+    // Highlightly (where MatchEvent.PlayerName comes from) format player names differently
+    // ("Bukayo Saka" vs "B. Saka", confirmed real 2026-09-07 - the same mismatch API-Football's
+    // player names had), so an exact match would silently miss most players and settle every pick as
+    // "didn't happen" rather than resolving correctly. Same surname heuristic PlayerPropsService
+    // already uses for team assignment. Team side is included to disambiguate the rare case of two
+    // same-surnamed players on opposite sides in one match.
+    //
+    // A player with no matching event genuinely didn't do the thing (no goal, no card) — that's a
+    // legitimate No/0 outcome, not "still unresolved" (the ResolvePicksAsync guard above already
+    // ensures EventsFinalizedAt is set before any pick here is evaluated at all).
+    private static MatchEvent? FindPlayerEvent(Match match, BetLegPick pick, string eventType)
+    {
+        var surname = Surname(pick.PlayerName);
+        var team = pick.Team switch { "Home" => SelectionSide.Home, "Away" => SelectionSide.Away, _ => (SelectionSide?)null };
+        return match.Events.FirstOrDefault(e =>
+            e.Type == eventType && string.Equals(Surname(e.PlayerName), surname, StringComparison.OrdinalIgnoreCase)
+            && (team is null || e.Team == team));
+    }
+
+    // Highlightly has no standalone "assists" counter - an assist only exists attached to a Goal
+    // event (AssistPlayerName), so counting them means counting Goal events this player assisted,
+    // not looking up a single stat. The assist provider is always on the same side as the goal
+    // itself, so e.Team (the scorer's team) is also the assister's team - no separate team field
+    // needed on the assist side.
+    private static int CountAssists(Match match, BetLegPick pick)
+    {
+        var surname = Surname(pick.PlayerName);
+        var team = pick.Team switch { "Home" => SelectionSide.Home, "Away" => SelectionSide.Away, _ => (SelectionSide?)null };
+        return match.Events.Count(e =>
+            e.Type == "Goal" && string.Equals(Surname(e.AssistPlayerName), surname, StringComparison.OrdinalIgnoreCase)
+            && (team is null || e.Team == team));
+    }
+
     // "J. Pickford" -> "Pickford", "Jordan Pickford" -> "Pickford" - same heuristic as
     // OddsApiMarketService.Surname/PlayerPropsService.Surname (the common ground between
-    // API-Football's abbreviated names and the-odds-api's full ones).
+    // Highlightly's abbreviated names and the-odds-api's full ones).
     private static string Surname(string? name) =>
         name?.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries) is { Length: > 0 } parts ? parts[^1] : name ?? "";
 

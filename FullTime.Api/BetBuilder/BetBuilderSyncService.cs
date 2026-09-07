@@ -264,6 +264,22 @@ public class BetBuilderSyncService(
                 }
             }
 
+            // Settles MarketType.TotalCorners - moved from API-Football's fixtures/statistics to
+            // Highlightly's own /statistics/{matchId} (confirmed real 2026-09-07: it has a team-level
+            // "Corners" entry, summed across both teams same as the old SumCornerKicks did).
+            List<Dtos.TeamStatisticsDto> statistics;
+            try
+            {
+                statistics = await client.GetStatisticsAsync(long.Parse(match.ExternalId), ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to fetch statistics for match {MatchId}", match.Id);
+                statistics = [];
+            }
+
+            match.TotalCorners = SumCorners(statistics);
+
             resolvedCount++;
         }
 
@@ -274,6 +290,26 @@ public class BetBuilderSyncService(
 
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Resolved match events for {Count} match(es)", resolvedCount);
+    }
+
+    private static int? SumCorners(List<Dtos.TeamStatisticsDto> statistics)
+    {
+        var total = 0;
+        var found = false;
+
+        foreach (var team in statistics)
+        {
+            var corners = team.Statistics.FirstOrDefault(s => s.DisplayName == "Corners");
+            if (corners?.Value is not { } value)
+            {
+                continue;
+            }
+
+            total += (int)value;
+            found = true;
+        }
+
+        return found ? total : null;
     }
 
     private static readonly TimeSpan LiveEventsRefreshInterval = TimeSpan.FromSeconds(30);

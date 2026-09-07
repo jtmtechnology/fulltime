@@ -158,6 +158,7 @@ public class ApiFootballSettlementSupportService(
                         Goals = stat.Goals?.Total ?? 0,
                         Assists = stat.Goals?.Assists ?? 0,
                         ShotsOnTarget = stat.Shots?.On ?? 0,
+                        TotalShots = stat.Shots?.Total ?? 0,
                         YellowCards = stat.Cards?.Yellow ?? 0,
                     });
                 }

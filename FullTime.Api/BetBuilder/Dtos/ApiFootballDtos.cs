@@ -188,6 +188,9 @@ public class ShotsStat
 {
     [JsonPropertyName("on")]
     public int? On { get; set; }
+
+    [JsonPropertyName("total")]
+    public int? Total { get; set; }
 }
 
 public class GoalsStat

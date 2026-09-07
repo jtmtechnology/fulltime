@@ -25,13 +25,6 @@
     </div>
 </div>
 
-@if (_bookmaker is not null)
-{
-    <div class="bet-builder-bookmaker-row muted">
-        Prices from <BookmakerLogo Name="@_bookmaker" LogoUrl="@_bookmakerLogoUrl" />
-    </div>
-}
-
 @if (_status == "Loading…")
 {
     <LoadingSpinner />
@@ -266,21 +259,28 @@ else
     // Client-only market-type strings, not shared with any server enum (BetBuilderMarketDto.MarketType
     // is a plain string on both ends) - added while evaluating the-odds-api's player-prop markets via
     // FullTime.Api.Sandbox, see HANDOVER.md. Anytime-scorer/card markets price a single "Yes" outcome
-    // per player; shots/assists price Over/Under per player per line, hence PlayerRowLabel including
+    // per player; assists price Over/Under per player per line, hence PlayerRowLabel including
     // Side+Line only when present.
+    //
+    // PlayerShotsOnTarget deliberately isn't listed here as of 2026-09-07 despite the server enum
+    // still having it (existing historical rows keep their meaning, per MarketType's own rule) -
+    // Highlightly (the only settlement data source now) has no per-player shots data anywhere in its
+    // API, so pricing it client-side again would just show an unsettleable market.
     private static readonly (string MarketType, string Label)[] PlayerPropMarketTypes =
     [
         ("PlayerGoalscorerAnytime", "Goal scorer"),
         ("PlayerAssists", "Player assists"),
         ("PlayerCard", "Player to be booked"),
+        ("PlayerRedCard", "Player sent off"),
         ("PlayerShotsOnTarget", "Shots on target"),
+        ("PlayerShots", "Total shots"),
     ];
 
-    // Shots/assists price a per-player Over/Under line rather than a single Yes/No outcome (unlike
+    // Assists/shots price a per-player Over/Under line rather than a single Yes/No outcome (unlike
     // goalscorer/card) - rendered as a "1+/2+/3+" table (one column per Over line actually priced)
     // to match the reference bookmaker layout, rather than a flat "Player (Over 1.5)" list row per
-    // line like the other two player-prop markets.
-    private static readonly HashSet<string> LinedPlayerPropMarketTypes = ["PlayerShotsOnTarget", "PlayerAssists"];
+    // line like the other player-prop markets.
+    private static readonly HashSet<string> LinedPlayerPropMarketTypes = ["PlayerAssists", "PlayerShotsOnTarget", "PlayerShots"];
 
     // "Popular" holds the markets Highlightly already prices (match result, totals, BTTS, etc.);
     // "Player Bets" holds the-odds-api's player props evaluated via FullTime.Api.Sandbox. The
@@ -309,8 +309,6 @@ else
     private readonly List<OverUnderLine> _totalCorners = [];
     private BttsOption? _btts;
     private FirstScorerOption? _firstScorer;
-    private string? _bookmaker;
-    private string? _bookmakerLogoUrl;
 
     private readonly Dictionary<(int Home, int Away), decimal> _correctScoreLookup = [];
     private List<PlayerPropGroup> _playerPropGroups = [];
@@ -424,8 +422,6 @@ else
         {
             var response = await Api.GetBetBuilderMarketsAsync(MatchId);
             _markets = response.Markets;
-            _bookmaker = response.Bookmaker;
-            _bookmakerLogoUrl = response.BookmakerLogoUrl;
 
             _overUnderLines.AddRange(_markets
                 .Where(m => m.MarketType == "OverUnder" && m.Line is not null)

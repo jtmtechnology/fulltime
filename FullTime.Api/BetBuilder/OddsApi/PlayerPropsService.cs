@@ -6,14 +6,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullTime.Api.BetBuilder.OddsApi;
 
-// EPL-only player props, sourced from the-odds-api's free tier - deliberately narrow, and
-// independent of Providers:MarketsSource (runs regardless of whether Highlightly or OddsApi is the
-// active markets source, since Highlightly has no player-prop markets of its own). Started as
-// anytime-goalscorer only (confirmed 2026-09-07 that was the only one of the four soccer
-// player-prop market keys with real EPL bookmaker coverage that day); player_shots_on_target
-// gained real coverage later the same day, hence tracking all four here rather than just one - see
-// ODDS_API_PLAYER_PROPS_INVESTIGATION.md for the full investigation. `us`-region only: uk/eu/au add
-// nothing beyond it for any of these markets that hasn't been checked already.
+// EPL-only player props (plus one match-level market, Total Corners), sourced from the-odds-api's
+// free tier - deliberately narrow, and independent of Providers:MarketsSource (runs regardless of
+// whether Highlightly or OddsApi is the active markets source, since neither Highlightly nor
+// PlayerPropsService's own market parsing offers these otherwise). `us`-region only: uk/eu/au add
+// nothing beyond it for any of these markets that hasn't been checked already - see
+// ODDS_API_PLAYER_PROPS_INVESTIGATION.md for the full investigation.
+//
+// The two shots markets are the exception to "settled via Highlightly" below - Highlightly has no
+// per-player shots data anywhere in its API (confirmed real 2026-09-07), so they still settle via
+// API-Football's MatchPlayerStat instead (see PlayerStatsSettlementBackgroundService), kept wired
+// in specifically for this on top of its squad-lookup use here.
 //
 // Gating is deliberately simple, not the TTL-tiered freshness OddsApiMarketService uses: once a
 // specific market has real prices stored for a match, it's never refetched (a personal app showing
@@ -34,14 +37,28 @@ public class PlayerPropsService(
     private const string Region = "us";
     private static readonly TimeSpan RetryInterval = TimeSpan.FromHours(1);
 
-    // "Yes"-only markets show a flat "player to X" list (no separate line); "Over"/"Under" markets
-    // show a per-player line table - see BetBuilder.razor's LinedPlayerPropMarketTypes.
-    private static readonly (string Key, MarketType Type, bool IsLined)[] TrackedMarkets =
+    // YesNo: flat "player to X" list, single "Yes" outcome per player (goalscorer/cards).
+    // PlayerLined: per-player Over/Under line table (assists) - see BetBuilder.razor's
+    // LinedPlayerPropMarketTypes.
+    // MatchLined: a plain Over/Under market with no player attribution at all (corners) - no squad
+    // lookup needed, PlayerName/Team stay null on the stored row.
+    private enum MarketKind { YesNo, PlayerLined, MatchLined }
+
+    private static readonly (string Key, MarketType Type, MarketKind Kind)[] TrackedMarkets =
     [
-        ("player_goal_scorer_anytime", MarketType.PlayerGoalscorerAnytime, false),
-        ("player_to_receive_card", MarketType.PlayerCard, false),
-        ("player_shots_on_target", MarketType.PlayerShotsOnTarget, true),
-        ("player_assists", MarketType.PlayerAssists, true),
+        ("player_goal_scorer_anytime", MarketType.PlayerGoalscorerAnytime, MarketKind.YesNo),
+        ("player_to_receive_card", MarketType.PlayerCard, MarketKind.YesNo),
+        ("player_to_receive_red_card", MarketType.PlayerRedCard, MarketKind.YesNo),
+        ("player_assists", MarketType.PlayerAssists, MarketKind.PlayerLined),
+        ("alternate_totals_corners", MarketType.TotalCorners, MarketKind.MatchLined),
+
+        // Both settled via API-Football's MatchPlayerStat (Highlightly has no per-player shots data
+        // at all) - see PlayerStatsSettlementBackgroundService. player_shots_on_target has real
+        // bookmaker coverage (confirmed real 2026-09-07); player_shots (total shots, not just on
+        // target) had none on either fixture checked the same day, but costs nothing to keep
+        // checking (empty responses are free) in case a bookmaker starts pricing it later.
+        ("player_shots_on_target", MarketType.PlayerShotsOnTarget, MarketKind.PlayerLined),
+        ("player_shots", MarketType.PlayerShots, MarketKind.PlayerLined),
     ];
 
     public async Task EnsureFreshAsync(Match match, CancellationToken ct)
@@ -106,7 +123,7 @@ public class PlayerPropsService(
         var fetchedAt = DateTime.UtcNow;
         var rows = new List<BetBuilderMarket>();
 
-        foreach (var (key, type, isLined) in pending)
+        foreach (var (key, type, kind) in pending)
         {
             OddsApiEventOddsDto? odds;
             try
@@ -122,6 +139,35 @@ public class PlayerPropsService(
             var marketDto = odds?.Bookmakers.FirstOrDefault()?.Markets.FirstOrDefault(m => m.Key == key);
             if (marketDto is null)
             {
+                continue;
+            }
+
+            if (kind == MarketKind.MatchLined)
+            {
+                foreach (var outcome in marketDto.Outcomes)
+                {
+                    var lineSide = outcome.Name switch
+                    {
+                        "Over" => SelectionSide.Over,
+                        "Under" => SelectionSide.Under,
+                        _ => (SelectionSide?)null,
+                    };
+                    if (lineSide is null || outcome.Point is null)
+                    {
+                        continue;
+                    }
+
+                    rows.Add(new BetBuilderMarket
+                    {
+                        Id = Guid.NewGuid(),
+                        MatchId = match.Id,
+                        MarketType = type,
+                        Line = outcome.Point,
+                        Side = lineSide,
+                        Price = outcome.Price,
+                        FetchedAt = fetchedAt,
+                    });
+                }
                 continue;
             }
 
@@ -142,7 +188,7 @@ public class PlayerPropsService(
                 // Only-Yes markets (goalscorer/card) don't observe a "No" side in real the-odds-api
                 // data, but skip it defensively rather than show a nonsensical "not to score" row if
                 // a bookmaker ever adds one.
-                if (side is null || (!isLined && side != SelectionSide.Yes))
+                if (side is null || (kind == MarketKind.YesNo && side != SelectionSide.Yes))
                 {
                     continue;
                 }
@@ -160,7 +206,7 @@ public class PlayerPropsService(
                     Id = Guid.NewGuid(),
                     MatchId = match.Id,
                     MarketType = type,
-                    Line = isLined ? outcome.Point : null,
+                    Line = kind == MarketKind.PlayerLined ? outcome.Point : null,
                     Side = side,
                     Price = outcome.Price,
                     PlayerName = playerName,
@@ -172,6 +218,15 @@ public class PlayerPropsService(
 
         if (rows.Count > 0)
         {
+            // A concurrent call (e.g. two page loads racing the fire-and-forget refresh trigger)
+            // can reach this point for the same match/type before either has committed, otherwise
+            // producing duplicate rows for the same market - clear out whichever types this call is
+            // about to insert first, so the last writer wins instead of both surviving.
+            var typesInRows = rows.Select(r => r.MarketType).Distinct().ToList();
+            await db.BetBuilderMarkets
+                .Where(m => m.MatchId == match.Id && typesInRows.Contains(m.MarketType))
+                .ExecuteDeleteAsync(ct);
+
             db.BetBuilderMarkets.AddRange(rows);
             logger.LogInformation("PlayerPropsService: stored {Count} price(s) for match {MatchId}", rows.Count, match.Id);
         }

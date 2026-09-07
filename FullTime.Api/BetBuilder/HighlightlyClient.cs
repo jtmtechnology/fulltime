@@ -55,6 +55,14 @@ public class HighlightlyClient(HttpClient httpClient, ILogger<HighlightlyClient>
         return result ?? [];
     }
 
+    // Team-level (not per-player) match statistics - only used for the "Corners" entry, see
+    // BetBuilderSyncService.ResolveMatchEventsAsync.
+    public async Task<List<TeamStatisticsDto>> GetStatisticsAsync(long matchId, CancellationToken ct = default)
+    {
+        var result = await GetWithRetryAsync<List<TeamStatisticsDto>>($"statistics/{matchId}", ct);
+        return result ?? [];
+    }
+
     private async Task<T?> GetWithRetryAsync<T>(string requestUri, CancellationToken ct)
     {
         var cooldownRemaining = _quotaExhaustedUntilUtc - DateTime.UtcNow;

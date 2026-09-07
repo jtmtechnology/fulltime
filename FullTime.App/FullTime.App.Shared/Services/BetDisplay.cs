@@ -17,13 +17,16 @@ public static class BetDisplay
     {
         "MatchResult" => pick.Side switch { "Home" => "Home win", "Away" => "Away win", _ => "Draw" },
         "OverUnder" => $"{pick.Side} {pick.Line:0.##}",
+        "TotalCorners" => $"{pick.Side} {pick.Line:0.##} corners",
         "BothTeamsToScore" => pick.Side == "Yes" ? "BTTS Yes" : "BTTS No",
         "CorrectScore" => $"{pick.PredictedHomeScore} - {pick.PredictedAwayScore}",
         "FirstTeamToScore" => $"First to score: {pick.Side switch { "Home" => homeTeam, "Away" => awayTeam, _ => "None" }}",
         "PlayerGoalscorerAnytime" => $"{pick.PlayerName} to score anytime",
         "PlayerCard" => $"{pick.PlayerName} to be booked",
-        "PlayerShotsOnTarget" => $"{pick.PlayerName} {LinePlusLabel(pick.Line)} shots on target",
+        "PlayerRedCard" => $"{pick.PlayerName} to be sent off",
         "PlayerAssists" => $"{pick.PlayerName} {LinePlusLabel(pick.Line)} assists",
+        "PlayerShotsOnTarget" => $"{pick.PlayerName} {LinePlusLabel(pick.Line)} shots on target",
+        "PlayerShots" => $"{pick.PlayerName} {LinePlusLabel(pick.Line)} shots",
         _ => pick.Side ?? "",
     };
 

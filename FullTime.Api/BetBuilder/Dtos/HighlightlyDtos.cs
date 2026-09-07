@@ -172,3 +172,28 @@ public class MatchEventDto
     [JsonPropertyName("substituted")]
     public string? Substituted { get; set; }
 }
+
+// Team-level (not per-player - confirmed real 2026-09-07, Highlightly has no per-player stats
+// endpoint) match statistics from /statistics/{matchId}. Only used for the "Corners" entry
+// (MarketType.TotalCorners settlement, see BetBuilderSyncService.ResolveMatchEventsAsync) - the
+// dozens of other stats it returns (passes, xG, aerial duels, etc.) aren't modelled since nothing
+// settles off them.
+public class TeamStatisticsDto
+{
+    [JsonPropertyName("team")]
+    public required TeamDto Team { get; set; }
+
+    [JsonPropertyName("statistics")]
+    public List<StatisticEntryDto> Statistics { get; set; } = [];
+}
+
+public class StatisticEntryDto
+{
+    // A plain number, but not always a whole one (e.g. "Possession": 0.45, "Expected Goals": 1.01) -
+    // double rather than int so parsing never fails regardless of which stat this entry is.
+    [JsonPropertyName("value")]
+    public double? Value { get; set; }
+
+    [JsonPropertyName("displayName")]
+    public required string DisplayName { get; set; }
+}
