@@ -209,11 +209,18 @@ public class BetBuilderSyncService(
     // after its match actually finished (confirmed happening: a bet on a match that finished ~21:20
     // didn't settle until ~01:06 the next sync tick). This is a settlement-latency concern, not a
     // price-freshness one, so it shouldn't share the odds interval.
-    public async Task ResolveFirstGoalScorersAsync(CancellationToken ct)
+    //
+    // As of 2026-09-07 this also stores the full event timeline (Models/MatchEvent.cs) for display -
+    // the same /events call already fetched every field, just discarded everything but the first
+    // goal's team. A 0-0 match resolves FirstGoalScorerSide as "None" with no call needed, but still
+    // gets its own events fetch now for its card/substitution timeline (Highlightly's quota is
+    // generous - 25,000/day direct account - unlike the-odds-api's free tier, so this small broadening
+    // was a deliberate call, not an oversight).
+    public async Task ResolveMatchEventsAsync(CancellationToken ct)
     {
         var cutoff = DateTime.UtcNow.AddDays(-3);
         var candidates = await db.Matches
-            .Where(m => m.Status == MatchStatus.Finished && m.FirstGoalScorerSide == null && m.KickoffTime >= cutoff)
+            .Where(m => m.Status == MatchStatus.Finished && m.EventsFetchedAt == null && m.KickoffTime >= cutoff)
             .ToListAsync(ct);
 
         if (candidates.Count == 0)
@@ -225,34 +232,50 @@ public class BetBuilderSyncService(
 
         foreach (var match in candidates)
         {
+            match.EventsFetchedAt = DateTime.UtcNow;
+
             if (match.HomeScore == 0 && match.AwayScore == 0)
             {
                 match.FirstGoalScorerSide = SelectionSide.None;
-                resolvedCount++;
-                continue;
             }
 
             var events = await client.GetEventsAsync(long.Parse(match.ExternalId), ct);
-            var firstGoal = events
-                .Where(e => e.Type == "Goal")
-                .OrderBy(e => ParseMinute(e.Time))
-                .FirstOrDefault();
 
-            if (firstGoal is null)
+            if (match.FirstGoalScorerSide is null)
             {
-                continue;
+                var firstGoal = events
+                    .Where(e => e.Type == "Goal")
+                    .OrderBy(e => ParseMinute(e.Time))
+                    .FirstOrDefault();
+
+                if (firstGoal is not null)
+                {
+                    match.FirstGoalScorerSide = firstGoal.Team.Id == match.HomeTeamId
+                        ? SelectionSide.Home
+                        : firstGoal.Team.Id == match.AwayTeamId
+                            ? SelectionSide.Away
+                            : null;
+                }
             }
 
-            match.FirstGoalScorerSide = firstGoal.Team.Id == match.HomeTeamId
-                ? SelectionSide.Home
-                : firstGoal.Team.Id == match.AwayTeamId
-                    ? SelectionSide.Away
-                    : null;
-
-            if (match.FirstGoalScorerSide is not null)
+            await db.MatchEvents.Where(e => e.MatchId == match.Id).ExecuteDeleteAsync(ct);
+            db.MatchEvents.AddRange(events.Select(e => new MatchEvent
             {
-                resolvedCount++;
-            }
+                Id = Guid.NewGuid(),
+                MatchId = match.Id,
+                Team = e.Team.Id == match.HomeTeamId ? SelectionSide.Home
+                    : e.Team.Id == match.AwayTeamId ? SelectionSide.Away
+                    : SelectionSide.None,
+                Minute = e.Time,
+                Type = e.Type,
+                PlayerName = e.Player,
+                PlayerExternalId = e.PlayerId,
+                AssistPlayerName = e.Assist,
+                AssistPlayerExternalId = e.AssistingPlayerId,
+                SubstitutedPlayerName = e.Substituted,
+            }));
+
+            resolvedCount++;
         }
 
         if (resolvedCount == 0)
@@ -261,7 +284,7 @@ public class BetBuilderSyncService(
         }
 
         await db.SaveChangesAsync(ct);
-        logger.LogInformation("Resolved first goalscorer for {Count} match(es)", resolvedCount);
+        logger.LogInformation("Resolved match events for {Count} match(es)", resolvedCount);
     }
 
     // Event minutes come as "45" or "45+1"/"90+7" (stoppage time) — split on '+' and sort by

@@ -1,0 +1,38 @@
+@* One row in the match-events timeline (MatchEvents.razor) - home-team events align left, away-team
+   events align right, matching how live-score apps typically lay this out. *@
+<div class="match-event-row @(Event.Team == "Home" ? "home" : "away")">
+    @if (Event.Team == "Away")
+    {
+        <span class="match-event-minute">@Event.Minute'</span>
+    }
+    <span class="match-event-icon">@Icon</span>
+    <span class="match-event-text">@Text</span>
+    @if (Event.Team == "Home")
+    {
+        <span class="match-event-minute">@Event.Minute'</span>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public MatchEventDto Event { get; set; } = default!;
+
+    private string Icon => Event.Type switch
+    {
+        "Goal" => "⚽",
+        "Yellow Card" => "🟨",
+        "Red Card" => "🟥",
+        "Substitution" => "🔄",
+        _ => "•",
+    };
+
+    // "Bryan Mbeumo (Kobbie Mainoo)" for a goal with an assist, "Jack Grealish (Brennan Johnson)" for
+    // a substitution (player on, player off) - just the player name otherwise. Highlightly's full
+    // event-type vocabulary isn't confirmed (see Models/MatchEvent.cs), so an unrecognized type still
+    // falls back to showing its raw name rather than nothing.
+    private string Text => Event.Type switch
+    {
+        "Goal" when Event.AssistPlayerName is { } assist => $"{Event.PlayerName} ({assist})",
+        "Substitution" when Event.SubstitutedPlayerName is { } off => $"{Event.PlayerName} ({off})",
+        _ => Event.PlayerName ?? Event.Type,
+    };
+}

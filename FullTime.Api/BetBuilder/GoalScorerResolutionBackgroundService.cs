@@ -20,8 +20,8 @@ public class GoalScorerResolutionBackgroundService(
 
             try
             {
-                await syncService.ResolveFirstGoalScorersAsync(stoppingToken);
-                logger.LogInformation("Goal scorer resolution tick complete");
+                await syncService.ResolveMatchEventsAsync(stoppingToken);
+                logger.LogInformation("Match events resolution tick complete");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

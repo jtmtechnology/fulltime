@@ -26,12 +26,16 @@ public record UpcomingMatchDto(
     decimal? AwayOdds,
     string? Bookmaker,
     string? BookmakerLogoUrl,
-    bool BetBuilderAvailable);
+    bool BetBuilderAvailable,
+    bool EventsAvailable);
 
 public record BetBuilderMarketDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore, decimal Price,
     string? PlayerName = null, string? Team = null);
 public record BetBuilderMarketsResponse(bool Available, List<BetBuilderMarketDto> Markets, string? Bookmaker, string? BookmakerLogoUrl);
+
+public record MatchEventDto(
+    string Team, string Minute, string Type, string? PlayerName, string? AssistPlayerName, string? SubstitutedPlayerName);
 
 [ApiController]
 [Route("api/matches")]
@@ -103,7 +107,8 @@ public class MatchesController(
                 m.OddsSnapshots.OrderByDescending(o => o.FetchedAt).Select(o => (decimal?)o.AwayOdds).FirstOrDefault(),
                 m.OddsSnapshots.OrderByDescending(o => o.FetchedAt).Select(o => o.Bookmaker).FirstOrDefault(),
                 m.OddsSnapshots.OrderByDescending(o => o.FetchedAt).Select(o => o.BookmakerLogoUrl).FirstOrDefault(),
-                m.BetBuilderMarkets.Any()))
+                m.BetBuilderMarkets.Any(),
+                m.Events.Any()))
             .ToListAsync(ct);
 
         return Ok(matches);
@@ -210,5 +215,31 @@ public class MatchesController(
             .ToListAsync(ct);
 
         return Ok(new BetBuilderMarketsResponse(markets.Count > 0, markets, bookmaker, bookmakerLogoUrl));
+    }
+
+    // Pure DB read - populated by BetBuilderSyncService.ResolveMatchEventsAsync once a match
+    // finishes, never fetched on demand (no live provider call happens from this endpoint at all).
+    // Ordered in memory since Minute is stored as Highlightly's raw string ("45+2") - a DB-level
+    // string sort would put "9" after "45"/"70".
+    [HttpGet("{id:guid}/events")]
+    public async Task<ActionResult<List<MatchEventDto>>> GetMatchEvents(Guid id, CancellationToken ct)
+    {
+        var events = await db.MatchEvents
+            .Where(e => e.MatchId == id)
+            .Select(e => new MatchEventDto(
+                e.Team.ToString(), e.Minute, e.Type, e.PlayerName, e.AssistPlayerName, e.SubstitutedPlayerName))
+            .ToListAsync(ct);
+
+        return Ok(events.OrderBy(e => ParseMinute(e.Minute)).ToList());
+    }
+
+    // Same stoppage-time-aware parsing as BetBuilderSyncService.ParseMinute - "45+2" sorts right
+    // after "45" and before "46", not lexicographically before "9".
+    private static (int Base, int Added) ParseMinute(string time)
+    {
+        var parts = time.Split('+');
+        var baseMinute = int.TryParse(parts[0], out var b) ? b : int.MaxValue;
+        var added = parts.Length > 1 && int.TryParse(parts[1], out var a) ? a : 0;
+        return (baseMinute, added);
     }
 }

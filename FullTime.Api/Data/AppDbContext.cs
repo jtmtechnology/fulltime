@@ -16,6 +16,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
     public DbSet<BetBuilderMarket> BetBuilderMarkets => Set<BetBuilderMarket>();
     public DbSet<MatchPlayerStat> MatchPlayerStats => Set<MatchPlayerStat>();
+    public DbSet<MatchEvent> MatchEvents => Set<MatchEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -42,6 +42,10 @@
         {
             <a class="bet-builder-link" href="@BetBuilderHref()">Bet Builder</a>
         }
+        else if ((Match.Status == "Finished" || Match.Status == "InProgress") && Match.EventsAvailable)
+        {
+            <a class="bet-builder-link" href="@MatchEventsHref()">Match Summary</a>
+        }
     </div>
 </div>
 
@@ -63,4 +67,10 @@
         $"bet-builder/{Match.Id}?home={Uri.EscapeDataString(Match.HomeTeam)}&away={Uri.EscapeDataString(Match.AwayTeam)}" +
         $"&kickoff={Uri.EscapeDataString(Match.KickoffTime.ToString("O"))}&league={Uri.EscapeDataString(LeagueCatalog.Name(Match.LeagueId))}" +
         $"&homeLogo={Uri.EscapeDataString(Match.HomeLogoUrl ?? "")}&awayLogo={Uri.EscapeDataString(Match.AwayLogoUrl ?? "")}";
+
+    private string MatchEventsHref() =>
+        $"match-events/{Match.Id}?home={Uri.EscapeDataString(Match.HomeTeam)}&away={Uri.EscapeDataString(Match.AwayTeam)}" +
+        $"&kickoff={Uri.EscapeDataString(Match.KickoffTime.ToString("O"))}" +
+        $"&homeLogo={Uri.EscapeDataString(Match.HomeLogoUrl ?? "")}&awayLogo={Uri.EscapeDataString(Match.AwayLogoUrl ?? "")}" +
+        $"&homeScore={Match.HomeScore}&awayScore={Match.AwayScore}";
 }

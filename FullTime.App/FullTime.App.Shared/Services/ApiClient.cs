@@ -160,6 +160,13 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         return (await res.Content.ReadFromJsonAsync<BetBuilderMarketsResponse>())!;
     }
 
+    public async Task<List<MatchEventDto>> GetMatchEventsAsync(Guid matchId)
+    {
+        var res = await httpClient.GetAsync($"api/matches/{matchId}/events");
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+        return (await res.Content.ReadFromJsonAsync<List<MatchEventDto>>())!;
+    }
+
     public async Task<List<LeaderboardEntryDto>> GetLeaderboardAsync()
     {
         Authorize();

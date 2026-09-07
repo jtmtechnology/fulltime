@@ -53,7 +53,7 @@ public class Match
     // Null until resolved: set to Home/Away once the match's first goal (if any) is confirmed via
     // Highlightly's event timeline, or straight to None once the final score is 0-0 (no external
     // call needed for that case). Needed to settle MarketType.FirstTeamToScore picks, which can't
-    // be derived from the final score alone. See BetBuilderSyncService.ResolveFirstGoalScorersAsync.
+    // be derived from the final score alone. See BetBuilderSyncService.ResolveMatchEventsAsync.
     public SelectionSide? FirstGoalScorerSide { get; set; }
 
     // Corner kicks summed across both teams from API-Football's fixtures/statistics endpoint — null
@@ -65,7 +65,7 @@ public class Match
     // this match's MatchPlayerStats/TotalCorners — a timestamp rather than a bool so a match whose
     // provider data never backfills (some lower-league/qualifying fixtures never get one) can still
     // age out of being re-queried every tick forever, same reasoning as FirstGoalScorerSide's cutoff
-    // in BetBuilderSyncService.ResolveFirstGoalScorersAsync.
+    // in BetBuilderSyncService.ResolveMatchEventsAsync.
     public DateTime? PlayerStatsResolvedAt { get; set; }
 
     public List<MatchPlayerStat> PlayerStats { get; set; } = [];
@@ -82,4 +82,13 @@ public class Match
     // cutover) since this is an independent, always-on EPL-only feature that runs regardless of
     // Providers:MarketsSource.
     public DateTime? PlayerPropsFetchedAt { get; set; }
+
+    // Last time BetBuilderSyncService.ResolveMatchEventsAsync fetched this match's full Highlightly
+    // event timeline (goals/cards/subs) - once a finished match has this set, its MatchEvents rows
+    // are permanent and it's never refetched. Separate from FirstGoalScorerSide (derived from the
+    // same fetch) since a 0-0 match resolves that immediately without needing events, but still
+    // gets its own events fetch now for the card/substitution timeline.
+    public DateTime? EventsFetchedAt { get; set; }
+
+    public List<MatchEvent> Events { get; set; } = [];
 }

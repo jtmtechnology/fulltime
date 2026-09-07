@@ -1,0 +1,109 @@
+@page "/match-events/{MatchId:guid}"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>FullTime — Match Summary</PageTitle>
+
+<div class="page-header-row">
+    <button type="button" class="back-btn" @onclick="GoBack" aria-label="Back">‹</button>
+    <h1>Match Summary</h1>
+</div>
+
+<div class="bb-teams-row">
+    <div class="bb-team">
+        <LogoImg Src="@HomeLogo" CssClass="crest" Alt="@HomeTeam" />
+        <span>@HomeTeam</span>
+    </div>
+    <div class="bb-kickoff">
+        <span class="match-events-score">@HomeScore - @AwayScore</span>
+        <span class="muted">@KickoffTime.ToLocalTime().ToString("d MMM, HH:mm")</span>
+    </div>
+    <div class="bb-team">
+        <LogoImg Src="@AwayLogo" CssClass="crest" Alt="@AwayTeam" />
+        <span>@AwayTeam</span>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="status">Loading…</div>
+}
+else if (_events.Count == 0)
+{
+    <div class="muted">No match events available.</div>
+}
+else
+{
+    @if (_firstHalf.Count > 0)
+    {
+        <div class="match-events-half-header">
+            <span>1st Half</span>
+            <span>@_halfTimeScore</span>
+        </div>
+        @foreach (var e in _firstHalf)
+        {
+            <MatchEventRow Event="e" />
+        }
+    }
+    @if (_secondHalf.Count > 0)
+    {
+        <div class="match-events-half-header">
+            <span>2nd Half</span>
+            <span>@HomeScore - @AwayScore</span>
+        </div>
+        @foreach (var e in _secondHalf)
+        {
+            <MatchEventRow Event="e" />
+        }
+    }
+}
+
+@code {
+    [Parameter] public Guid MatchId { get; set; }
+    [SupplyParameterFromQuery(Name = "home")] public string? Home { get; set; }
+    [SupplyParameterFromQuery(Name = "away")] public string? Away { get; set; }
+    [SupplyParameterFromQuery(Name = "kickoff")] public string? Kickoff { get; set; }
+    [SupplyParameterFromQuery(Name = "homeLogo")] public string? HomeLogo { get; set; }
+    [SupplyParameterFromQuery(Name = "awayLogo")] public string? AwayLogo { get; set; }
+    [SupplyParameterFromQuery(Name = "homeScore")] public int? HomeScore { get; set; }
+    [SupplyParameterFromQuery(Name = "awayScore")] public int? AwayScore { get; set; }
+
+    private string HomeTeam => Home ?? "";
+    private string AwayTeam => Away ?? "";
+    private DateTime KickoffTime => DateTime.TryParse(Kickoff, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt) ? dt : DateTime.UtcNow;
+
+    private bool _loading = true;
+    private List<MatchEventDto> _events = [];
+    private List<MatchEventDto> _firstHalf = [];
+    private List<MatchEventDto> _secondHalf = [];
+    private string _halfTimeScore = "0 - 0";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _events = await Api.GetMatchEventsAsync(MatchId);
+        }
+        catch (ApiException)
+        {
+            _events = [];
+        }
+
+        // Stoppage-time minutes ("45+2") still belong to the half they extend, not the next one -
+        // only a bare "46"+ base minute (no way to distinguish 2nd-half additions from 1st-half
+        // ones without the raw base, hence splitting on Base rather than the full string).
+        _firstHalf = _events.Where(e => BaseMinute(e.Minute) <= 45).ToList();
+        _secondHalf = _events.Where(e => BaseMinute(e.Minute) > 45).ToList();
+
+        var homeGoalsAtHalf = _firstHalf.Count(e => e.Type == "Goal" && e.Team == "Home");
+        var awayGoalsAtHalf = _firstHalf.Count(e => e.Type == "Goal" && e.Team == "Away");
+        _halfTimeScore = $"{homeGoalsAtHalf} - {awayGoalsAtHalf}";
+
+        _loading = false;
+    }
+
+    private static int BaseMinute(string time) =>
+        int.TryParse(time.Split('+')[0], out var b) ? b : int.MaxValue;
+
+    private void GoBack() => Nav.NavigateTo($"/?date={DateOnly.FromDateTime(KickoffTime.ToLocalTime()):yyyy-MM-dd}");
+}

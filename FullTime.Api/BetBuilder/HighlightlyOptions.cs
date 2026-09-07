@@ -58,7 +58,7 @@ public class HighlightlyOptions
     // spare. Score/status freshness at 30s vs 15s is not noticeable for a casual family app.
     public int LiveRefreshIntervalSeconds { get; set; } = 30;
 
-    // How often BetBuilderSyncService.ResolveFirstGoalScorersAsync runs, independent of
+    // How often BetBuilderSyncService.ResolveMatchEventsAsync runs, independent of
     // SyncIntervalMinutes — this used to share the odds-sync cadence, which meant a
     // FirstTeamToScore bet could sit unsettled for up to SyncIntervalMinutes after its match
     // actually finished (confirmed happening: ~4h delay once that moved to 240). Kept short since

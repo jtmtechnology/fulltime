@@ -138,9 +138,11 @@ public class OddsValueDto
     public required string Value { get; set; }
 }
 
-// Goal timeline entry from /football/events/{id} — only used to resolve First Team To Score once
-// a match finishes (see BetBuilderSyncService.ResolveFirstGoalScorersAsync). Response is a bare
-// JSON array, not wrapped in a "data" envelope like the other endpoints.
+// Full match-timeline entry from /events/{id} - used both to resolve First Team To Score once a
+// match finishes and (as of 2026-09-07) to store the full goal/card/substitution timeline for
+// display (see BetBuilderSyncService.ResolveMatchEventsAsync, Models/MatchEvent.cs). Response is a
+// bare JSON array, not wrapped in a "data" envelope like the other endpoints. Player/assist/
+// substitution fields confirmed real 2026-09-07 - previously fetched and silently discarded.
 public class MatchEventDto
 {
     [JsonPropertyName("team")]
@@ -151,4 +153,22 @@ public class MatchEventDto
 
     [JsonPropertyName("type")]
     public required string Type { get; set; }
+
+    // Player coming ON for a Substitution, the scorer for a Goal, the booked player for a card.
+    [JsonPropertyName("player")]
+    public string? Player { get; set; }
+
+    [JsonPropertyName("playerId")]
+    public long? PlayerId { get; set; }
+
+    // Assist provider's name, set only for Goal events with one.
+    [JsonPropertyName("assist")]
+    public string? Assist { get; set; }
+
+    [JsonPropertyName("assistingPlayerId")]
+    public long? AssistingPlayerId { get; set; }
+
+    // The player coming OFF, set only for Substitution events.
+    [JsonPropertyName("substituted")]
+    public string? Substituted { get; set; }
 }
