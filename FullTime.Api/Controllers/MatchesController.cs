@@ -40,7 +40,6 @@ public class MatchesController(
     IOptions<HighlightlyOptions> highlightlyOptions,
     IOptions<ProvidersOptions> providersOptions,
     OddsApiMarketService oddsApiMarkets,
-    PlayerPropsService playerProps,
     IServiceScopeFactory scopeFactory,
     ILogger<MatchesController> logger) : ControllerBase
 {
@@ -133,6 +132,29 @@ public class MatchesController(
         });
     }
 
+    // Same detached-scope reasoning as TriggerH2hRefreshInBackground above.
+    private void TriggerPlayerPropsRefreshInBackground(Guid matchId)
+    {
+        _ = Task.Run(async () =>
+        {
+            using var scope = scopeFactory.CreateScope();
+            try
+            {
+                var scopedDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var scopedPlayerProps = scope.ServiceProvider.GetRequiredService<PlayerPropsService>();
+                var match = await scopedDb.Matches.FindAsync([matchId]);
+                if (match is not null)
+                {
+                    await scopedPlayerProps.EnsureFreshAsync(match, CancellationToken.None);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Background player-props refresh failed for match {MatchId}", matchId);
+            }
+        });
+    }
+
     // For Highlightly, reads whatever BetBuilderSyncBackgroundService's timer has already stored.
     // For the-odds-api, ensures a fresh full 9-market pull first (on-demand, cache-miss only — see
     // OddsApiMarketService) since there's no background sync for this any more. Most matches will
@@ -146,16 +168,16 @@ public class MatchesController(
 
         // Independent of MarketsSource - EPL player props run regardless of whether Highlightly or
         // OddsApi is the active markets source, since Highlightly has no player-prop markets of its
-        // own (see PlayerPropsService).
-        var matchForPlayerProps = await db.Matches.FindAsync([id], ct);
-        if (matchForPlayerProps is not null)
-        {
-            await playerProps.EnsureFreshAsync(matchForPlayerProps, ct);
-        }
+        // own (see PlayerPropsService). NOT awaited: same reasoning as TriggerH2hRefreshInBackground
+        // below - most requests are a cheap DB-only no-op (everything already found, or still within
+        // the hourly retry window), but the rare real fetch is several serialized the-odds-api calls
+        // that made this endpoint noticeably slow when awaited inline. Returns whatever's already
+        // cached immediately; a fresh fetch (if one fires) is picked up by the next view instead.
+        TriggerPlayerPropsRefreshInBackground(id);
 
         if (providersOptions.Value.MarketsSource == "OddsApi")
         {
-            var match = matchForPlayerProps ?? await db.Matches.FindAsync([id], ct);
+            var match = await db.Matches.FindAsync([id], ct);
             if (match is not null)
             {
                 await oddsApiMarkets.EnsureBetBuilderMarketsFreshAsync(match, ct);
