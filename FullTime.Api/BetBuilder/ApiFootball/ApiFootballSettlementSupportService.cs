@@ -1,3 +1,5 @@
+using FullTime.Api.BetBuilder.Dtos;
+using FullTime.Api.BetBuilder.OddsApi;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
 using Microsoft.EntityFrameworkCore;
@@ -95,7 +97,21 @@ public class ApiFootballSettlementSupportService(
 
         foreach (var match in candidates)
         {
-            var fixtureId = long.Parse(match.ExternalId);
+            // Never trust match.ExternalId directly as an API-Football fixture ID - while
+            // Highlightly is the live-score provider it's Highlightly's own match ID, a real ID
+            // collision risk (both are just numeric IDs), not merely a missing lookup. Resolving by
+            // team name + kickoff date instead works correctly either way (confirmed 2026-09-07,
+            // same fix already applied to squad lookups - see ApiFootballEplTeamMap), at the cost of
+            // one extra /fixtures call per finished match, negligible next to API-Football's PRO
+            // tier 7,500/day quota.
+            var fixture = await ResolveFixtureAsync(match, ct);
+            if (fixture is null)
+            {
+                logger.LogWarning("Could not resolve an API-Football fixture for match {MatchId}", match.Id);
+                continue;
+            }
+
+            var fixtureId = fixture.Fixture.Id;
 
             List<Dtos.FixturePlayersResponseTeam> teams;
             List<Dtos.FixtureStatisticsTeam> statistics;
@@ -114,8 +130,11 @@ public class ApiFootballSettlementSupportService(
 
             foreach (var team in teams)
             {
-                var side = team.Team.Id == match.HomeTeamId ? SelectionSide.Home
-                    : team.Team.Id == match.AwayTeamId ? SelectionSide.Away
+                // Compared against the resolved fixture's own team IDs (API-Football's), not
+                // match.HomeTeamId/AwayTeamId (Highlightly's) - same reasoning as the fixture
+                // resolution above.
+                var side = team.Team.Id == fixture.Teams.Home.Id ? SelectionSide.Home
+                    : team.Team.Id == fixture.Teams.Away.Id ? SelectionSide.Away
                     : (SelectionSide?)null;
                 if (side is null)
                 {
@@ -157,6 +176,37 @@ public class ApiFootballSettlementSupportService(
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Resolved player stats for {Count} match(es)", resolvedCount);
     }
+
+    // Looks up the real API-Football fixture for a match by league + kickoff date, then picks the
+    // best team-name match among that day's fixtures (there's rarely more than one match between
+    // the same two competitions on the same day, so this is unambiguous in practice). Falls back to
+    // treating match.LeagueId as an API-Football league ID directly when it's not in the bridge map
+    // - covers the dormant LiveScoreSource=ApiFootball cutover, where it already is one.
+    private async Task<FixtureDto?> ResolveFixtureAsync(Match match, CancellationToken ct)
+    {
+        var apiFootballLeagueId = HighlightlyToApiFootballLeagueMap.LeagueIds.GetValueOrDefault(match.LeagueId, match.LeagueId);
+        var date = DateOnly.FromDateTime(match.KickoffTime);
+
+        List<FixtureDto> fixtures;
+        try
+        {
+            fixtures = await client.GetFixturesAsync((int)apiFootballLeagueId, SeasonFor(date), date, date, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to look up API-Football fixtures for match {MatchId}", match.Id);
+            return null;
+        }
+
+        var candidate = new TeamNameMatcher.MatchCandidate(match.HomeTeam, match.AwayTeam, match.KickoffTime);
+        var pairs = fixtures.Select(f => (Fixture: f, Candidate: new TeamNameMatcher.MatchCandidate(
+            f.Teams.Home.Name, f.Teams.Away.Name, f.Fixture.Date.UtcDateTime)));
+        return TeamNameMatcher.FindBest(pairs, candidate)?.OddsEvent;
+    }
+
+    // Same convention as ApiFootballMatchSyncService.SeasonFor - API-Football's "season" is the
+    // year the season started in (a March fixture in year Y is season Y-1).
+    private static int SeasonFor(DateOnly date) => date.Month >= 7 ? date.Year : date.Year - 1;
 
     private static int? SumCornerKicks(List<Dtos.FixtureStatisticsTeam> statistics)
     {

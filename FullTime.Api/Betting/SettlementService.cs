@@ -125,17 +125,17 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
                 };
             case MarketType.PlayerGoalscorerAnytime:
             {
-                var scored = (FindPlayerStat(match, pick.PlayerName)?.Goals ?? 0) > 0;
+                var scored = (FindPlayerStat(match, pick)?.Goals ?? 0) > 0;
                 return pick.Side switch { SelectionSide.Yes => scored, SelectionSide.No => !scored, _ => false };
             }
             case MarketType.PlayerCard:
             {
-                var booked = (FindPlayerStat(match, pick.PlayerName)?.YellowCards ?? 0) > 0;
+                var booked = (FindPlayerStat(match, pick)?.YellowCards ?? 0) > 0;
                 return pick.Side switch { SelectionSide.Yes => booked, SelectionSide.No => !booked, _ => false };
             }
             case MarketType.PlayerShotsOnTarget:
             {
-                var shots = FindPlayerStat(match, pick.PlayerName)?.ShotsOnTarget ?? 0;
+                var shots = FindPlayerStat(match, pick)?.ShotsOnTarget ?? 0;
                 return pick.Side switch
                 {
                     SelectionSide.Over => shots > pick.Line!.Value,
@@ -145,7 +145,7 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
             }
             case MarketType.PlayerAssists:
             {
-                var assists = FindPlayerStat(match, pick.PlayerName)?.Assists ?? 0;
+                var assists = FindPlayerStat(match, pick)?.Assists ?? 0;
                 return pick.Side switch
                 {
                     SelectionSide.Over => assists > pick.Line!.Value,
@@ -158,12 +158,31 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
         }
     }
 
+    // Matched by surname + team side, not exact PlayerName equality - the-odds-api (where
+    // BetLegPick.PlayerName comes from, copied from BetBuilderMarket at placement time) and
+    // API-Football (where MatchPlayerStat.PlayerName comes from) format player names differently
+    // ("Bukayo Saka" vs "B. Saka", confirmed real 2026-09-07), so an exact match would silently miss
+    // most players and settle every pick as "didn't happen" rather than resolving correctly. Same
+    // surname heuristic PlayerPropsService already uses for team assignment. Team side is included
+    // to disambiguate the rare case of two same-surnamed players on opposite sides in one match.
+    //
     // A player who took no shots/never touched the ball at all has no MatchPlayerStat row (API-
     // Football's fixtures/players response only lists players who actually featured) — that's a
     // legitimate 0/No outcome, not "still unresolved" (the ResolvePicksAsync guard above already
     // ensures PlayerStatsResolvedAt is set before any pick here is evaluated at all).
-    private static MatchPlayerStat? FindPlayerStat(Match match, string? playerName) =>
-        match.PlayerStats.FirstOrDefault(s => s.PlayerName == playerName);
+    private static MatchPlayerStat? FindPlayerStat(Match match, BetLegPick pick)
+    {
+        var surname = Surname(pick.PlayerName);
+        var team = pick.Team switch { "Home" => SelectionSide.Home, "Away" => SelectionSide.Away, _ => (SelectionSide?)null };
+        return match.PlayerStats.FirstOrDefault(s =>
+            string.Equals(Surname(s.PlayerName), surname, StringComparison.OrdinalIgnoreCase) && (team is null || s.Team == team));
+    }
+
+    // "J. Pickford" -> "Pickford", "Jordan Pickford" -> "Pickford" - same heuristic as
+    // OddsApiMarketService.Surname/PlayerPropsService.Surname (the common ground between
+    // API-Football's abbreviated names and the-odds-api's full ones).
+    private static string Surname(string? name) =>
+        name?.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries) is { Length: > 0 } parts ? parts[^1] : name ?? "";
 
     private async Task ResolveLegsAsync(CancellationToken ct)
     {

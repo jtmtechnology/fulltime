@@ -107,6 +107,13 @@ else
     builder.Services.AddHostedService<HighlightlyMatchSyncBackgroundService>();
     builder.Services.AddHostedService<HighlightlyFixtureDiscoveryBackgroundService>();
     builder.Services.AddHostedService<GoalScorerResolutionBackgroundService>();
+
+    // Highlightly has no player-level stats of its own, so PlayerPropsService's EPL player-prop
+    // bets (goalscorer/cards/shots/assists) still need API-Football's player stats to settle -
+    // unlike FirstTeamToScore (handled above by GoalScorerResolutionBackgroundService), there's no
+    // Highlightly equivalent to fall back on. When LiveScoreSource=ApiFootball instead, this same
+    // resolution already runs as part of ApiFootballSettlementSupportBackgroundService above.
+    builder.Services.AddHostedService<PlayerStatsSettlementBackgroundService>();
 }
 
 // BetBuilderSyncBackgroundService is Highlightly's own timer-driven odds sync — only needed when

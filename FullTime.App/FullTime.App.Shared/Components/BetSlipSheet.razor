@@ -197,8 +197,15 @@
         "CorrectScore" => $"{pick.PredictedHomeScore} - {pick.PredictedAwayScore}",
         "FirstTeamToScore" => $"First to score: {pick.Side switch { "Home" => homeTeam, "Away" => awayTeam, _ => "None" }}",
         "PlayerGoalscorerAnytime" => $"{pick.PlayerName} to score anytime",
+        "PlayerCard" => $"{pick.PlayerName} to be booked",
+        "PlayerShotsOnTarget" => $"{pick.PlayerName} {LinePlusLabel(pick.Line)} shots on target",
+        "PlayerAssists" => $"{pick.PlayerName} {LinePlusLabel(pick.Line)} assists",
         _ => pick.Side ?? "",
     };
+
+    // "Over 1.5" reads as "2+" - matches BetBuilder.razor's LineLabel convention for the same lined
+    // player-prop markets (a half-line "Over 1.5" means 2 or more, shown as a whole number).
+    private static string LinePlusLabel(decimal? line) => line is { } l ? $"{(int)(l + 1m)}+" : "";
 
     private async Task PlaceBetAsync()
     {
