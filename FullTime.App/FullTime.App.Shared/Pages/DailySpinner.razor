@@ -93,7 +93,13 @@
         }
         @if (_streakBonusAmount is { } bonus)
         {
-            <p class="win-streak-bonus">🎉 Bonus prize awarded of @ContextState.CurrencySymbol@bonus!</p>
+            <div class="win-streak-bonus">
+                <span class="win-streak-bonus-icon">🔥</span>
+                <div>
+                    <p class="win-streak-bonus-title">7-Day Streak Bonus!</p>
+                    <p class="win-streak-bonus-amount">+@ContextState.CurrencySymbol@bonus awarded</p>
+                </div>
+            </div>
         }
         <button type="button" class="primary-btn win-dismiss-btn" @onclick="DismissResult">@(isTryAgain ? "OK" : "Nice one!")</button>
     </div>
