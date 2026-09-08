@@ -394,6 +394,7 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
 
 /* Match Summary (MatchEvents.razor) - goal/card/substitution timeline. */
 .match-events-score { font-size: 1rem; font-weight: 800; }
+.match-events-status.live { font-weight: 700; }
 .match-events-half-header {
     display: flex; align-items: center; justify-content: space-between; margin: 1rem 0 0.5rem;
     font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);

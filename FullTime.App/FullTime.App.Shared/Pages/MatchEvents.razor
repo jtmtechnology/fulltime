@@ -17,6 +17,10 @@
     <div class="bb-kickoff">
         <span class="match-events-score">@HomeScore - @AwayScore</span>
         <span class="muted">@KickoffTime.ToLocalTime().ToString("d MMM, HH:mm")</span>
+        @if (MatchStatusText() is { } statusText)
+        {
+            <span class="match-events-status @(Status == "InProgress" ? "live" : "muted")">@statusText</span>
+        }
     </div>
     <div class="bb-team">
         <LogoImg Src="@AwayLogo" CssClass="crest" Alt="@AwayTeam" />
@@ -67,10 +71,23 @@ else
     [SupplyParameterFromQuery(Name = "awayLogo")] public string? AwayLogo { get; set; }
     [SupplyParameterFromQuery(Name = "homeScore")] public int? HomeScore { get; set; }
     [SupplyParameterFromQuery(Name = "awayScore")] public int? AwayScore { get; set; }
+    [SupplyParameterFromQuery(Name = "status")] public string? Status { get; set; }
+    [SupplyParameterFromQuery(Name = "minute")] public int? Minute { get; set; }
+    [SupplyParameterFromQuery(Name = "isHalfTime")] public bool IsHalfTime { get; set; }
 
     private string HomeTeam => Home ?? "";
     private string AwayTeam => Away ?? "";
     private DateTime KickoffTime => DateTime.TryParse(Kickoff, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt) ? dt : DateTime.UtcNow;
+
+    // Mirrors MatchCard's LiveClockText - same snapshot-via-querystring approach already used here
+    // for score/kickoff, so this goes stale exactly as they do until the page is reopened.
+    private string? MatchStatusText() => Status switch
+    {
+        "InProgress" when IsHalfTime => "HT",
+        "InProgress" when Minute is { } minute => $"{minute}'",
+        "Finished" => "FT",
+        _ => null,
+    };
 
     private bool _loading = true;
     private List<MatchEventDto> _events = [];

@@ -1,6 +1,7 @@
 @implements IDisposable
 @inject AuthState AuthState
 @inject ActiveContextState ContextState
+@inject ApiClient Api
 
 @if (AuthState.IsLoggedIn)
 {
@@ -10,11 +11,21 @@
 }
 
 @code {
+    private readonly CancellationTokenSource _cts = new();
+
     protected override async Task OnInitializedAsync()
     {
         AuthState.Changed += OnAuthChanged;
         ContextState.Changed += OnContextChanged;
         await RefreshAsync();
+
+        // The header chip is mounted once for the whole session (in MainLayout), so this is the one
+        // place a bet's settlement - which happens server-side via SettlementService, with nothing
+        // client-driven to react to - can still reach the balance shown here. Bet placement and the
+        // Daily Spinner already refresh instantly via their own ContextState.RefreshBalanceAsync()
+        // calls; this loop only needs to catch the settlement case. Same config-driven interval
+        // Matches.razor's own auto-refresh uses, so it doesn't poll our API any more aggressively.
+        _ = AutoRefreshLoopAsync(_cts.Token);
     }
 
     // Mirrors the re-init pattern in Routes.razor: on the Web host AuthState isn't populated
@@ -42,9 +53,40 @@
         await ContextState.InitializeAsync();
     }
 
+    private async Task AutoRefreshLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            var seconds = 600;
+            try
+            {
+                seconds = (await Api.GetConfigAsync()).RefreshIntervalSeconds;
+            }
+            catch
+            {
+                // fall back to the default above if /api/config isn't reachable
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(Math.Max(1, seconds)), ct);
+            }
+            catch (TaskCanceledException)
+            {
+                break;
+            }
+
+            if (AuthState.IsLoggedIn)
+            {
+                await ContextState.RefreshBalanceAsync();
+            }
+        }
+    }
+
     public void Dispose()
     {
         AuthState.Changed -= OnAuthChanged;
         ContextState.Changed -= OnContextChanged;
+        _cts.Cancel();
     }
 }

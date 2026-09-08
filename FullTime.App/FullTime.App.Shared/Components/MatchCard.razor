@@ -27,17 +27,23 @@
         </div>
     </div>
 
-    <div class="odds-row">
-        <OddsCell MatchId="@Match.Id" MatchStatus="@Match.Status" Pick="Home" Odds="@Match.HomeOdds"
-                  HomeTeam="@Match.HomeTeam" AwayTeam="@Match.AwayTeam" KickoffTime="@Match.KickoffTime" />
-        <OddsCell MatchId="@Match.Id" MatchStatus="@Match.Status" Pick="Draw" Odds="@Match.DrawOdds"
-                  HomeTeam="@Match.HomeTeam" AwayTeam="@Match.AwayTeam" KickoffTime="@Match.KickoffTime" />
-        <OddsCell MatchId="@Match.Id" MatchStatus="@Match.Status" Pick="Away" Odds="@Match.AwayOdds"
-                  HomeTeam="@Match.HomeTeam" AwayTeam="@Match.AwayTeam" KickoffTime="@Match.KickoffTime" />
-    </div>
+    @if (Match.Status == "Upcoming" && HasOdds)
+    {
+        <div class="odds-row">
+            <OddsCell MatchId="@Match.Id" MatchStatus="@Match.Status" Pick="Home" Odds="@Match.HomeOdds"
+                      HomeTeam="@Match.HomeTeam" AwayTeam="@Match.AwayTeam" KickoffTime="@Match.KickoffTime" />
+            <OddsCell MatchId="@Match.Id" MatchStatus="@Match.Status" Pick="Draw" Odds="@Match.DrawOdds"
+                      HomeTeam="@Match.HomeTeam" AwayTeam="@Match.AwayTeam" KickoffTime="@Match.KickoffTime" />
+            <OddsCell MatchId="@Match.Id" MatchStatus="@Match.Status" Pick="Away" Odds="@Match.AwayOdds"
+                      HomeTeam="@Match.HomeTeam" AwayTeam="@Match.AwayTeam" KickoffTime="@Match.KickoffTime" />
+        </div>
+    }
 
     <div class="bookmaker-row">
-        <BookmakerLogo Name="@Match.Bookmaker" LogoUrl="@Match.BookmakerLogoUrl" />
+        @if (Match.Status == "Upcoming" && HasOdds)
+        {
+            <BookmakerLogo Name="@Match.Bookmaker" LogoUrl="@Match.BookmakerLogoUrl" />
+        }
         @if (Match.Status == "Upcoming" && Match.BetBuilderAvailable)
         {
             <a class="bet-builder-link" href="@BetBuilderHref()">Bet Builder</a>
@@ -51,6 +57,10 @@
 
 @code {
     [Parameter, EditorRequired] public UpcomingMatchDto Match { get; set; } = default!;
+
+    // No odds fetched yet for this match (e.g. too far out) - showing three "—" cells and a "—"
+    // bookmaker placeholder reads as broken, not "coming soon", so hide the whole section instead.
+    private bool HasOdds => Match.HomeOdds is not null || Match.DrawOdds is not null || Match.AwayOdds is not null;
 
     private string ScoreText() => Match.Status switch
     {
@@ -72,5 +82,6 @@
         $"match-events/{Match.Id}?home={Uri.EscapeDataString(Match.HomeTeam)}&away={Uri.EscapeDataString(Match.AwayTeam)}" +
         $"&kickoff={Uri.EscapeDataString(Match.KickoffTime.ToString("O"))}" +
         $"&homeLogo={Uri.EscapeDataString(Match.HomeLogoUrl ?? "")}&awayLogo={Uri.EscapeDataString(Match.AwayLogoUrl ?? "")}" +
-        $"&homeScore={Match.HomeScore}&awayScore={Match.AwayScore}";
+        $"&homeScore={Match.HomeScore}&awayScore={Match.AwayScore}" +
+        $"&status={Uri.EscapeDataString(Match.Status)}&minute={Match.Minute}&isHalfTime={Match.IsHalfTime}";
 }
