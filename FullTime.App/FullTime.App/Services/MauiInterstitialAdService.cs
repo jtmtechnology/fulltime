@@ -46,7 +46,7 @@ public class MauiInterstitialAdService(IAdsRemovalService adsRemoval) : IInterst
 {
     private static string AdUnitId => DeviceInfo.Platform == DevicePlatform.iOS
         ? "ca-app-pub-3940256099942544/4411468910"  // Google TEST interstitial ad unit (iOS)
-        : "ca-app-pub-3940256099942544/1033173712"; // Google TEST interstitial ad unit (Android)
+        : "ca-app-pub-8873351312647846/9075922506"; // Real interstitial ad unit (Android)
 
     private static bool _initialized;
     private static bool _consentRequested;
@@ -119,7 +119,7 @@ public class MauiInterstitialAdService(IAdsRemovalService adsRemoval) : IInterst
         _initialized = true;
 
 #if ANDROID
-        const string appId = "ca-app-pub-3940256099942544~3347511713"; // Google TEST AdMob app ID (Android)
+        const string appId = "ca-app-pub-8873351312647846~5927014987"; // Real AdMob app ID (Android)
         var activity = Platform.CurrentActivity as Microsoft.Maui.MauiAppCompatActivity;
         CrossMauiMTAdmob.Current.Init(
             activity!, appId, license: null!, nativeAdsId: null!, openAdsId: null!,

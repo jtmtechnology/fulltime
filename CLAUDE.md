@@ -55,9 +55,19 @@ than branching on `DeviceInfo.Platform` inside shared code.
   time on top of any explicit sleep, and this has produced wrong conclusions repeatedly. For
   reliable timing data, add temporary `Console.WriteLine`/logcat diagnostics with a `Stopwatch` and
   read real timestamps back out, then remove the diagnostics once done.
-- Real AdMob ad unit IDs must never ship in a build submitted to the App Store or Play Store —
-  only Google's published test IDs are safe for that. Double-check `MauiInterstitialAdService.cs`
-  and the `AndroidManifest.xml`/`Info.plist` AdMob app ID before any store submission.
+- Real AdMob ad unit IDs must never ship in a build submitted for a platform's **first-ever**
+  review on that store — automated review bots interacting with real ad units before the app is
+  approved/live risks invalid-traffic flags against the AdMob account. Only Google's published
+  test IDs are safe for that first submission. Once a platform's app is approved and live, real
+  IDs are correct going forward (including in later store-submitted builds for that platform) —
+  don't revert to test IDs by default; check the app's actual current approval status per
+  platform first. Android went live 2026-09-08 with real IDs
+  (`ca-app-pub-8873351312647846~5927014987` app ID,
+  `ca-app-pub-8873351312647846/9075922506` interstitial). iOS has no AdMob app registered yet, so
+  it stays on Google's test IDs until that changes. Double-check `MauiInterstitialAdService.cs`
+  and the `AndroidManifest.xml`/`Info.plist` AdMob app ID before any store submission — for
+  whichever platform hasn't yet had its first approval, that means confirming test IDs are in
+  place, not assuming it.
 
 ## Deployment
 
