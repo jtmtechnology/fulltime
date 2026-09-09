@@ -1,5 +1,7 @@
 using System.Net;
+using FullTime.Api.Auth;
 using FullTime.Api.BetBuilder.Dtos;
+using Microsoft.Extensions.Options;
 
 namespace FullTime.Api.BetBuilder;
 
@@ -10,7 +12,8 @@ namespace FullTime.Api.BetBuilder;
 // whose paths are already scoped to football and don't repeat it - the "football/" prefix 404s
 // there. If HighlightlyOptions.ApiHost ever points back at the RapidAPI proxy, these paths would
 // need the prefix restored.
-public class HighlightlyClient(HttpClient httpClient, ILogger<HighlightlyClient> logger)
+public class HighlightlyClient(
+    HttpClient httpClient, IOptions<HighlightlyOptions> options, IEmailSender emailSender, ILogger<HighlightlyClient> logger)
 {
     private static readonly TimeSpan MinRequestInterval = TimeSpan.FromMilliseconds(300);
     private static readonly TimeSpan QuotaCooldown = TimeSpan.FromMinutes(15);
@@ -26,6 +29,20 @@ public class HighlightlyClient(HttpClient httpClient, ILogger<HighlightlyClient>
     // with its own attempts, multiplying the wasted calls instead of sharing the "account is cooling
     // down" fact - this is what pushed usage from 85% to 100% within minutes.
     private static DateTime _quotaExhaustedUntilUtc = DateTime.MinValue;
+
+    // Self-tracked call counter for quota alerting - confirmed 2026-09-09 that Highlightly's own
+    // 429 response carries no remaining-quota/reset-time header at all (just a plain
+    // {"message":"You have breached your daily request limits."} body), so there's no live endpoint
+    // to poll for "how much is left". Counting our own real outbound calls (below, right before each
+    // actual HTTP request - calls skipped by the cooldown gate above don't count, since they never
+    // reach the provider) is the closest available proxy. Resets on the first call of a new UTC date;
+    // also resets on every process restart (in-memory only, same as _quotaExhaustedUntilUtc above),
+    // so a redeploy loses same-day progress toward the threshold - acceptable imprecision for an
+    // early-warning signal, not a billing-accurate meter.
+    private static int _dailyCallCount;
+    private static DateOnly _countDate = DateOnly.MinValue;
+    private static DateOnly? _thresholdAlertSentDate;
+    private static DateOnly? _exhaustionAlertSentDate;
 
     public async Task<List<MatchDto>> GetMatchesAsync(int leagueId, int season, DateOnly date, CancellationToken ct = default)
     {
@@ -73,6 +90,7 @@ public class HighlightlyClient(HttpClient httpClient, ILogger<HighlightlyClient>
         }
 
         await WaitForThrottleSlotAsync(ct);
+        RecordCallForQuotaTracking();
         using var response = await httpClient.GetAsync(requestUri, ct);
         var isThrottled = response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.Forbidden;
         if (!isThrottled)
@@ -88,8 +106,83 @@ public class HighlightlyClient(HttpClient httpClient, ILogger<HighlightlyClient>
         logger.LogWarning(
             "Throttled ({StatusCode}) on {RequestUri} - treating as quota exhaustion, cooling down all Highlightly calls until {Until:O}",
             response.StatusCode, requestUri, _quotaExhaustedUntilUtc);
+        MaybeAlertExhausted();
         response.EnsureSuccessStatusCode();
         return default;
+    }
+
+    // Called right before every real outbound request (not calls skipped by the cooldown gate
+    // above, which never reach the provider). Fires the proactive "approaching the limit" email
+    // exactly once per UTC date, the first time the running count crosses the configured threshold -
+    // see HighlightlyOptions.DailyCallBudget/AlertThresholdPercent.
+    private void RecordCallForQuotaTracking()
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (today != _countDate)
+        {
+            _countDate = today;
+            _dailyCallCount = 0;
+        }
+
+        var count = Interlocked.Increment(ref _dailyCallCount);
+        var opts = options.Value;
+        var threshold = opts.DailyCallBudget * opts.AlertThresholdPercent / 100;
+
+        if (count < threshold || _thresholdAlertSentDate == today)
+        {
+            return;
+        }
+
+        _thresholdAlertSentDate = today;
+        SendAlertEmail(
+            "FullTime: Highlightly quota approaching daily limit",
+            $"Highlightly has made {count} calls today (UTC {today:yyyy-MM-dd}), crossing the " +
+            $"{opts.AlertThresholdPercent}% warning threshold of its {opts.DailyCallBudget}/day budget. " +
+            "No outage yet, but live scores/odds may stop updating if the account actually hits its cap.");
+    }
+
+    // Fires the moment we get an actual 429/403 from the provider - a much stronger signal than the
+    // proactive count-based warning above (that one estimates; this one is ground truth), and the two
+    // are complementary: the threshold email gives advance notice, this one confirms it actually
+    // happened. Also fires exactly once per UTC date.
+    private void MaybeAlertExhausted()
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (_exhaustionAlertSentDate == today)
+        {
+            return;
+        }
+
+        _exhaustionAlertSentDate = today;
+        SendAlertEmail(
+            "FullTime: Highlightly quota exhausted",
+            $"Highlightly just returned a 429/403 (UTC {DateTime.UtcNow:yyyy-MM-dd HH:mm}) and calls are " +
+            $"now cooling down until {_quotaExhaustedUntilUtc:yyyy-MM-dd HH:mm} UTC. Live scores and odds " +
+            "have stopped updating for every tracked league until this clears.");
+    }
+
+    // Fire-and-forget by design: a failed alert email must never break the sync loop that
+    // triggered it. IEmailSender is a singleton (see Program.cs), so it's safe to use from this
+    // background context with no request-scoped dependencies involved.
+    private void SendAlertEmail(string subject, string body)
+    {
+        var toEmail = options.Value.AlertEmail;
+        if (string.IsNullOrWhiteSpace(toEmail))
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await emailSender.SendAsync(toEmail, subject, body);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to send Highlightly quota alert email to {ToEmail}", toEmail);
+            }
+        });
     }
 
     private async Task WaitForThrottleSlotAsync(CancellationToken ct)

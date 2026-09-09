@@ -64,4 +64,22 @@ public class HighlightlyOptions
     // actually finished (confirmed happening: ~4h delay once that moved to 240). Kept short since
     // it only touches matches Finished in the last 3 days and is cheap when nothing's pending.
     public int GoalScorerResolutionIntervalMinutes { get; set; } = 5;
+
+    // Where HighlightlyClient sends quota alerts (see its RecordCallForQuotaTracking/
+    // MaybeAlertExhausted) - null/empty disables alerting entirely rather than throwing, since a
+    // personal project shouldn't hard-fail the whole sync loop over a missing alert address. Kept
+    // out of the checked-in appsettings.json default (same as ApiKey/Email:* secrets) and set via
+    // the Highlightly__AlertEmail environment variable on the VM instead.
+    public string? AlertEmail { get; set; }
+
+    // The account's actual daily cap (confirmed 25,000/day when the direct soccer.highlightly.net
+    // account was set up - see HighlightlyMatchSyncService's top-of-file comment) - not derived from
+    // anything the provider reports at runtime, since its 429 response carries no quota/reset header
+    // at all (confirmed 2026-09-09: just a plain error message).
+    public int DailyCallBudget { get; set; } = 25000;
+
+    // RecordCallForQuotaTracking fires the proactive warning email once the day's call count crosses
+    // this percentage of DailyCallBudget - 80% leaves headroom to actually receive and act on the
+    // warning before the account hits its real cap.
+    public int AlertThresholdPercent { get; set; } = 80;
 }
