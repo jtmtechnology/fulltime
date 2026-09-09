@@ -67,8 +67,11 @@ public class MatchesController(
             var start = selectedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
             var end = start.AddDays(1);
             // A specific date was asked for explicitly, so show whatever's there regardless of status
-            // (finished results for a past date are just as relevant as fixtures for a future one).
-            query = db.Matches.Where(m => m.KickoffTime >= start && m.KickoffTime < end);
+            // (finished results for a past date are just as relevant as fixtures for a future one) -
+            // except Postponed, which never actually happened on this date and shouldn't be shown as
+            // if it were a fixture here (per user request 2026-09-09).
+            query = db.Matches.Where(m =>
+                m.KickoffTime >= start && m.KickoffTime < end && m.Status != MatchStatus.Postponed);
         }
         else
         {

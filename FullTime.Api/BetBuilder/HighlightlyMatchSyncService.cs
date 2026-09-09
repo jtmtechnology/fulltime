@@ -33,14 +33,19 @@ public class HighlightlyMatchSyncService(
     // future Upcoming fixtures, which are also "not Finished" but don't need 30s-frequency polling
     // (RefreshFixturesAsync's daily discovery covers those) — including them blew up datesToSync to
     // every date with any fixture in the whole MatchSyncDaysAhead window (confirmed in production:
-    // 20 distinct dates), multiplying every live tick's cost by ~20x for zero benefit.
+    // 20 distinct dates), multiplying every live tick's cost by ~20x for zero benefit. Also
+    // deliberately excludes Postponed (previously fell under "!= Finished" too, which meant a
+    // postponed match's kickoff date got re-added to every single tick forever, permanently
+    // doubling this league's call count - confirmed a real contributor to the 2026-09-09 quota
+    // exhaustion) - a postponed fixture is a dead end for this loop; if Highlightly ever reissues it
+    // with a new date, RefreshFixturesAsync's daily forward-looking scan picks that up on its own.
     public async Task RefreshLiveAsync(CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
         var datesToSync = new HashSet<DateOnly> { DateOnly.FromDateTime(now) };
 
         var staleKickoffs = await db.Matches
-            .Where(m => m.Status != MatchStatus.Finished && m.KickoffTime <= now)
+            .Where(m => (m.Status == MatchStatus.Upcoming || m.Status == MatchStatus.InProgress) && m.KickoffTime <= now)
             .Select(m => m.KickoffTime)
             .ToListAsync(ct);
 
@@ -240,14 +245,21 @@ public class HighlightlyMatchSyncService(
     // InProgress, which pinned the live-poll loop at its 15-30s cadence for 11+ hours overnight.
     // Now only the confirmed live-state strings map to InProgress explicitly; anything still
     // unrecognized logs a warning and keeps whatever status the match already had, so an unknown
-    // string can never itself force (or keep) a match falsely "live". Postponed maps to Upcoming
-    // (no dedicated MatchStatus for it); its score naturally parses to null since the provider
-    // reports none.
+    // string can never itself force (or keep) a match falsely "live". "Not started" is the only
+    // description mapped to Upcoming - Postponed gets its own status (see MatchStatus.Postponed),
+    // rather than being folded into Upcoming, precisely so RefreshLiveAsync's staleKickoffs query
+    // (below) can stop re-fetching it once it's identified as postponed instead of forever treating
+    // it as "hasn't kicked off yet".
     private MatchStatus DeriveStatus(string description, MatchStatus previousStatus, string externalId)
     {
-        if (description is "Not started" or "Postponed")
+        if (description == "Not started")
         {
             return MatchStatus.Upcoming;
+        }
+
+        if (description == "Postponed")
+        {
+            return MatchStatus.Postponed;
         }
 
         if (description.StartsWith("Finished", StringComparison.Ordinal))
