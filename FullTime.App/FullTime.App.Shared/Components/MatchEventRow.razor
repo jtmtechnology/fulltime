@@ -18,7 +18,10 @@
 
     private string Icon => Event.Type switch
     {
-        "Goal" => "⚽",
+        "Goal" or "Penalty" or "Own Goal" or "VAR Goal Confirmed" => "⚽",
+        "Missed Penalty" => "❌",
+        "VAR Goal Cancelled" => "🚫",
+        "VAR Penalty" => "📺",
         "Yellow Card" => "🟨",
         "Red Card" => "🟥",
         "Substitution" => "⇄",
@@ -33,6 +36,8 @@
     {
         "Goal" when Event.AssistPlayerName is { } assist => $"{Event.PlayerName} ({assist})",
         "Substitution" when Event.SubstitutedPlayerName is { } off => $"{Event.PlayerName} ({off})",
+        "Penalty" => $"{Event.PlayerName} (Penalty)",
+        "Missed Penalty" => $"{Event.PlayerName} (Penalty missed)",
         _ => Event.PlayerName ?? Event.Type,
     };
 }
