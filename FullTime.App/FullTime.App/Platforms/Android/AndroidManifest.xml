@@ -9,6 +9,13 @@
          traffic to 10.0.2.2 not permitted" failure without this. -->
     <application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true" android:usesCleartextTraffic="true">
         <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-8873351312647846~5927014987" />
+        <!-- Without this, Firebase falls back to the app's full-colour launcher icon for push
+             notifications, which Android then auto-derives into a status-bar silhouette from
+             scratch (no dedicated notification asset ever existed) - inconsistent and often
+             unrecognisable. ic_stat_notification is a purpose-built white-on-transparent version
+             of the shield, generated from the launcher icon's own alpha channel. -->
+        <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_notification" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/notification_accent" />
     </application>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
