@@ -10,7 +10,7 @@
 
 <div class="league-chips">
     <button type="button" class="league-chip @(_view == View.MyLeagues ? "selected" : "")" @onclick="() => _view = View.MyLeagues">My Leagues</button>
-    <button type="button" class="league-chip @(_view == View.Worldwide ? "selected" : "")" @onclick="() => _view = View.Worldwide">Worldwide Top 50</button>
+    <button type="button" class="league-chip @(_view == View.Worldwide ? "selected" : "")" @onclick="ShowWorldwideAsync">Worldwide Top 50</button>
 </div>
 
 @if (_status == "Loading…")
@@ -201,6 +201,30 @@ else
             _worldwide = await Api.GetLeaderboardAsync();
             await LoadMyLeaguesAsync();
             _status = "";
+        }
+        catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await AuthState.LogoutAsync();
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            _status = $"Error: {ex.Message}";
+            _error = true;
+        }
+    }
+
+    // Re-fetches rather than trusting the snapshot from OnInitializedAsync - otherwise a league or
+    // player added after the page first loaded (by this user or anyone else) wouldn't show up here
+    // until the app was fully restarted, the same staleness LoadMyLeaguesAsync already avoids for
+    // "My Leagues" by re-running after every create/join/leave.
+    private async Task ShowWorldwideAsync()
+    {
+        _view = View.Worldwide;
+
+        try
+        {
+            _worldwide = await Api.GetLeaderboardAsync();
         }
         catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
         {
