@@ -17,9 +17,12 @@ public class WeeklyTopUpService(
     // The Sunday evening cutoff, in UTC, before which that week's top-up isn't due yet.
     private const int TopUpHourUtc = 21;
 
-    public async Task RunAsync(CancellationToken ct = default)
+    // Also used by LeagueService to stamp a brand-new membership's LastTopUpDate at the moment it's
+    // created, so joining mid-week doesn't look "overdue" for a top-up it was never meant to get
+    // until the next real Sunday cutoff (LastTopUpDate == null used to mean exactly that to
+    // RunAsync's query below, which paid out immediately on the first sweep after signup).
+    public static DateOnly MostRecentCutoffSunday(DateTime now)
     {
-        var now = DateTime.UtcNow;
         var today = DateOnly.FromDateTime(now);
         var daysSinceSunday = ((int)today.DayOfWeek - (int)DayOfWeek.Sunday + 7) % 7;
         var mostRecentSunday = today.AddDays(-daysSinceSunday);
@@ -33,6 +36,13 @@ public class WeeklyTopUpService(
             mostRecentSunday = mostRecentSunday.AddDays(-7);
         }
 
+        return mostRecentSunday;
+    }
+
+    public async Task RunAsync(CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        var mostRecentSunday = MostRecentCutoffSunday(now);
         var amount = options.Value.WeeklyTopUpAmount;
 
         var due = await db.LeagueMemberships

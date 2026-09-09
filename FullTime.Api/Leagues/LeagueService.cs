@@ -63,6 +63,7 @@ public class LeagueService(
             JoinedAt = league.CreatedAt,
             Balance = options.Value.StartingBalance,
             StartingBalance = options.Value.StartingBalance,
+            LastTopUpDate = WeeklyTopUpService.MostRecentCutoffSunday(league.CreatedAt),
         });
 
         db.Leagues.Add(league);
@@ -93,14 +94,16 @@ public class LeagueService(
             return new JoinLeagueResult(JoinLeagueOutcome.MaxLeaguesReached);
         }
 
+        var joinedAt = DateTime.UtcNow;
         db.LeagueMemberships.Add(new LeagueMembership
         {
             Id = Guid.NewGuid(),
             LeagueId = league.Id,
             UserId = userId,
-            JoinedAt = DateTime.UtcNow,
+            JoinedAt = joinedAt,
             Balance = options.Value.StartingBalance,
             StartingBalance = options.Value.StartingBalance,
+            LastTopUpDate = WeeklyTopUpService.MostRecentCutoffSunday(joinedAt),
         });
         await db.SaveChangesAsync(ct);
 
