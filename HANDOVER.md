@@ -1039,3 +1039,44 @@ quota-risk class as the Postponed bug, just a different trigger.
 Commits this part of the session, all pushed to `main`: `49c258f`, `a3f71f1`, `1b253fd`, `2b50ef4`,
 `618b774`, `bb82e4c`, `0f272f2`. `fulltime-api` and `fulltime-web` are both running the latest of
 these as of this handover.
+
+---
+
+## 13. 2026-09-10 session (new session) — Android release build v1.4, R8 obfuscation investigation
+
+New conversation, same calendar day as §10-§12's rollout. Two things done, neither touching the
+backend/API-Football work above.
+
+### 13.1 Play Store release build v1.4 (code 11)
+
+- Owner confirmed version code 10 (1.3, built §6.8) was already uploaded to Play Console, so bumped
+  `ApplicationDisplayVersion`/`ApplicationVersion` 1.3/10 → 1.4/11 in `FullTime.App.csproj` and
+  rebuilt the signed AAB per `signing/README.md`. This build bundles everything from §10-§12 that
+  touches `FullTime.App.Shared` (the Bet Builder accordion restructure, bookmaker row, crest fix,
+  etc.) — none of that had reached Android before this build.
+- Output: `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`.
+- **Commit `a379ab3` is local only — not pushed, and the AAB has not been uploaded to Play
+  Console.** Both still need doing.
+
+### 13.2 Play Console "app optimisation" warning — R8 obfuscation — investigated, not implemented
+
+- Owner shared a Play Console screenshot: "App optimisation is below our threshold — Obfuscation
+  (1%)", deadline Feb 2027 (Google's mandatory 25% floor takes effect then, but only enforced once
+  DEX exceeds 10MB for apps — worth checking whether this app is even near that size before treating
+  it as urgent).
+- **Root cause confirmed empirically, not guessed**: `FullTime.App.csproj` never sets
+  `AndroidLinkTool`, so R8 doesn't run at all today. Checked the just-built Release AAB's output
+  folder for `mapping.txt` (R8 generates this automatically whenever it actually runs, per
+  Microsoft's own docs) — absent, confirming R8 is fully inactive, not just non-obfuscating.
+- **The fix is one line** (`<AndroidLinkTool Condition="'$(Configuration)'=='Release'">r8</AndroidLinkTool>`)
+  but carries real risk: this app binds four Java/reflection-heavy plugins —
+  `Plugin.FirebasePushNotifications`, `Plugin.MauiMTAdmob` (AdMob), `Plugin.InAppBilling` (Google
+  Play Billing), `Xamarin.Google.UserMessagingPlatform` (UMP consent) — and R8 obfuscation is
+  confirmed (via Firebase's own and dotnet/maui's issue trackers) to break libraries like these
+  **silently in Release builds only**, while Debug keeps working fine. Any fix needs a `proguard.cfg`
+  with explicit `-keep` rules for those four packages' Java namespaces, plus an actual on-device
+  smoke test of push notifications, ads, in-app purchase, and the UMP consent dialog before it ever
+  reaches a real release — not just a build-succeeds check.
+- **Owner's call: not now** — deferred to a dedicated future session given the Feb 2027 runway. No
+  code changes made. If picked up later, start from `AndroidLinkTool=r8` + the four keep-rule
+  packages above, and treat "build succeeds" as necessary but nowhere near sufficient.
