@@ -1,3 +1,4 @@
+using FullTime.Api.Auth;
 using FullTime.Api.BetBuilder.Dtos;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
@@ -18,8 +19,14 @@ public class ApiFootballMatchSyncService(
     AppDbContext db,
     IOptions<ApiFootballOptions> options,
     IHubContext<MatchUpdatesHub> hub,
+    IEmailSender emailSender,
     ILogger<ApiFootballMatchSyncService> logger)
 {
+    // Per-match, once per UTC date - same reasoning as HighlightlyClient's quota-alert dedup: a
+    // stuck match should keep nagging daily until fixed, but not once per tick. In-memory only
+    // (resets on restart), acceptable for a monitoring feature same as the quota alerts.
+    private static readonly Dictionary<Guid, DateOnly> _staleAlertSentDates = [];
+
     public async Task RefreshLiveAsync(CancellationToken ct = default)
     {
         var fixtures = await client.GetLiveFixturesAsync(ct);
@@ -79,8 +86,74 @@ public class ApiFootballMatchSyncService(
         }
     }
 
-    public Task<bool> HasLiveMatchAsync(CancellationToken ct = default) =>
-        db.Matches.AnyAsync(m => m.Status == MatchStatus.InProgress, ct);
+    // Excludes matches stuck InProgress well past any real match's actual duration (extra time +
+    // penalties + delays all included) - a stuck row must not be allowed to force the expensive
+    // live-refresh cadence forever (see CheckStaleInProgressMatchesAsync, StaleInProgressMinutes).
+    public Task<bool> HasLiveMatchAsync(CancellationToken ct = default)
+    {
+        var staleCutoff = DateTime.UtcNow.AddMinutes(-options.Value.StaleInProgressMinutes);
+        return db.Matches.AnyAsync(m => m.Status == MatchStatus.InProgress && m.KickoffTime > staleCutoff, ct);
+    }
+
+    // A match this long past kickoff and still InProgress almost certainly never got a real final
+    // whistle recorded - abandoned game, or API-Football dropped it from fixtures?live=all before
+    // sending a clean "FT". HasLiveMatchAsync above already stops treating it as "live" for cadence
+    // purposes, but it still needs a human to actually look at it (settlement for any bets on it is
+    // stuck too, since SettlementService only acts once Status == Finished) - hence the alert.
+    public async Task CheckStaleInProgressMatchesAsync(CancellationToken ct = default)
+    {
+        var staleCutoff = DateTime.UtcNow.AddMinutes(-options.Value.StaleInProgressMinutes);
+        var staleMatches = await db.Matches
+            .Where(m => m.Status == MatchStatus.InProgress && m.KickoffTime <= staleCutoff)
+            .ToListAsync(ct);
+
+        if (staleMatches.Count == 0)
+        {
+            return;
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var toAlert = staleMatches.Where(m => !_staleAlertSentDates.TryGetValue(m.Id, out var sent) || sent != today).ToList();
+        if (toAlert.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var match in toAlert)
+        {
+            _staleAlertSentDates[match.Id] = today;
+            logger.LogWarning(
+                "Match {MatchId} ({HomeTeam} v {AwayTeam}, kicked off {KickoffTime:O}) has been InProgress for over {Minutes} minutes - likely stuck",
+                match.Id, match.HomeTeam, match.AwayTeam, match.KickoffTime, options.Value.StaleInProgressMinutes);
+        }
+
+        var toEmail = options.Value.AlertEmail;
+        if (string.IsNullOrWhiteSpace(toEmail))
+        {
+            return;
+        }
+
+        var body = "The following match(es) have been stuck at InProgress well past a normal match duration " +
+            $"(over {options.Value.StaleInProgressMinutes} minutes since kickoff) and likely never received a real " +
+            "final whistle from API-Football:\n\n" +
+            string.Join("\n", toAlert.Select(m => $"- {m.HomeTeam} v {m.AwayTeam} (kicked off {m.KickoffTime:yyyy-MM-dd HH:mm} UTC)")) +
+            "\n\nThey no longer force the fast live-refresh cadence, but bets on them can't settle until their " +
+            "Status/scores are corrected - check API-Football's real status for these fixtures directly.";
+
+        // Fire-and-forget, same reasoning as HighlightlyClient.SendAlertEmail - a failed alert must
+        // never break the sync loop that triggered it.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await emailSender.SendAsync(toEmail, "FullTime: match(es) stuck InProgress", body);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to send stale-InProgress alert email to {ToEmail}", toEmail);
+            }
+        }, ct);
+    }
 
     public async Task<TimeSpan> NextPollDelayAsync(CancellationToken ct = default)
     {

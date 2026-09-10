@@ -56,4 +56,17 @@ public class ApiFootballOptions
     public int OddsImminentTtlMinutes { get; set; } = 15;
     public int OddsNearBoundaryHours { get; set; } = 24;
     public int OddsImminentBoundaryHours { get; set; } = 1;
+
+    // A match stuck at InProgress this long past its own kickoff (extra time + penalties + delays
+    // all included, generously) almost certainly means the sync never saw its real final whistle -
+    // abandoned game, or API-Football simply drops it from fixtures?live=all before sending a clean
+    // "FT". Found 2026-09-10: HasLiveMatchAsync (which NextPollDelayAsync uses to decide fast-vs-idle
+    // cadence) counted ANY InProgress match, so one stuck row would force the expensive 10s live
+    // cadence forever - the exact same class of quota risk as the Postponed/staleKickoffs bug this
+    // whole cutover already fixed once, just via a different trigger.
+    public int StaleInProgressMinutes { get; set; } = 210;
+
+    // Blank by default (checked-in secret-like placeholder, same convention as
+    // Highlightly:AlertEmail) - set via ApiFootball__AlertEmail on the VM.
+    public string AlertEmail { get; set; } = "";
 }
