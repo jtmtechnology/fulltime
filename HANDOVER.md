@@ -496,37 +496,45 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-10 session, see §12 for full detail):**
-1. **API-Football is now the live provider for everything** (`LiveScoreSource` and `MarketsSource`
+**Top priorities for whoever picks this up next (updated end of 2026-09-10, see §14 for the latest):**
+1. **Trigger a fresh iOS Codemagic build (`ios-testflight`)** — this is the owner's immediate next
+   step (asked to push §14's fix "so I can test iOS"). Also tests the §6.11 hypothesis (owner's full
+   delete+restart+reinstall did NOT fix the stale notification icon, ruling out the local-cache
+   theory) - if the new build's notification icon comes through correct, that confirms TestFlight/APNs
+   caches icon artwork per-build rather than reading the live bundle.
+2. **Deploy `fulltime-web`** to pick up §14's Team Corners/Cards bet-description fix (commit `bc9a77b`,
+   pushed, not yet deployed) — cheap, no migration, standard `X=web` publish/scp/restart.
+3. **Upload a build to Play Console** —
+   `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`
+   (version 1.4, code 11, §13.1, commit `a379ab3`, pushed) is signed but now **stale on three counts**:
+   predates the form-dots feature (§13.3, `d57e348`) and §14's bet-description fix (`bc9a77b`), neither
+   of which have reached Android yet. Rebuild with both folded in before uploading (bump to 1.5/12
+   first, per §13's version-code convention).
+4. **API-Football is now the live provider for everything** (`LiveScoreSource` and `MarketsSource`
    both `"ApiFootball"`, deployed and verified) — Highlightly and the-odds-api are fully dormant
    rollback paths, not in active use. Don't assume `HANDOVER.md` sections written before §10 still
    describe current behavior where they talk about Highlightly being primary.
-2. **Build Phase 4 proper** (quota-alert *call-budget* parity — daily-count tracking + threshold
+5. **Build Phase 4 proper** (quota-alert *call-budget* parity — daily-count tracking + threshold
    email, porting `29f05f2`'s Highlightly pattern to `ApiFootballClient`) — still genuinely open.
    Don't confuse this with the narrower stale-InProgress-match alert added in §12.4, which is a
    different thing (a stuck-match detector, not a call-volume tracker).
-3. **A new Android build is needed** to bring several client-only fixes to mobile users — none of
-   them have reached Android yet: the Team Corners/Team Cards Bet Builder markets, the
-   `IsSelected` Team-comparison fix, the reinstated bookmaker row, and the crest `object-fit` CSS
-   fix. All are already live on `fulltime-web`.
-4. **Watch `journalctl -u fulltime-api` for real 429s** over the next few days — §11.4's cadence
+6. **Watch `journalctl -u fulltime-api` for real 429s** over the next few days — §11.4's cadence
    math says a heavy multi-league day could plausibly approach or exceed Pro's 7,500/day ceiling
-   even before any account upgrade. No 429s seen yet as of this handover.
-5. **Confirm the account tier before pushing cadences any lower** — still Pro (7,500/day) as of
+   even before any account upgrade, and §13.3 adds a modest amount of extra call volume on top
+   (team-form lookups, 6h-cached). No 429s seen yet as of this handover.
+7. **Confirm the account tier before pushing cadences any lower** — still Pro (7,500/day) as of
    2026-09-10; the owner wants to design for up to 75,000/day eventually (needs an Ultra-class
    upgrade first, see §6.13).
-6. **Trigger a fresh iOS Codemagic build (`ios-testflight`)** to test the hypothesis in §6.11 - the
-   owner's full delete+restart+reinstall did NOT fix the stale notification icon, ruling out the
-   local-cache theory. If a new build's notification icon comes through correct, that confirms
-   TestFlight/APNs caches icon artwork per-build rather than reading the live bundle.
-7. **Upload a build to Play Console** —
-   `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`
-   (version 1.3, code 10) is signed but local-only, and now stale (predates all of today's
-   `FullTime.App.Shared` changes) - fold item 3's fixes into whatever build actually ships.
-8. The duplicate-`BetBuilderMarket`-row problem (below) has still never been swept beyond one match.
-9. If Highlightly's *old* API key (now replaced, §6.12) ever matters again — e.g. to understand why
-   a real daily quota stayed dead for 17+ hours instead of resetting — that's now a dashboard
-   question, not something diagnosable from the app's own logs.
+8. **Low priority**: R8/obfuscation for the Android build (§13.2) — Play Console flagged it, but the
+   deadline is Feb 2027 and enabling it risks silently breaking push/ads/billing/UMP without careful
+   proguard keep rules. Deferred on purpose, not forgotten.
+9. **Low priority**: `BetSlipSheet.razor`'s pick-label switch duplicates `BetDisplay.cs`'s (§14) -
+   consider refactoring the slip to call `BetDisplay.PickLabel` directly so a future new `MarketType`
+   can't fix one and silently miss the other again.
+10. The duplicate-`BetBuilderMarket`-row problem (below) has still never been swept beyond one match.
+11. If Highlightly's *old* API key (now replaced, §6.12) ever matters again — e.g. to understand why
+    a real daily quota stayed dead for 17+ hours instead of resetting — that's now a dashboard
+    question, not something diagnosable from the app's own logs.
 
 Full list:
 
@@ -1055,8 +1063,9 @@ backend/API-Football work above.
   touches `FullTime.App.Shared` (the Bet Builder accordion restructure, bookmaker row, crest fix,
   etc.) — none of that had reached Android before this build.
 - Output: `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`.
-- **Commit `a379ab3` is local only — not pushed, and the AAB has not been uploaded to Play
-  Console.** Both still need doing.
+- Commit `a379ab3`, pushed to `main`. **The AAB itself still has not been uploaded to Play
+  Console** — that's the only remaining step, and it now also needs the form-dots feature (§13.3)
+  folded in, since that landed after this build.
 
 ### 13.2 Play Console "app optimisation" warning — R8 obfuscation — investigated, not implemented
 
@@ -1080,3 +1089,82 @@ backend/API-Football work above.
 - **Owner's call: not now** — deferred to a dedicated future session given the Feb 2027 runway. No
   code changes made. If picked up later, start from `AndroidLinkTool=r8` + the four keep-rule
   packages above, and treat "build succeeds" as necessary but nowhere near sufficient.
+
+### 13.3 New: "last 5 results" form dots on the Bet Builder header
+
+Owner asked for a form-guide widget (colored dots under each team name, one per recent result) after
+sharing a reference screenshot. Built, then improved once the owner asked whether API-Football had a
+dedicated endpoint for it - it does, and it's a better source than what was first built.
+
+- **First pass**: computed from our own `Matches` table (last 5 `Finished` rows for a team, any
+  tracked competition, W/D/L relative to that team). Worked, but confirmed via direct DB query that
+  **zero teams currently have both a finished and an upcoming match** in the DB (the only `Finished`
+  rows left are clustered right around yesterday's API-Football cutover) - every team would show 0
+  dots for weeks until enough new fixtures complete under the new provider's team-ID scheme.
+- **Switched to API-Football's own `/teams/statistics?league=&season=&team=` endpoint** instead -
+  confirmed live via `curl` that it returns a bare `form` string (e.g. `"LWD"`), and cross-checked
+  against Manchester United's actual fixture dates/results to confirm the ordering is chronological,
+  oldest-first (matches the design decision below exactly, no reordering needed). The endpoint is
+  **league-scoped** (`league` is a required param, confirmed the API rejects a call without one) -
+  so "form" means "form in this specific competition," the same convention most football apps use.
+- **New `ApiFootballTeamFormService`** - 6h in-memory cache per (team, league) so repeated Bet
+  Builder views don't each cost a fresh API call; tolerates failures (never breaks the rest of the
+  page, form is display-only).
+- **A real bug found and fixed while testing against a live match, not just a hypothetical**:
+  `Match.LeagueId` is *always* stored in Highlightly's own ID space regardless of which provider is
+  live (a deliberate fix from §12.1 for the client's league catalog) - calling API-Football's form
+  endpoint with it directly returned wrong/empty data. Fixed by translating through the existing
+  `HighlightlyToApiFootballLeagueMap.LeagueIds` first. Caught this because the very first test match
+  (Man Utd v Sabah FA, a friendly) returned empty form for both teams, which led to checking the
+  actual `LeagueId` value rather than assuming the fetch was just failing quietly.
+- Design decisions (asked explicitly, not assumed): green=win/red=loss/grey=draw, oldest-to-newest
+  left-to-right (most recent dot rightmost) - both confirmed against the owner's reference
+  screenshot before building.
+- **Verified end-to-end, not just build-succeeds**: deployed to `fulltime-api`+`fulltime-web`,
+  curled the real endpoint against Stevenage v Luton (`D,L,D,D,W` / `W,D,L,W,D`), confirmed the
+  rendered HTML had the matching dot counts/colors, then built and ran the actual MAUI app on the
+  `FullTime_Pixel8_API35` emulator and the owner confirmed it visually.
+- Files: `FullTime.Api/BetBuilder/ApiFootball/ApiFootballClient.cs` (new `GetTeamFormAsync`),
+  `.../ApiFootballTeamFormService.cs` (new), `FullTime.Api/BetBuilder/Dtos/ApiFootballDtos.cs`
+  (`TeamStatisticsResponseDto`/`TeamStatisticsInfo`), `FullTime.Api/Controllers/MatchesController.cs`
+  (`BetBuilderMarketsResponse.HomeForm`/`AwayForm`), `FullTime.Api/Program.cs` (DI registration),
+  `FullTime.App/FullTime.App.Shared/Models/ApiModels.cs` (client DTO),
+  `.../Pages/BetBuilder.razor` (`.bb-form` dots under each team name),
+  `.../wwwroot/app.css` (`.bb-form`/`.bb-form-dot` rules, reusing `--accent`/`--danger`/`--text-muted`).
+- Commit `d57e348`, pushed. `fulltime-api`/`fulltime-web` both running it as of this handover -
+  **already fully live**, nothing pending here except folding it into the next Android AAB (§13.1).
+
+---
+
+## 14. 2026-09-10 session (new session) — Team Corners/Cards bet-description bug fix
+
+Owner reported "cards and corners bets not showing in bet descriptions." Client-only fix, no
+backend/DB involved.
+
+- **Root cause**: `TeamCorners`/`TeamCards` (new `MarketType` values from Phase 2, §11.3) were never
+  added to the pick-label formatters that turn a pick's `MarketType`/`Line`/`Side`/`Team` into
+  readable text (e.g. "Man Utd Over 8.5 corners") - they fell through to the bare `pick.Side` default
+  ("Over"/"Under" with no team name or market word at all).
+- **Found the same formatter duplicated in two places that had drifted apart**:
+  `FullTime.App.Shared/Services/BetDisplay.cs` (used by `MyBets.razor` and Leaderboard's Live Bets -
+  shown *after* a bet is placed) and a separate, near-identical inline switch inside
+  `FullTime.App.Shared/Components/BetSlipSheet.razor` (the bet slip shown *before* placing - most
+  likely what the owner actually saw). `BetDisplay.cs`'s own header comment only mentions the first
+  two consumers, not the slip - this duplication is why the bug could exist in one place but not
+  necessarily be caught by testing the other. **Not deduplicated in this pass (kept the fix minimal
+  and matched the existing pattern) - worth refactoring `BetSlipSheet.razor` to call `BetDisplay`
+  directly next time either one needs a change, so they can't drift again.**
+- **Fix**: added `TeamCorners`/`TeamCards` cases to both switches (new shared-shape `TeamName` local
+  helper mapping the pick's `"Home"`/`"Away"` `Team` field to the actual team name, same convention
+  `FirstTeamToScore` already used). Also added `PlayerFoulsCommitted` to both, which had the exact
+  same gap (a real `MarketType` with no case, silently falling through) even though the owner hadn't
+  reported it yet.
+- Verified via `dotnet build` on `FullTime.App.Shared` (0 errors) - not yet run in the emulator/web
+  head this session.
+- Files: `FullTime.App/FullTime.App.Shared/Services/BetDisplay.cs`,
+  `FullTime.App/FullTime.App.Shared/Components/BetSlipSheet.razor`.
+- Commit `bc9a77b`, pushed to `main`. **Not yet deployed** - `fulltime-web` needs redeploying to pick
+  it up, and it needs folding into the next Android AAB alongside the still-pending form-dots feature
+  (§13.1/§13.3). Owner's stated next step is triggering an iOS TestFlight build to test on a real
+  device - this fix will be included in that build once triggered, along with a chance to verify
+  §6.11's stale-notification-icon hypothesis at the same time.
