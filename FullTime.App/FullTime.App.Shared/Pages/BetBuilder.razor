@@ -68,26 +68,34 @@ else
             </AccordionSection>
         }
 
-        @foreach (var section in TeamLineSections)
+        @foreach (var group in TeamLineGroups)
         {
-            @if (section.Lines.Count > 0)
+            @if (group.Teams.Any(t => t.Lines.Count > 0))
             {
-                <AccordionSection Id="@section.Id" Title="@section.Title" Expanded="_expanded" OnToggle="ToggleSection">
-                    <div class="odds-table">
-                        <div class="odds-table-header">
-                            <span></span><span>Over</span><span>Under</span>
-                        </div>
-                        @foreach (var line in section.Lines)
+                <AccordionSection Id="@group.Id" Title="@group.Title" Expanded="_expanded" OnToggle="ToggleSection">
+                    @foreach (var teamGroup in group.Teams)
+                    {
+                        @if (teamGroup.Lines.Count > 0)
                         {
-                            var overPick = new SlipPick(section.MarketType, line.Line, "Over", line.OverPrice, Team: section.Team);
-                            var underPick = new SlipPick(section.MarketType, line.Line, "Under", line.UnderPrice, Team: section.Team);
-                            <div class="odds-table-row">
-                                <span class="odds-table-label">@line.Line.ToString("0.##")</span>
-                                <span class="@TableCellClass(overPick)" @onclick="() => TogglePick(overPick)">@OddsCell.FormatOdds(overPick.Odds)</span>
-                                <span class="@TableCellClass(underPick)" @onclick="() => TogglePick(underPick)">@OddsCell.FormatOdds(underPick.Odds)</span>
-                            </div>
+                            <AccordionSection Id="@($"{group.Id}-{teamGroup.TeamKey}")" Title="@teamGroup.TeamLabel" TitleIconUrl="@teamGroup.LogoUrl" Expanded="_expanded" OnToggle="ToggleSection">
+                                <div class="odds-table">
+                                    <div class="odds-table-header">
+                                        <span></span><span>Over</span><span>Under</span>
+                                    </div>
+                                    @foreach (var line in teamGroup.Lines)
+                                    {
+                                        var overPick = new SlipPick(group.MarketType, line.Line, "Over", line.OverPrice, Team: teamGroup.TeamKey);
+                                        var underPick = new SlipPick(group.MarketType, line.Line, "Under", line.UnderPrice, Team: teamGroup.TeamKey);
+                                        <div class="odds-table-row">
+                                            <span class="odds-table-label">@line.Line.ToString("0.##")</span>
+                                            <span class="@TableCellClass(overPick)" @onclick="() => TogglePick(overPick)">@OddsCell.FormatOdds(overPick.Odds)</span>
+                                            <span class="@TableCellClass(underPick)" @onclick="() => TogglePick(underPick)">@OddsCell.FormatOdds(underPick.Odds)</span>
+                                        </div>
+                                    }
+                                </div>
+                            </AccordionSection>
                         }
-                    </div>
+                    }
                 </AccordionSection>
             }
         }
@@ -179,7 +187,7 @@ else
         }
 
         @if (_overUnderLines.Count == 0 && _btts is null && _firstScorer is null && _correctScoreLookup.Count == 0
-            && _totalCorners.Count == 0 && TeamLineSections.All(s => s.Lines.Count == 0))
+            && _totalCorners.Count == 0 && TeamLineGroups.All(g => g.Teams.All(t => t.Lines.Count == 0)))
         {
             <div class="muted">No standard markets are priced for this match right now.</div>
         }
@@ -339,17 +347,24 @@ else
     private BttsOption? _btts;
     private FirstScorerOption? _firstScorer;
 
-    private record TeamLineSection(string Id, string Title, string MarketType, string Team, List<OverUnderLine> Lines);
+    private record TeamLineTeamGroup(string TeamKey, string TeamLabel, string? LogoUrl, List<OverUnderLine> Lines);
+    private record TeamLineMarketGroup(string Id, string Title, string MarketType, List<TeamLineTeamGroup> Teams);
 
-    // TeamCorners/TeamCards (Phase 2, 2026-09-10) - same construction pattern as _totalCorners, just
-    // split per team rather than whole-match. A separate SlipPick is built per section (see markup)
-    // with Team set, since MarketType/Line/Side alone can't tell "Home Over 5.5" from "Away Over
-    // 5.5" apart (see BetService.FindMarketAsync's matching Team disambiguation server-side).
-    private List<TeamLineSection> TeamLineSections => [
-        new("home-corners", $"{HomeTeam} corners", "TeamCorners", "Home", _homeCorners),
-        new("away-corners", $"{AwayTeam} corners", "TeamCorners", "Away", _awayCorners),
-        new("home-cards", $"{HomeTeam} cards", "TeamCards", "Home", _homeCards),
-        new("away-cards", $"{AwayTeam} cards", "TeamCards", "Away", _awayCards),
+    // TeamCorners/TeamCards (Phase 2, 2026-09-10) - one accordion per market, split by team inside
+    // (badge + name, same nested-AccordionSection pattern the player-prop tab already uses) rather
+    // than four flat top-level sections. TeamKey ("Home"/"Away") is what actually goes on the
+    // SlipPick - MarketType/Line/Side alone can't tell "Home Over 5.5" from "Away Over 5.5" apart
+    // (see BetService.FindMarketAsync's matching Team disambiguation server-side) - TeamLabel is
+    // just the display name.
+    private List<TeamLineMarketGroup> TeamLineGroups => [
+        new("corners", "Corners", "TeamCorners", [
+            new("Home", HomeTeam, HomeLogo, _homeCorners),
+            new("Away", AwayTeam, AwayLogo, _awayCorners),
+        ]),
+        new("cards", "Cards", "TeamCards", [
+            new("Home", HomeTeam, HomeLogo, _homeCards),
+            new("Away", AwayTeam, AwayLogo, _awayCards),
+        ]),
     ];
 
     private readonly Dictionary<(int Home, int Away), decimal> _correctScoreLookup = [];
@@ -563,7 +578,7 @@ else
             // tab that actually has something to show instead of an empty "Popular" screen.
             if (_overUnderLines.Count == 0 && _btts is null && _firstScorer is null
                 && _correctScoreLookup.Count == 0 && _totalCorners.Count == 0
-                && TeamLineSections.All(s => s.Lines.Count == 0) && _playerPropGroups.Count > 0)
+                && TeamLineGroups.All(g => g.Teams.All(t => t.Lines.Count == 0)) && _playerPropGroups.Count > 0)
             {
                 _activeTab = "Player Bets";
             }
