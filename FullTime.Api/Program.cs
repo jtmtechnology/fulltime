@@ -84,6 +84,7 @@ builder.Services.AddHttpClient<ApiFootballClient>((sp, client) =>
 });
 builder.Services.AddScoped<ApiFootballMatchSyncService>();
 builder.Services.AddScoped<ApiFootballSettlementSupportService>();
+builder.Services.AddScoped<ApiFootballOddsService>();
 
 builder.Services.Configure<OddsApiOptions>(builder.Configuration.GetSection(OddsApiOptions.SectionName));
 // The-odds-api's key is a query-string param per request, not a header (unlike Highlightly/
@@ -117,10 +118,16 @@ else
     builder.Services.AddHostedService<PlayerStatsSettlementBackgroundService>();
 }
 
-// BetBuilderSyncBackgroundService is Highlightly's own timer-driven odds sync — only needed when
-// Highlightly is still the markets source. the-odds-api's replacement (OddsApiMarketService) is
-// called on-demand from MatchesController instead, never from a timer.
-if (providers.MarketsSource != "OddsApi")
+// BetBuilderSyncBackgroundService is Highlightly's own timer-driven odds sync; ApiFootballOddsSyncBackgroundService
+// (Phase 2, 2026-09-10) is its API-Football equivalent, also proactive/timer-driven since the goal
+// is odds ready for every tracked match, not just whichever one a user views. the-odds-api's
+// replacement (OddsApiMarketService) is called on-demand from MatchesController instead, never from
+// a timer, so it needs no hosted service at all.
+if (providers.MarketsSource == "ApiFootball")
+{
+    builder.Services.AddHostedService<ApiFootballOddsSyncBackgroundService>();
+}
+else if (providers.MarketsSource != "OddsApi")
 {
     builder.Services.AddHostedService<BetBuilderSyncBackgroundService>();
 }

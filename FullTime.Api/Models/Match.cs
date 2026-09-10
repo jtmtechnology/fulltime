@@ -99,4 +99,18 @@ public class Match
     public DateTime? EventsFinalizedAt { get; set; }
 
     public List<MatchEvent> Events { get; set; } = [];
+
+    // Last time ApiFootballOddsService.EnsureBetBuilderMarketsFreshAsync attempted a fetch for this
+    // match - same "stamp even on a miss" reasoning as OddsLastFetchedAt, kept as a separate field
+    // since the two odds sources have independent TTL-gating and aren't both active at once
+    // (Providers:MarketsSource picks one).
+    public DateTime? ApiFootballOddsLastFetchedAt { get; set; }
+
+    // Per-team corner/card counts, split out from the existing summed TotalCorners - populated
+    // alongside it in ApiFootballSettlementSupportService.ResolvePlayerStatsAsync's existing
+    // fixtures/statistics fetch (no extra API call). Settle MarketType.TeamCorners/TeamCards.
+    public int? HomeCorners { get; set; }
+    public int? AwayCorners { get; set; }
+    public int? HomeCards { get; set; }
+    public int? AwayCards { get; set; }
 }

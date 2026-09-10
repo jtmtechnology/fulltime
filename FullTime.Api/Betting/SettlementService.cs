@@ -61,7 +61,16 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
 
     private static readonly MarketType[] PlayerStatMarketTypes =
     [
-        MarketType.PlayerShotsOnTarget, MarketType.PlayerShots,
+        MarketType.PlayerShotsOnTarget, MarketType.PlayerShots, MarketType.PlayerFoulsCommitted,
+    ];
+
+    // TeamCorners/TeamCards (Phase 2, 2026-09-10) read Match.HomeCorners/AwayCorners/HomeCards/
+    // AwayCards, populated by the same ApiFootballSettlementSupportService.ResolvePlayerStatsAsync
+    // fetch that already sets PlayerStatsResolvedAt for the shots markets above - not
+    // EventsDerivedMarketTypes, since they don't depend on Match.Events at all.
+    private static readonly MarketType[] TeamStatMarketTypes =
+    [
+        MarketType.TeamCorners, MarketType.TeamCards,
     ];
 
     private async Task ResolvePicksAsync(CancellationToken ct)
@@ -76,7 +85,8 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
             .Where(p => p.Outcome == SelectionOutcome.Pending && p.BetLeg!.Match!.Result != null
                 && (p.MarketType != MarketType.FirstTeamToScore || p.BetLeg!.Match!.FirstGoalScorerSide != null)
                 && (!EventsDerivedMarketTypes.Contains(p.MarketType) || p.BetLeg!.Match!.EventsFinalizedAt != null)
-                && (!PlayerStatMarketTypes.Contains(p.MarketType) || p.BetLeg!.Match!.PlayerStatsResolvedAt != null))
+                && (!PlayerStatMarketTypes.Contains(p.MarketType) || p.BetLeg!.Match!.PlayerStatsResolvedAt != null)
+                && (!TeamStatMarketTypes.Contains(p.MarketType) || p.BetLeg!.Match!.PlayerStatsResolvedAt != null))
             .ToListAsync(ct);
 
         if (pendingPicks.Count == 0)
@@ -177,6 +187,36 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
                 {
                     SelectionSide.Over => shots > pick.Line!.Value,
                     SelectionSide.Under => shots < pick.Line!.Value,
+                    _ => false,
+                };
+            }
+            case MarketType.PlayerFoulsCommitted:
+            {
+                var fouls = FindPlayerStat(match, pick)?.FoulsCommitted ?? 0;
+                return pick.Side switch
+                {
+                    SelectionSide.Over => fouls > pick.Line!.Value,
+                    SelectionSide.Under => fouls < pick.Line!.Value,
+                    _ => false,
+                };
+            }
+            case MarketType.TeamCorners:
+            {
+                var teamCorners = (pick.Team == "Home" ? match.HomeCorners : match.AwayCorners) ?? 0;
+                return pick.Side switch
+                {
+                    SelectionSide.Over => teamCorners > pick.Line!.Value,
+                    SelectionSide.Under => teamCorners < pick.Line!.Value,
+                    _ => false,
+                };
+            }
+            case MarketType.TeamCards:
+            {
+                var cards = (pick.Team == "Home" ? match.HomeCards : match.AwayCards) ?? 0;
+                return pick.Side switch
+                {
+                    SelectionSide.Over => cards > pick.Line!.Value,
+                    SelectionSide.Under => cards < pick.Line!.Value,
                     _ => false,
                 };
             }

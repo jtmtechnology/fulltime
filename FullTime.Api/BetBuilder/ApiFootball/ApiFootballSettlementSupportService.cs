@@ -3,10 +3,11 @@ using FullTime.Api.BetBuilder.OddsApi;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace FullTime.Api.BetBuilder.ApiFootball;
 
-// API-Football equivalent of BetBuilderSyncService's ResolveFirstGoalScorersAsync, plus the new
+// API-Football equivalent of BetBuilderSyncService's ResolveMatchEventsAsync, plus the new
 // per-player stats resolution this cutover unblocks (see MatchPlayerStat, Match.TotalCorners).
 // Runs on its own short cadence (ApiFootballOptions.GoalScorerResolutionIntervalMinutes) via
 // ApiFootballSettlementSupportBackgroundService — a settlement-latency concern, not a
@@ -14,18 +15,27 @@ namespace FullTime.Api.BetBuilder.ApiFootball;
 public class ApiFootballSettlementSupportService(
     ApiFootballClient client,
     AppDbContext db,
+    IOptions<ApiFootballOptions> options,
     ILogger<ApiFootballSettlementSupportService> logger)
 {
-    // Resolves MarketType.FirstTeamToScore, which can't be derived from the final score alone.
-    // A 0-0 result needs no external call (nobody scored, so "None" is certain); everything else
-    // needs one fixtures/events lookup. Cutoff mirrors the Highlightly original: some fixtures
-    // (lower-league/qualifying) never get an events backfill at all, so this ages out after 3 days
-    // rather than re-querying forever for no benefit.
-    public async Task ResolveFirstGoalScorersAsync(CancellationToken ct)
+
+    // Resolves MarketType.FirstTeamToScore (can't be derived from the final score alone) AND
+    // populates MatchEvent/EventsFinalizedAt for TotalCorners/PlayerGoalscorerAnytime/PlayerCard/
+    // PlayerRedCard/PlayerAssists settlement (SettlementService.ResolvePicksAsync's
+    // EventsDerivedMarketTypes gate) - both come from the same fixtures/events call, so one method
+    // does both, mirroring BetBuilderSyncService.ResolveMatchEventsAsync exactly (this used to be
+    // narrower, ResolveFirstGoalScorersAsync, before 2026-09-10's finding that the LiveScoreSource
+    // toggle turning this whole service off left those 5 market types with no way to ever settle -
+    // see HANDOVER.md §10 / memory project_apifootball_settlement_gap).
+    // A 0-0 result still needs no external call for the first-goalscorer side (nobody scored, so
+    // "None" is certain) but still fetches events for the other market types' sake. Cutoff mirrors
+    // the Highlightly original: some fixtures (lower-league/qualifying) never get an events backfill
+    // at all, so this ages out after 3 days rather than re-querying forever for no benefit.
+    public async Task ResolveMatchEventsAsync(CancellationToken ct)
     {
         var cutoff = DateTime.UtcNow.AddDays(-3);
         var candidates = await db.Matches
-            .Where(m => m.Status == MatchStatus.Finished && m.FirstGoalScorerSide == null && m.KickoffTime >= cutoff)
+            .Where(m => m.Status == MatchStatus.Finished && m.EventsFinalizedAt == null && m.KickoffTime >= cutoff)
             .ToListAsync(ct);
 
         if (candidates.Count == 0)
@@ -37,44 +47,134 @@ public class ApiFootballSettlementSupportService(
 
         foreach (var match in candidates)
         {
+            match.EventsFetchedAt = DateTime.UtcNow;
+            match.EventsFinalizedAt = DateTime.UtcNow;
+
             if (match.HomeScore == 0 && match.AwayScore == 0)
             {
                 match.FirstGoalScorerSide = SelectionSide.None;
-                resolvedCount++;
-                continue;
             }
 
-            var events = await client.GetFixtureEventsAsync(long.Parse(match.ExternalId), ct);
-            var firstGoal = events
-                .Where(e => e.Type == "Goal")
-                .OrderBy(e => e.Time.Elapsed)
-                .ThenBy(e => e.Time.Extra ?? 0)
-                .FirstOrDefault();
+            var events = await FetchAndStoreEventsAsync(match, ct);
 
-            if (firstGoal is null)
+            if (match.FirstGoalScorerSide is null)
             {
-                continue;
+                var firstGoal = events
+                    .Where(e => e.Type == "Goal")
+                    .OrderBy(e => e.Time.Elapsed)
+                    .ThenBy(e => e.Time.Extra ?? 0)
+                    .FirstOrDefault();
+
+                if (firstGoal is not null)
+                {
+                    match.FirstGoalScorerSide = firstGoal.Team.Id == match.HomeTeamId
+                        ? SelectionSide.Home
+                        : firstGoal.Team.Id == match.AwayTeamId
+                            ? SelectionSide.Away
+                            : null;
+                }
             }
 
-            match.FirstGoalScorerSide = firstGoal.Team.Id == match.HomeTeamId
-                ? SelectionSide.Home
-                : firstGoal.Team.Id == match.AwayTeamId
-                    ? SelectionSide.Away
-                    : null;
-
-            if (match.FirstGoalScorerSide is not null)
-            {
-                resolvedCount++;
-            }
+            resolvedCount++;
         }
 
-        if (resolvedCount == 0)
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation("Resolved match events for {Count} match(es)", resolvedCount);
+    }
+
+    // Powers Match Summary's live display while a match is in progress - a display-freshness
+    // concern, not a settlement one (ResolveMatchEventsAsync above is what settlement actually
+    // waits on, and only runs once a match is Finished). Mirrors
+    // BetBuilderSyncService.RefreshLiveMatchEventsAsync exactly.
+    public async Task RefreshLiveMatchEventsAsync(CancellationToken ct)
+    {
+        var staleCutoff = DateTime.UtcNow - TimeSpan.FromSeconds(Math.Max(1, options.Value.LiveEventsRefreshIntervalSeconds));
+        var candidates = await db.Matches
+            .Where(m => m.Status == MatchStatus.InProgress && (m.EventsFetchedAt == null || m.EventsFetchedAt <= staleCutoff))
+            .ToListAsync(ct);
+
+        if (candidates.Count == 0)
         {
             return;
         }
 
+        foreach (var match in candidates)
+        {
+            match.EventsFetchedAt = DateTime.UtcNow;
+            await FetchAndStoreEventsAsync(match, ct);
+        }
+
         await db.SaveChangesAsync(ct);
-        logger.LogInformation("Resolved first goalscorer for {Count} match(es)", resolvedCount);
+        logger.LogInformation("Refreshed live match events for {Count} match(es)", candidates.Count);
+    }
+
+    // Confirmed live 2026-09-10 against a real finished fixture: type/detail pairs seen were
+    // Goal/"Normal Goal", Goal/"Penalty", Goal/"Own Goal", Card/"Yellow Card", subst/"Substitution N",
+    // Var/"Goal cancelled", Var/"Penalty cancelled" (API-Football's own docs also list "Missed
+    // Penalty", "Red Card", "Second Yellow card", "Goal confirmed"/"Penalty confirmed" - not yet seen
+    // live, mapped defensively). Normalizes to the exact canonical strings Highlightly already
+    // produces (MatchEventRow.razor's icon/text switch), so the client needs zero changes -
+    // anything genuinely unrecognized falls through to Detail raw, which the client already renders
+    // as a generic bullet + raw text rather than crashing (same tolerant pattern as
+    // BetBuilderSyncService.ParseOutcome).
+    private static string MapEventType(string type, string detail) => (type, detail) switch
+    {
+        ("Goal", "Normal Goal") => "Goal",
+        ("Goal", "Penalty") => "Penalty",
+        ("Goal", "Missed Penalty") => "Missed Penalty",
+        ("Goal", "Own Goal") => "Own Goal",
+        ("Card", "Yellow Card") => "Yellow Card",
+        ("Card", "Red Card") => "Red Card",
+        ("Card", "Second Yellow card") => "Red Card",
+        ("subst", _) => "Substitution",
+        ("Var", _) when detail.Contains("Penalty", StringComparison.OrdinalIgnoreCase) => "VAR Penalty",
+        ("Var", _) when detail.Contains("cancel", StringComparison.OrdinalIgnoreCase) => "VAR Goal Cancelled",
+        ("Var", _) when detail.Contains("confirm", StringComparison.OrdinalIgnoreCase) => "VAR Goal Confirmed",
+        _ => detail,
+    };
+
+    private async Task<List<Dtos.FixtureEventDto>> FetchAndStoreEventsAsync(Match match, CancellationToken ct)
+    {
+        List<Dtos.FixtureEventDto> events;
+        try
+        {
+            events = await client.GetFixtureEventsAsync(long.Parse(match.ExternalId), ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to fetch events for match {MatchId}", match.Id);
+            return [];
+        }
+
+        await db.MatchEvents.Where(e => e.MatchId == match.Id).ExecuteDeleteAsync(ct);
+        db.MatchEvents.AddRange(events.Select(e =>
+        {
+            // API-Football's "subst" events put the player coming OFF in "player" and the player
+            // coming ON in "assist" - the reverse of every other event type, where "player" is the
+            // main actor. Display-only nuance (no MarketType settles off substitutions), so a wrong
+            // guess here is cosmetic, not a settlement risk.
+            var (onName, onId, offName) = e.Type == "subst"
+                ? (e.Assist?.Name, e.Assist?.Id, e.Player.Name)
+                : (e.Player.Name, e.Player.Id, (string?)null);
+
+            return new MatchEvent
+            {
+                Id = Guid.NewGuid(),
+                MatchId = match.Id,
+                Team = e.Team.Id == match.HomeTeamId ? SelectionSide.Home
+                    : e.Team.Id == match.AwayTeamId ? SelectionSide.Away
+                    : SelectionSide.None,
+                Minute = e.Time.Extra is { } extra ? $"{e.Time.Elapsed}+{extra}" : e.Time.Elapsed.ToString(),
+                Type = MapEventType(e.Type, e.Detail),
+                PlayerName = onName,
+                PlayerExternalId = onId,
+                AssistPlayerName = e.Type == "subst" ? null : e.Assist?.Name,
+                AssistPlayerExternalId = e.Type == "subst" ? null : e.Assist?.Id,
+                SubstitutedPlayerName = offName,
+            };
+        }));
+
+        return events;
     }
 
     // Powers settlement for the four player-prop market types plus TotalCorners. Same 3-day cutoff
@@ -160,11 +260,24 @@ public class ApiFootballSettlementSupportService(
                         ShotsOnTarget = stat.Shots?.On ?? 0,
                         TotalShots = stat.Shots?.Total ?? 0,
                         YellowCards = stat.Cards?.Yellow ?? 0,
+                        FoulsCommitted = stat.Fouls?.Committed ?? 0,
                     });
                 }
             }
 
-            match.TotalCorners = SumCornerKicks(statistics);
+            // Split by team (compared against the resolved fixture's own team IDs, same reasoning
+            // as the player-stats loop above) rather than just summed, so TeamCorners/TeamCards
+            // (Phase 2 odds) can settle per side - TotalCorners keeps its existing summed value for
+            // the markets that already depend on it.
+            var homeStats = statistics.FirstOrDefault(t => t.Team.Id == fixture.Teams.Home.Id);
+            var awayStats = statistics.FirstOrDefault(t => t.Team.Id == fixture.Teams.Away.Id);
+            match.HomeCorners = ExtractStat(homeStats, "Corner Kicks");
+            match.AwayCorners = ExtractStat(awayStats, "Corner Kicks");
+            match.HomeCards = SumCards(homeStats);
+            match.AwayCards = SumCards(awayStats);
+            match.TotalCorners = match.HomeCorners is null && match.AwayCorners is null
+                ? null
+                : (match.HomeCorners ?? 0) + (match.AwayCorners ?? 0);
             match.PlayerStatsResolvedAt = DateTime.UtcNow;
             resolvedCount++;
         }
@@ -209,23 +322,21 @@ public class ApiFootballSettlementSupportService(
     // year the season started in (a March fixture in year Y is season Y-1).
     private static int SeasonFor(DateOnly date) => date.Month >= 7 ? date.Year : date.Year - 1;
 
-    private static int? SumCornerKicks(List<Dtos.FixtureStatisticsTeam> statistics)
+    private static int? ExtractStat(Dtos.FixtureStatisticsTeam? team, string statType)
     {
-        var total = 0;
-        var found = false;
+        var entry = team?.Statistics.FirstOrDefault(s => s.Type == statType);
+        return entry is not null && entry.Value.ValueKind == System.Text.Json.JsonValueKind.Number
+            ? entry.Value.GetInt32()
+            : null;
+    }
 
-        foreach (var team in statistics)
-        {
-            var corners = team.Statistics.FirstOrDefault(s => s.Type == "Corner Kicks");
-            if (corners is null || corners.Value.ValueKind != System.Text.Json.JsonValueKind.Number)
-            {
-                continue;
-            }
-
-            total += corners.Value.GetInt32();
-            found = true;
-        }
-
-        return found ? total : null;
+    // "Team Total Cards" bookmaker markets count yellow and red together - Red Cards comes back
+    // null rather than 0 when a team has none (confirmed live 2026-09-10), same null-means-absent
+    // handling as ExtractStat above.
+    private static int? SumCards(Dtos.FixtureStatisticsTeam? team)
+    {
+        var yellow = ExtractStat(team, "Yellow Cards");
+        var red = ExtractStat(team, "Red Cards");
+        return yellow is null && red is null ? null : (yellow ?? 0) + (red ?? 0);
     }
 }

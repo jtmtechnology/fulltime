@@ -227,7 +227,7 @@
         {
             var legs = Slip.Legs.Select(kv => new LegRequest(
                 kv.Key, kv.Value.Picks.Select(p => new PickRequest(
-                    p.MarketType, p.Line, p.Side, p.PredictedHomeScore, p.PredictedAwayScore, p.PlayerName)).ToList())).ToList();
+                    p.MarketType, p.Line, p.Side, p.PredictedHomeScore, p.PredictedAwayScore, p.PlayerName, p.Team)).ToList())).ToList();
             var placedBet = await Api.PlaceBetAsync(_stake, legs, ContextState.Current.LeagueId);
 
             await Slip.ClearAsync();

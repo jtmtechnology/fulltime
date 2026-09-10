@@ -68,6 +68,30 @@ else
             </AccordionSection>
         }
 
+        @foreach (var section in TeamLineSections)
+        {
+            @if (section.Lines.Count > 0)
+            {
+                <AccordionSection Id="@section.Id" Title="@section.Title" Expanded="_expanded" OnToggle="ToggleSection">
+                    <div class="odds-table">
+                        <div class="odds-table-header">
+                            <span></span><span>Over</span><span>Under</span>
+                        </div>
+                        @foreach (var line in section.Lines)
+                        {
+                            var overPick = new SlipPick(section.MarketType, line.Line, "Over", line.OverPrice, Team: section.Team);
+                            var underPick = new SlipPick(section.MarketType, line.Line, "Under", line.UnderPrice, Team: section.Team);
+                            <div class="odds-table-row">
+                                <span class="odds-table-label">@line.Line.ToString("0.##")</span>
+                                <span class="@TableCellClass(overPick)" @onclick="() => TogglePick(overPick)">@OddsCell.FormatOdds(overPick.Odds)</span>
+                                <span class="@TableCellClass(underPick)" @onclick="() => TogglePick(underPick)">@OddsCell.FormatOdds(underPick.Odds)</span>
+                            </div>
+                        }
+                    </div>
+                </AccordionSection>
+            }
+        }
+
         @if (_overUnderLines.Count > 0)
         {
             <AccordionSection Id="totals" Title="Total goals" Expanded="_expanded" OnToggle="ToggleSection">
@@ -154,7 +178,8 @@ else
             </AccordionSection>
         }
 
-        @if (_overUnderLines.Count == 0 && _btts is null && _firstScorer is null && _correctScoreLookup.Count == 0 && _totalCorners.Count == 0)
+        @if (_overUnderLines.Count == 0 && _btts is null && _firstScorer is null && _correctScoreLookup.Count == 0
+            && _totalCorners.Count == 0 && TeamLineSections.All(s => s.Lines.Count == 0))
         {
             <div class="muted">No standard markets are priced for this match right now.</div>
         }
@@ -307,8 +332,25 @@ else
     private List<BetBuilderMarketDto>? _markets;
     private readonly List<OverUnderLine> _overUnderLines = [];
     private readonly List<OverUnderLine> _totalCorners = [];
+    private readonly List<OverUnderLine> _homeCorners = [];
+    private readonly List<OverUnderLine> _awayCorners = [];
+    private readonly List<OverUnderLine> _homeCards = [];
+    private readonly List<OverUnderLine> _awayCards = [];
     private BttsOption? _btts;
     private FirstScorerOption? _firstScorer;
+
+    private record TeamLineSection(string Id, string Title, string MarketType, string Team, List<OverUnderLine> Lines);
+
+    // TeamCorners/TeamCards (Phase 2, 2026-09-10) - same construction pattern as _totalCorners, just
+    // split per team rather than whole-match. A separate SlipPick is built per section (see markup)
+    // with Team set, since MarketType/Line/Side alone can't tell "Home Over 5.5" from "Away Over
+    // 5.5" apart (see BetService.FindMarketAsync's matching Team disambiguation server-side).
+    private List<TeamLineSection> TeamLineSections => [
+        new("home-corners", $"{HomeTeam} corners", "TeamCorners", "Home", _homeCorners),
+        new("away-corners", $"{AwayTeam} corners", "TeamCorners", "Away", _awayCorners),
+        new("home-cards", $"{HomeTeam} cards", "TeamCards", "Home", _homeCards),
+        new("away-cards", $"{AwayTeam} cards", "TeamCards", "Away", _awayCards),
+    ];
 
     private readonly Dictionary<(int Home, int Away), decimal> _correctScoreLookup = [];
     private List<PlayerPropGroup> _playerPropGroups = [];
@@ -459,6 +501,11 @@ else
                 .Select(g => new OverUnderLine(g.Key, g.First(m => m.Side == "Over").Price, g.First(m => m.Side == "Under").Price))
                 .OrderBy(l => l.Line));
 
+            _homeCorners.AddRange(BuildTeamLines("TeamCorners", "Home"));
+            _awayCorners.AddRange(BuildTeamLines("TeamCorners", "Away"));
+            _homeCards.AddRange(BuildTeamLines("TeamCards", "Home"));
+            _awayCards.AddRange(BuildTeamLines("TeamCards", "Away"));
+
             // Grouped by team (see SandboxPlayerPropMarket.Team's surname-matching comment for how
             // that's resolved) - players the surname heuristic couldn't place on either squad are
             // dropped server-side (AppCompatController) rather than shown in an "Unmatched" group.
@@ -515,7 +562,8 @@ else
             // If this match only has player props priced (no Popular markets at all), land on the
             // tab that actually has something to show instead of an empty "Popular" screen.
             if (_overUnderLines.Count == 0 && _btts is null && _firstScorer is null
-                && _correctScoreLookup.Count == 0 && _totalCorners.Count == 0 && _playerPropGroups.Count > 0)
+                && _correctScoreLookup.Count == 0 && _totalCorners.Count == 0
+                && TeamLineSections.All(s => s.Lines.Count == 0) && _playerPropGroups.Count > 0)
             {
                 _activeTab = "Player Bets";
             }
@@ -573,7 +621,7 @@ else
         _selected.TryGetValue(pick.MarketType, out var existing)
         && existing.Line == pick.Line && existing.Side == pick.Side
         && existing.PredictedHomeScore == pick.PredictedHomeScore && existing.PredictedAwayScore == pick.PredictedAwayScore
-        && existing.PlayerName == pick.PlayerName;
+        && existing.PlayerName == pick.PlayerName && existing.Team == pick.Team;
 
     // "Amad Diallo (Over 1.5)" for a lined prop, just "Amad Diallo" for a plain Yes/No one (Line is
     // null for anytime-scorer/card markets - see PlayerPropMarketTypes).
@@ -583,6 +631,14 @@ else
     // An "Over 1.5" line means 2 or more - the reference layout shows that as a plain "2+" column
     // rather than a bookmaker-style half-line, since there's no such thing as "1.5 shots".
     private static string LineLabel(decimal line) => $"{(int)(line + 1m)}+";
+
+    private IEnumerable<OverUnderLine> BuildTeamLines(string marketType, string team) =>
+        (_markets ?? [])
+            .Where(m => m.MarketType == marketType && m.Team == team && m.Line is not null)
+            .GroupBy(m => m.Line!.Value)
+            .Where(g => g.Any(m => m.Side == "Over") && g.Any(m => m.Side == "Under"))
+            .Select(g => new OverUnderLine(g.Key, g.First(m => m.Side == "Over").Price, g.First(m => m.Side == "Under").Price))
+            .OrderBy(l => l.Line);
 
     private string TableCellClass(SlipPick pick) => IsSelected(pick) ? "odds-table-cell selected" : "odds-table-cell";
 

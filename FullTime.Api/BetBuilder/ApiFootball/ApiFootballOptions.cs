@@ -31,4 +31,29 @@ public class ApiFootballOptions
     // independent of fixture/live cadence — settlement-latency concern, not price-freshness (see
     // HighlightlyOptions.GoalScorerResolutionIntervalMinutes for the same reasoning).
     public int GoalScorerResolutionIntervalMinutes { get; set; } = 5;
+
+    // How often RefreshLiveMatchEventsAsync re-fetches events for InProgress matches, for Match
+    // Summary's live display. Unlike live-score sync (one fixtures?live=all call regardless of
+    // match count), this is genuinely one call PER live match PER tick - deliberately set slower
+    // than Highlightly's ~30s equivalent to keep worst-case cost (several concurrent live matches
+    // on a busy Saturday) further from Pro's 7,500/day ceiling. Settlement itself doesn't depend on
+    // this cadence - only the live display does - so a slower value here is a pure quota/freshness
+    // tradeoff, safe to raise once the account is upgraded.
+    public int LiveEventsRefreshIntervalSeconds { get; set; } = 45;
+
+    // Bet365's api-sports.io bookmaker ID (confirmed live 2026-09-10: {"id":8,"name":"Bet365"}) -
+    // same choice HighlightlyOptions.BookmakerName ("bet365") already made, for the richest
+    // coverage of the bookmakers available on this plan.
+    public long OddsBookmakerId { get; set; } = 8;
+
+    // How often ApiFootballOddsSyncBackgroundService ticks and checks every tracked Upcoming match
+    // against NeedsOddsRefresh's TTL gate - the gate (not this interval) is what actually controls
+    // call volume, since most ticks are no-ops for matches not yet due. Mirrors OddsApiOptions'
+    // tiered-TTL fields/reasoning exactly.
+    public int OddsSyncIntervalMinutes { get; set; } = 15;
+    public int OddsFarTtlHours { get; set; } = 6;
+    public int OddsNearTtlMinutes { get; set; } = 45;
+    public int OddsImminentTtlMinutes { get; set; } = 15;
+    public int OddsNearBoundaryHours { get; set; } = 24;
+    public int OddsImminentBoundaryHours { get; set; } = 1;
 }

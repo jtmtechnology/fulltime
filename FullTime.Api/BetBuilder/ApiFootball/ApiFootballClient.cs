@@ -36,6 +36,12 @@ public class ApiFootballClient(HttpClient httpClient, ILogger<ApiFootballClient>
     public Task<List<FixtureStatisticsTeam>> GetFixtureStatisticsAsync(long fixtureId, CancellationToken ct = default) =>
         GetListAsync<FixtureStatisticsTeam>($"fixtures/statistics?fixture={fixtureId}", ct);
 
+    // /odds?fixture={id}&bookmaker={id} — confirmed live 2026-09-10: filtering by bookmaker
+    // server-side (rather than requesting all 6+ and discarding client-side) keeps the response
+    // small and the parsing surface to just the one bookmaker we price from.
+    public Task<List<OddsFixtureResponseDto>> GetOddsAsync(long fixtureId, long bookmakerId, CancellationToken ct = default) =>
+        GetListAsync<OddsFixtureResponseDto>($"odds?fixture={fixtureId}&bookmaker={bookmakerId}", ct);
+
     // /players/squads?team={id} — one call per team, used to resolve which team a the-odds-api
     // player-prop outcome belongs to (the-odds-api has no roster data of its own).
     public async Task<List<string>> GetSquadPlayerNamesAsync(long teamId, CancellationToken ct = default)

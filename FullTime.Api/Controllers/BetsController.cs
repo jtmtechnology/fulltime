@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullTime.Api.Controllers;
 
-public record PickRequest(string MarketType, decimal? Line, string? Side, int? PredictedHomeScore = null, int? PredictedAwayScore = null, string? PlayerName = null);
+public record PickRequest(string MarketType, decimal? Line, string? Side, int? PredictedHomeScore = null, int? PredictedAwayScore = null, string? PlayerName = null, string? Team = null);
 public record LegRequest(Guid MatchId, List<PickRequest> Picks);
 public record PlaceBetRequest(decimal Stake, List<LegRequest> Legs, Guid? LeagueId);
 
@@ -58,7 +58,7 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
                     side = parsedSide;
                 }
 
-                picks.Add(new LegPickInput(marketType, pickRequest.Line, side, pickRequest.PredictedHomeScore, pickRequest.PredictedAwayScore, pickRequest.PlayerName));
+                picks.Add(new LegPickInput(marketType, pickRequest.Line, side, pickRequest.PredictedHomeScore, pickRequest.PredictedAwayScore, pickRequest.PlayerName, pickRequest.Team));
             }
 
             legs.Add(new LegInput(legRequest.MatchId, picks));

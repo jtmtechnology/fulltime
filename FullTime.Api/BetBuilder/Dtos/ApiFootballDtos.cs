@@ -122,8 +122,11 @@ public class SquadPlayerDto
     public required string Name { get; set; }
 }
 
-// /fixtures/events?fixture={id} — goal timeline, same role as Highlightly's MatchEventDto (see
-// ApiFootballGoalScorerService.ResolveFirstGoalScorersAsync).
+// /fixtures/events?fixture={id} — full match event timeline (goals/cards/subs/VAR), same role as
+// Highlightly's MatchEventDto (see ApiFootballSettlementSupportService.ResolveMatchEventsAsync).
+// Player/Assist/Detail confirmed live 2026-09-10 against a real finished fixture — "assist" is
+// always present as an object even with no assist, just {"id": null, "name": null}, hence
+// EventPlayerInfo's fields are nullable rather than reusing the stricter PlayerInfo used elsewhere.
 public class FixtureEventDto
 {
     [JsonPropertyName("time")]
@@ -132,8 +135,26 @@ public class FixtureEventDto
     [JsonPropertyName("team")]
     public required TeamInfo Team { get; set; }
 
+    [JsonPropertyName("player")]
+    public required EventPlayerInfo Player { get; set; }
+
+    [JsonPropertyName("assist")]
+    public EventPlayerInfo? Assist { get; set; }
+
     [JsonPropertyName("type")]
     public required string Type { get; set; }
+
+    [JsonPropertyName("detail")]
+    public required string Detail { get; set; }
+}
+
+public class EventPlayerInfo
+{
+    [JsonPropertyName("id")]
+    public long? Id { get; set; }
+
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
 }
 
 public class EventTimeDto
@@ -182,6 +203,15 @@ public class PlayerMatchStatistics
 
     [JsonPropertyName("cards")]
     public CardsStat? Cards { get; set; }
+
+    [JsonPropertyName("fouls")]
+    public FoulsStat? Fouls { get; set; }
+}
+
+public class FoulsStat
+{
+    [JsonPropertyName("committed")]
+    public int? Committed { get; set; }
 }
 
 public class ShotsStat
@@ -228,8 +258,48 @@ public class FixtureStatisticEntry
     public required string Type { get; set; }
 
     // Comes back as a number, a percentage string ("54%"), or null depending on Type — only ever
-    // read for Type == "Corner Kicks" (a plain int), so a JsonElement sidesteps modelling every
+    // read for Type == "Corner Kicks"/"Yellow Cards"/"Red Cards" (plain ints, "Red Cards" can be
+    // null when zero — confirmed live 2026-09-10), so a JsonElement sidesteps modelling every
     // other stat's shape just to ignore it.
     [JsonPropertyName("value")]
     public System.Text.Json.JsonElement Value { get; set; }
+}
+
+// /odds?fixture={id}&bookmaker={id} — confirmed live 2026-09-10 against a real upcoming fixture:
+// a single call returns every market Bet365 currently prices for that fixture, one response item
+// (we only ever request one fixture at a time, so .Response has at most one entry).
+public class OddsFixtureResponseDto
+{
+    [JsonPropertyName("bookmakers")]
+    public List<BookmakerOddsDto> Bookmakers { get; set; } = [];
+}
+
+public class BookmakerOddsDto
+{
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
+    [JsonPropertyName("name")]
+    public required string Name { get; set; }
+
+    [JsonPropertyName("bets")]
+    public List<BetOddsDto> Bets { get; set; } = [];
+}
+
+public class BetOddsDto
+{
+    [JsonPropertyName("name")]
+    public required string Name { get; set; }
+
+    [JsonPropertyName("values")]
+    public List<BetValueDto> Values { get; set; } = [];
+}
+
+public class BetValueDto
+{
+    [JsonPropertyName("value")]
+    public required string Value { get; set; }
+
+    [JsonPropertyName("odd")]
+    public required string Odd { get; set; }
 }

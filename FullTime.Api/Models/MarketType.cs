@@ -33,4 +33,13 @@ public enum MarketType
     // Total shots (not just on target) - same API-Football settlement path as PlayerShotsOnTarget,
     // via MatchPlayerStat.TotalShots.
     PlayerShots,
+
+    // Added for API-Football odds (Phase 2, 2026-09-10) - match-level (not player-level) totals,
+    // settled from Match.HomeCorners/AwayCorners/HomeCards/AwayCards (see SettlementService).
+    TeamCorners,
+    TeamCards,
+
+    // Player-level, settled from MatchPlayerStat.FoulsCommitted (API-Football's
+    // fixtures/players?fixture= "fouls.committed" field, not previously mapped).
+    PlayerFoulsCommitted,
 }

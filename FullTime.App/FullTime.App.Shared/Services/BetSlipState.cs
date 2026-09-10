@@ -4,7 +4,7 @@ namespace FullTime.App.Shared.Services;
 
 public record SlipPick(
     string MarketType, decimal? Line, string? Side, decimal Odds, int? PredictedHomeScore = null,
-    int? PredictedAwayScore = null, string? PlayerName = null);
+    int? PredictedAwayScore = null, string? PlayerName = null, string? Team = null);
 
 public record SlipLeg(List<SlipPick> Picks, string HomeTeam, string AwayTeam, DateTime KickoffTime)
 {

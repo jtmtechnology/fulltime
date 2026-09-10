@@ -497,31 +497,39 @@ still in effect:
 ## 7. Known issues / outstanding
 
 **Top priorities for whoever picks this up next:**
-1. **Continue the API-Football cutover plan** at
-   `C:\Users\alan.browne\.claude\plans\vivid-growing-snail.md` (§6.13, §10) — Phase 1 (live scores)
-   is done and deployed as of 2026-09-10. **Next: Phase 3 (Match Summary/event-fetch) is now
-   effectively urgent, not "do last"** — it's what closes the settlement gap in §10, not just a
-   Match Summary display nicety. Do it before or alongside Phase 2 (odds), earlier than the plan
-   file's original order suggests. Still confirm the API-Football account tier before any more
-   aggressive cadence changes (still Pro/7,500/day as of 2026-09-10, confirmed via
-   `curl https://v3.football.api-sports.io/status` — 15/7500 used that morning; the user wants to
-   design for 75,000/day eventually, needs an upgrade first).
-2. **Check for stuck bets on the settlement gap** (§10) — query for `Pending` `BetLegPicks` with
-   `MarketType` in `TotalCorners`/`PlayerGoalscorerAnytime`/`PlayerCard`/`PlayerRedCard`/
-   `PlayerAssists` against `Finished` matches whose `KickoffTime` is after 2026-09-10. None existed
-   at cutover time (the DB wipe cleared everything), but new bets may have been placed since.
-3. **Trigger a fresh iOS Codemagic build (`ios-testflight`)** to test the new hypothesis in §6.11 -
+1. **Finish rolling out Phase 2/3 of the API-Football cutover** (§11) — code is written and builds
+   clean (API + web head) but **nothing has been applied/deployed yet**. In order:
+   - Apply the EF migration (`20260910081108_AddApiFootballOddsPhase2Columns`) to the production DB
+     — additive-only, reviewed via `dotnet ef migrations script`, but still needs the owner's
+     go-ahead per `CLAUDE.md`'s prod-DB-write rule.
+   - Deploy `fulltime-api` (carries Phase 3's settlement-gap fix live, and Phase 2's new odds
+     service/background sync code — though `Providers:MarketsSource` staying `"Highlightly"` means
+     Phase 2 won't actually run until the next step).
+   - Flip `Providers:MarketsSource` to `"ApiFootball"` in `appsettings.json`, commit, redeploy — this
+     is the actual "go live" switch for Phase 2's odds.
+   - Redeploy `fulltime-web` (`BetBuilder.razor`'s new team-corners/team-cards sections, the
+     `IsSelected` Team-comparison fix) — Web users won't see any client-side Phase 2 changes until
+     this happens. A new Android build is also needed for Android users (same lag as item 4 below).
+   - Watch `journalctl -u fulltime-api` closely right after for real 429s — §11.4's cadence math
+     says this is plausible on a heavy day even before any account upgrade.
+2. **Build Phase 4** (quota-alert email parity for `ApiFootballClient`, mirroring `29f05f2`'s
+   Highlightly version) — more urgent now than when the plan first proposed it, given Phase 2/3's
+   added call volume (§11.4).
+3. **Check for stuck bets on the (now-closed-in-code, not-yet-deployed) settlement gap** (§10/§11.2)
+   — query for `Pending` `BetLegPicks` with `MarketType` in `TotalCorners`/`PlayerGoalscorerAnytime`/
+   `PlayerCard`/`PlayerRedCard`/`PlayerAssists` against `Finished` matches whose `KickoffTime` is
+   after 2026-09-10. None existed at cutover time (the DB wipe cleared everything), but new bets may
+   have been placed since, and won't self-heal until Phase 3 is actually deployed.
+4. **Trigger a fresh iOS Codemagic build (`ios-testflight`)** to test the new hypothesis in §6.11 -
    the owner's full delete+restart+reinstall did NOT fix the stale notification icon, ruling out the
    local-cache theory. If a new build's notification icon comes through correct, that confirms
    TestFlight/APNs caches icon artwork per-build rather than reading the live bundle.
-4. **Upload the built AAB to Play Console** —
+5. **Upload the built AAB to Play Console** —
    `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`
    (version 1.3, code 10) is built and signed but sitting local-only (§6.8). This is the only
    remaining step to get the notification-icon fix and all three `FullTime.App.Shared` fixes to
-   Android users.
-5. **Redeploy `fulltime-web`** for the same three `FullTime.App.Shared` fixes (leaderboard-refresh,
-   match-event-icon, ads-removed-card) to reach Web users — `fulltime-api` is already up to date
-   (redeployed in §6.9/§6.10), `fulltime-web` is not. Follow `CLAUDE.md`'s deploy steps with `X=web`.
+   Android users (note: it predates this session's Phase 2/3 client changes, so a further rebuild
+   will be needed for those too once ready to ship).
 6. The duplicate-`BetBuilderMarket`-row problem (below) has still never been swept beyond one match.
 7. If Highlightly's *old* API key (now replaced, §6.12) ever matters again — e.g. to understand why
    a real daily quota stayed dead for 17+ hours instead of resetting — that's now a dashboard
@@ -754,3 +762,146 @@ API keys in plaintext** — must never be committed.
 - **Not done this session**: Phases 2-4 of the plan (odds, Match Summary/event-fetch, quota-alert
   parity) — see §7 top priorities. `Providers:MarketsSource` is still `"Highlightly"`, so Bet
   Builder odds/markets are unaffected by this session's changes.
+
+---
+
+## 11. 2026-09-10 session (continued) — Phase 2 (odds) + Phase 3 (Match Summary/settlement gap)
+
+Owner asked to do Phase 2 and Phase 3 next, explicitly bumping Phase 3 ahead of its plan-file
+ordering per §10's finding (it closes the settlement gap, not just a display nicety). Also asked
+mid-session to work out safe live-score/odds-refresh cadences to stay within API-Football's quota.
+
+### 11.1 Real data confirmed live before writing any parsing code
+
+Per the plan's own instruction not to guess field shapes from memory - confirmed via direct `curl`
+against the VM's real API-Football key, against real fixtures (not the sandbox):
+
+- **Match events** (`/fixtures/events?fixture=`): real type/detail pairs seen were `Goal`/"Normal
+  Goal", `Goal`/"Penalty", `Goal`/"Own Goal", `Card`/"Yellow Card", `subst`/"Substitution N",
+  `Var`/"Goal cancelled", `Var`/"Penalty cancelled" - confirms `player`/`assist`/`detail` fields
+  exist as the plan assumed (previously only `time`/`team`/`type` were mapped). `assist` is always
+  a present object, just `{"id": null, "name": null}` when there's no assist.
+- **Odds** (`/odds?fixture=&bookmaker=8`, Bet365): 105 bet types on one real upcoming fixture.
+  Confirmed real names/shapes for `Match Winner` (Home/Draw/Away), `Goals Over/Under` ("Over
+  2.5"/"Under 2.5"), `Both Teams Score` (Yes/No), `Exact Score` ("1:0" style), `Team To Score First`
+  (Home/Away/"No goal"), `Home/Away Corners Over/Under`, `Home/Away Team Total Cards`, `Home/Away
+  Anytime Goal Scorer` (value = full player name, Yes-only), `Home/Away Player Shots`/`Player Shots
+  On Target Total`/`Player Fouls Committed` (all a `"PlayerName - N"` ladder - one discrete Over-N.5
+  price per count, no matching Under price at all for this shape).
+- **Two real discrepancies from the plan's assumptions, found this way rather than guessed**:
+  - `Player Assists` is a **whole-match Yes/No proposition** under Bet365 via API-Football, not
+    per-player - deliberately left unmapped (falls through the parser's tolerant null/skip path,
+    same as everywhere else in this codebase) rather than wired up wrong.
+  - No per-player card market exists under this bookmaker at all - `PlayerCard`/`PlayerRedCard`
+    just never get rows from API-Football odds, same real gap the-odds-api already had (§7.4/§6.13).
+  - Statistics endpoint field names confirmed too: `Corner Kicks`, `Yellow Cards`, `Red Cards`
+    (nullable - comes back `null` rather than `0` when a team has none).
+
+### 11.2 Phase 3 - Match Summary / settlement gap closed
+
+- `FullTime.Api/BetBuilder/Dtos/ApiFootballDtos.cs` - `FixtureEventDto` extended with `Player`
+  (required), `Assist` (nullable), `Detail` (required); new `EventPlayerInfo` (nullable id/name,
+  since `assist` needs nullable fields the existing stricter `PlayerInfo` doesn't have). New odds
+  DTOs (`OddsFixtureResponseDto`/`BookmakerOddsDto`/`BetOddsDto`/`BetValueDto`) for Phase 2.
+- `FullTime.Api/BetBuilder/ApiFootball/ApiFootballSettlementSupportService.cs` -
+  `ResolveFirstGoalScorersAsync` renamed to `ResolveMatchEventsAsync` and broadened: now also fetches
+  and stores `MatchEvent` rows and sets `EventsFinalizedAt` for every finished match (previously only
+  set `FirstGoalScorerSide`) - this is the actual fix for §10's settlement gap.
+  New `RefreshLiveMatchEventsAsync` powers Match Summary's live display while `InProgress`, on its
+  own cadence (`ApiFootballOptions.LiveEventsRefreshIntervalSeconds`, see §11.4), separate from
+  settlement (which only ever runs once a match is `Finished`).
+  New `MapEventType` normalizes API-Football's `type`/`detail` pairs to the exact canonical strings
+  Highlightly already produces (`"Goal"`, `"Penalty"`, `"Own Goal"`, `"Yellow Card"`, `"Red Card"`,
+  `"Substitution"`, `"VAR Goal Cancelled"`, `"VAR Goal Confirmed"`, `"VAR Penalty"`) - anything
+  genuinely unrecognized falls through to the raw `Detail` string, which `MatchEventRow.razor`
+  already renders as a generic bullet + text rather than crashing (zero client changes needed).
+  API-Football's `subst` events put the player going OFF in `player` and the player coming ON in
+  `assist` (the reverse of every other event type) - handled, but this is a display-only nuance (no
+  `MarketType` settles off substitutions), so a wrong guess there would be cosmetic, not a
+  settlement risk.
+- `FullTime.Api/BetBuilder/ApiFootball/ApiFootballMatchSyncBackgroundService.cs` - now also calls
+  `RefreshLiveMatchEventsAsync` each tick, same dual-call pattern
+  `HighlightlyMatchSyncBackgroundService` already used.
+- `FullTime.Api/BetBuilder/ApiFootball/ApiFootballSettlementSupportBackgroundService.cs` - updated
+  call site for the rename.
+- Settlement gap from §10 (`project_apifootball_settlement_gap` memory) is now closed - can be
+  deleted once this has run in production against a real finished match and confirmed working.
+
+### 11.3 Phase 2 - odds via a new `ApiFootballOddsService`
+
+- **New `MarketType` values** (appended, per the enum's own append-only rule): `TeamCorners`,
+  `TeamCards`, `PlayerFoulsCommitted`.
+- **New EF migration** `20260910081108_AddApiFootballOddsPhase2Columns` (additive only, reviewed via
+  `dotnet ef migrations script` before applying anywhere - **not yet applied to production, see §7**):
+  `Match.ApiFootballOddsLastFetchedAt`/`HomeCorners`/`AwayCorners`/`HomeCards`/`AwayCards`,
+  `MatchPlayerStat.FoulsCommitted`.
+- `FullTime.Api/BetBuilder/ApiFootball/ApiFootballSettlementSupportService.cs`'s existing
+  `ResolvePlayerStatsAsync` (fixtures/statistics fetch, already running) now also splits corners/
+  cards per team into the new columns, instead of only the old summed `Match.TotalCorners` - no new
+  API call, same fetch just kept more of what it already returns. Maps `fouls.committed` from the
+  fixtures/players fetch into the new `MatchPlayerStat.FoulsCommitted` too.
+- `FullTime.Api/BetBuilder/ApiFootball/ApiFootballClient.cs` - new `GetOddsAsync(fixtureId,
+  bookmakerId)`, filtering server-side to one bookmaker (`ApiFootballOptions.OddsBookmakerId`,
+  default `8` = Bet365, confirmed live) rather than requesting all 6+ and discarding client-side.
+- **New `FullTime.Api/BetBuilder/ApiFootball/ApiFootballOddsService.cs`** - the bet-name→`MarketType`
+  mapping table (§11.1's confirmed real names), TTL-tiered freshness (mirrors
+  `OddsApiMarketService.NeedsRefresh` exactly, new `ApiFootballOptions.Odds*` fields), delete-then-
+  insert scoped to `MatchId` (no DB constraint stops duplicates, same discipline as every other odds
+  sync in this codebase).
+- **New `FullTime.Api/BetBuilder/ApiFootball/ApiFootballOddsSyncBackgroundService.cs`** - proactive
+  background sync iterating every tracked `Upcoming` match each tick (per the owner's explicit "add
+  odds to any fixture where we have the markets" request), not on-demand-only like the-odds-api -
+  each match's own TTL gate makes most per-match calls same-tick no-ops.
+- `FullTime.Api/Program.cs` - registers the new odds service/background service; `MarketsSource`
+  branch is now three-way (`ApiFootball` / `Highlightly` / `OddsApi`). **`Providers:MarketsSource`
+  has NOT been flipped to `"ApiFootball"` yet** - see §7, this needs the DB migration applied and a
+  deploy first.
+- **A real ambiguous-lookup bug found and fixed while wiring this up, in `BetService.FindMarketAsync`**:
+  `TeamCorners`/`TeamCards` need `Team` as a disambiguator the same way `PlayerName` already
+  disambiguates player props ("Home Over 5.5" and "Away Over 5.5" share the same
+  MatchId/MarketType/Line/Side) - added `Team` all the way through the stack (`SlipPick` →
+  `PickRequest` → `LegPickInput` → `FindMarketAsync`'s new `IsTeamScopedMarket` filter).
+  **While fixing this, found the identical bug already live for `PlayerShots`/`PlayerRedCard`** -
+  both were missing from `FindMarketAsync`'s `IsPlayerPropMarket` list, meaning two players sharing
+  the same Line/Side on either market could have gotten an arbitrary (possibly wrong) player's price
+  silently attached to a placed bet. Fixed in the same pass since it's the exact same function/bug
+  class - not scope creep, just noticed while already there.
+- **Client** (`FullTime.App/FullTime.App.Shared/Pages/BetBuilder.razor`): new `TeamLineSections`
+  (four accordion sections - `{Team} corners`/`{Team} cards` - same construction pattern as the
+  existing `_totalCorners` block, now factored into a shared `BuildTeamLines` helper). Fixed
+  `IsSelected` to also compare `Team` (it previously didn't, which would have made a Home-corners
+  selection incorrectly show an Away-corners row at the same line as also "selected").
+  **`PlayerFoulsCommitted` deliberately NOT added to the client's player-prop tab** - per §11.1, this
+  bookmaker's fouls market isn't team-split, and the existing player-prop rendering fundamentally
+  groups by `Team` (`Home`/`Away`); a null-`Team` market would just silently render nothing. The
+  settlement/DB side is fully wired regardless, in case a future bookmaker update splits it by team,
+  or someone adds squad-based team resolution for it later.
+
+### 11.4 Cadence/quota decisions (owner explicitly asked to work this out)
+
+Confirmed still Pro (7,500/day) as of this session. Rough worst-case-Saturday budget:
+
+| Source | Interval | Rough worst-case cost |
+|---|---|---|
+| Live score sync (Phase 1, already live) | 10s while any match live, else 3600s idle | ~3,400/day on a heavy multi-kickoff Saturday (~9.5h "something live") |
+| Live match-events refresh (Phase 3, new) | 45s per live match (not batched - genuinely 1 call per live match per tick, unlike score sync's single `fixtures?live=all` call) | scales with concurrent live-match count; deliberately slower than Highlightly's ~30s equivalent for exactly this reason |
+| Odds sync (Phase 2, new) | Background tick every 15min, but TTL (not the tick interval) actually gates calls: Far 6h / Near 45min (≤24h to kickoff) / Imminent 15min (≤1h to kickoff) | "a few thousand/day" per the original plan's own estimate, given ~14 tracked leagues and ~100+ tracked Upcoming matches at any time |
+| Fixture discovery + settlement support | ~14/day + a few hundred/day | negligible |
+
+**Explicitly flagged, not just assumed**: combining all of the above on a genuinely heavy day (many
+simultaneous live matches, e.g. a full Champions League night) could plausibly approach or exceed
+Pro's 7,500/day ceiling - exactly the plan's own "tight-to-over on a heavy multi-league Saturday"
+warning. The account still needs upgrading before this is fully safe at scale (§7 carries this
+forward); until then, watch for real 429s in the logs after this goes live, and consider Phase 4
+(quota-alert email parity, still not built) sooner rather than later given the new call volume.
+
+### 11.5 Not done this session
+
+- Phase 4 (quota-alert email parity for `ApiFootballClient`, mirroring `29f05f2`'s Highlightly
+  version) - still open, see §7.
+- The EF migration is generated and reviewed but **not yet applied to the production database**,
+  and `Providers:MarketsSource` has **not** been flipped - both need the owner's go-ahead per
+  `CLAUDE.md`'s deploy/prod-DB-write confirmation rule. See §7 for the exact rollout steps left.
+- `fulltime-web` still needs redeploying for the `BetBuilder.razor` changes to reach Web users, and
+  a new Android build is needed to reach Android users (same `FullTime.App.Shared` deploy-lag
+  pattern as §7 item 5/earlier sessions) - neither done yet.

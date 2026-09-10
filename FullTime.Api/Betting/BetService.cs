@@ -6,7 +6,7 @@ namespace FullTime.Api.Betting;
 
 public record LegPickInput(
     MarketType MarketType, decimal? Line, SelectionSide? Side, int? PredictedHomeScore = null, int? PredictedAwayScore = null,
-    string? PlayerName = null);
+    string? PlayerName = null, string? Team = null);
 public record LegInput(Guid MatchId, List<LegPickInput> Picks);
 
 public class BetService(AppDbContext db, ILogger<BetService> logger)
@@ -79,7 +79,7 @@ public class BetService(AppDbContext db, ILogger<BetService> logger)
             {
                 var market = await FindMarketAsync(
                     legInput.MatchId, pickInput.MarketType, pickInput.Line, pickInput.Side,
-                    pickInput.PredictedHomeScore, pickInput.PredictedAwayScore, pickInput.PlayerName, ct);
+                    pickInput.PredictedHomeScore, pickInput.PredictedAwayScore, pickInput.PlayerName, pickInput.Team, ct);
                 var odds = market is null
                     ? await GetMatchResultOddsAsync(legInput.MatchId, pickInput.MarketType, pickInput.Side, ct)
                     : market.Price;
@@ -183,10 +183,13 @@ public class BetService(AppDbContext db, ILogger<BetService> logger)
     // PlayerName for the four player-prop types (PlayerGoalscorerAnytime/PlayerCard/
     // PlayerShotsOnTarget/PlayerAssists) — without it, two different players both priced e.g.
     // "Over 0.5 shots on target" under the same MarketType/Line/Side would be an ambiguous lookup
-    // (confirmed a real bug during the cutover plan's research; this is the fix).
+    // (confirmed a real bug during the cutover plan's research; this is the fix). TeamCorners/
+    // TeamCards (Phase 2, 2026-09-10) have the exact same ambiguity the other way round - "Home
+    // Over 5.5" and "Away Over 5.5" share a MarketType/Line/Side, disambiguated by Team instead of
+    // PlayerName.
     private async Task<BetBuilderMarket?> FindMarketAsync(
         Guid matchId, MarketType marketType, decimal? line, SelectionSide? side,
-        int? predictedHomeScore, int? predictedAwayScore, string? playerName, CancellationToken ct)
+        int? predictedHomeScore, int? predictedAwayScore, string? playerName, string? team, CancellationToken ct)
     {
         if (marketType == MarketType.MatchResult)
         {
@@ -203,9 +206,18 @@ public class BetService(AppDbContext db, ILogger<BetService> logger)
             query = query.Where(m => m.PlayerName == playerName);
         }
 
+        if (IsTeamScopedMarket(marketType))
+        {
+            query = query.Where(m => m.Team == team);
+        }
+
         return await query.OrderByDescending(m => m.FetchedAt).FirstOrDefaultAsync(ct);
     }
 
     private static bool IsPlayerPropMarket(MarketType marketType) => marketType is
-        MarketType.PlayerGoalscorerAnytime or MarketType.PlayerCard or MarketType.PlayerShotsOnTarget or MarketType.PlayerAssists;
+        MarketType.PlayerGoalscorerAnytime or MarketType.PlayerCard or MarketType.PlayerShotsOnTarget
+        or MarketType.PlayerAssists or MarketType.PlayerRedCard or MarketType.PlayerShots or MarketType.PlayerFoulsCommitted;
+
+    private static bool IsTeamScopedMarket(MarketType marketType) => marketType is
+        MarketType.TeamCorners or MarketType.TeamCards;
 }

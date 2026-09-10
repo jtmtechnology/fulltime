@@ -16,7 +16,7 @@ public class ApiFootballSettlementSupportBackgroundService(
 
             try
             {
-                await service.ResolveFirstGoalScorersAsync(stoppingToken);
+                await service.ResolveMatchEventsAsync(stoppingToken);
                 await service.ResolvePlayerStatsAsync(stoppingToken);
                 logger.LogInformation("API-Football settlement support tick complete");
             }

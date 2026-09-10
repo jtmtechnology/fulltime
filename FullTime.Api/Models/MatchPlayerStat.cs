@@ -22,4 +22,8 @@ public class MatchPlayerStat
     public int ShotsOnTarget { get; set; }
     public int TotalShots { get; set; }
     public int YellowCards { get; set; }
+
+    // API-Football's fixtures/players "fouls.committed" field - not previously mapped. Settles
+    // MarketType.PlayerFoulsCommitted (added for Phase 2's odds cutover, 2026-09-10).
+    public int FoulsCommitted { get; set; }
 }
