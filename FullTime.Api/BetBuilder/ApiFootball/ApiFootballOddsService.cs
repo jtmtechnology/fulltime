@@ -4,6 +4,7 @@ using FullTime.Api.Data;
 using FullTime.Api.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using BookmakerLogos = FullTime.Api.BetBuilder.BookmakerLogos;
 
 namespace FullTime.Api.BetBuilder.ApiFootball;
 
@@ -49,6 +50,14 @@ public class ApiFootballOddsService(
         }
 
         var fetchedAt = DateTime.UtcNow;
+
+        // Match-card-level Home/Draw/Away odds (OddsSnapshot) are a separate display path from
+        // BetBuilderMarket - mirrors BetBuilderSyncService.SnapshotOneXTwoIfChangedAsync exactly
+        // (found missing 2026-09-10: this cutover only ever wrote BetBuilderMarket rows, leaving
+        // match cards with no basic odds at all once Highlightly's own snapshot sync stopped
+        // running).
+        await SnapshotMatchResultIfChangedAsync(match, bookmaker, fetchedAt, ct);
+
         var rows = bookmaker.Bets.SelectMany(bet => ParseBet(match, bet, fetchedAt)).ToList();
 
         // Delete-then-insert scoped to this match - a blind per-outcome upsert would silently
@@ -60,6 +69,69 @@ public class ApiFootballOddsService(
 
         await db.SaveChangesAsync(ct);
         logger.LogInformation("API-Football odds: stored {Count} market row(s) for match {MatchId}", rows.Count, match.Id);
+    }
+
+    // Mirrors BetBuilderSyncService.SnapshotOneXTwoIfChangedAsync exactly - only writes a new row
+    // when the price/bookmaker actually changed, so OddsSnapshot doesn't accumulate a row every
+    // single tick regardless of whether anything moved.
+    private async Task SnapshotMatchResultIfChangedAsync(Match match, BookmakerOddsDto bookmaker, DateTime fetchedAt, CancellationToken ct)
+    {
+        var matchWinner = bookmaker.Bets.FirstOrDefault(b => b.Name == "Match Winner");
+        if (matchWinner is null)
+        {
+            return;
+        }
+
+        decimal? home = null, draw = null, away = null;
+        foreach (var value in matchWinner.Values)
+        {
+            if (!decimal.TryParse(value.Odd, NumberStyles.Number, CultureInfo.InvariantCulture, out var odd))
+            {
+                continue;
+            }
+
+            switch (value.Value)
+            {
+                case "Home": home = odd; break;
+                case "Draw": draw = odd; break;
+                case "Away": away = odd; break;
+            }
+        }
+
+        if (home is null || draw is null || away is null)
+        {
+            return;
+        }
+
+        var latest = await db.OddsSnapshots
+            .Where(o => o.MatchId == match.Id)
+            .OrderByDescending(o => o.FetchedAt)
+            .FirstOrDefaultAsync(ct);
+
+        var logoUrl = BookmakerLogos.UrlFor(bookmaker.Name);
+        var changed = latest is null
+            || latest.HomeOdds != home.Value
+            || latest.DrawOdds != draw.Value
+            || latest.AwayOdds != away.Value
+            || !string.Equals(latest.Bookmaker, bookmaker.Name, StringComparison.OrdinalIgnoreCase)
+            || latest.BookmakerLogoUrl != logoUrl;
+
+        if (!changed)
+        {
+            return;
+        }
+
+        db.OddsSnapshots.Add(new OddsSnapshot
+        {
+            Id = Guid.NewGuid(),
+            MatchId = match.Id,
+            HomeOdds = home.Value,
+            DrawOdds = draw.Value,
+            AwayOdds = away.Value,
+            Bookmaker = bookmaker.Name,
+            BookmakerLogoUrl = logoUrl,
+            FetchedAt = fetchedAt,
+        });
     }
 
     private bool NeedsRefresh(DateTime? lastFetchedAt, DateTime kickoffTime)
