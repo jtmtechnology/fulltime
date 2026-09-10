@@ -27,6 +27,22 @@ public class ApiFootballClient(HttpClient httpClient, ILogger<ApiFootballClient>
         GetListAsync<FixtureDto>(
             $"fixtures?league={leagueId}&season={season}&from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}", ct);
 
+    // /fixtures?ids=id1-id2-... — up to 20 ids per call (API-Football's documented limit). Used to
+    // directly re-check a match that disappeared from live=all before we ever saw its final status
+    // (confirmed in production 2026-09-10: API-Football drops a fixture from the live set at/near
+    // full time, sometimes before a clean "FT" tick reaches us, leaving it stuck at its last-seen
+    // live status/minute — see ApiFootballMatchSyncService.RefreshLiveAsync).
+    public async Task<List<FixtureDto>> GetFixturesByIdsAsync(IEnumerable<long> fixtureIds, CancellationToken ct = default)
+    {
+        var results = new List<FixtureDto>();
+        foreach (var chunk in fixtureIds.Chunk(20))
+        {
+            results.AddRange(await GetListAsync<FixtureDto>($"fixtures?ids={string.Join('-', chunk)}", ct));
+        }
+
+        return results;
+    }
+
     public Task<List<FixtureEventDto>> GetFixtureEventsAsync(long fixtureId, CancellationToken ct = default) =>
         GetListAsync<FixtureEventDto>($"fixtures/events?fixture={fixtureId}", ct);
 

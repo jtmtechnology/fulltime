@@ -42,6 +42,27 @@ public class ApiFootballMatchSyncService(
             upsertedCount++;
         }
 
+        // A match that's still InProgress in our DB but didn't come back in this tick's live=all
+        // response almost certainly just finished and dropped off the live set - re-fetch it
+        // directly rather than waiting for the once-a-day fixture-discovery tick to eventually
+        // notice (confirmed in production 2026-09-10: matches sat stuck at their last-seen live
+        // minute for hours after actually finishing).
+        var liveExternalIds = tracked.Select(f => f.Fixture.Id.ToString()).ToHashSet();
+        var droppedFromLive = await db.Matches
+            .Where(m => m.Status == MatchStatus.InProgress && !liveExternalIds.Contains(m.ExternalId))
+            .Select(m => m.ExternalId)
+            .ToListAsync(ct);
+
+        if (droppedFromLive.Count > 0)
+        {
+            var followUp = await client.GetFixturesByIdsAsync(droppedFromLive.Select(long.Parse), ct);
+            foreach (var fixture in followUp)
+            {
+                await UpsertMatchAsync(fixture, ct);
+                upsertedCount++;
+            }
+        }
+
         if (upsertedCount > 0)
         {
             await db.SaveChangesAsync(ct);
