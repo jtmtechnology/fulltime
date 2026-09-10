@@ -133,7 +133,11 @@ public class ApiFootballMatchSyncService(
             db.Matches.Add(match);
         }
 
-        match.LeagueId = dto.League.Id;
+        // Store Highlightly's own ID here, not API-Football's raw one - the client's
+        // LeagueCatalog/MatchLeaguePreferences are keyed on Highlightly's IDs regardless of which
+        // provider is actually live (see HighlightlyToApiFootballLeagueMap's reverse-map comment).
+        match.LeagueId = HighlightlyToApiFootballLeagueMap.ApiFootballToHighlightlyLeagueIds
+            .GetValueOrDefault(dto.League.Id, dto.League.Id);
         match.Round = dto.League.Round;
         match.HomeTeam = dto.Teams.Home.Name;
         match.AwayTeam = dto.Teams.Away.Name;

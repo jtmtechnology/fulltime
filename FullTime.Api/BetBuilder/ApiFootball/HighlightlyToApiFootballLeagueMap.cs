@@ -26,4 +26,13 @@ public static class HighlightlyToApiFootballLeagueMap
         [HighlightlyLeagueMap.EuropaLeague] = ApiFootballLeagueMap.EuropaLeague,
         [HighlightlyLeagueMap.ConferenceLeague] = ApiFootballLeagueMap.ConferenceLeague,
     };
+
+    // Reverse of the above - needed by ApiFootballMatchSyncService.UpsertMatchAsync, which discovers
+    // fixtures keyed by API-Football's own league IDs but must still store Match.LeagueId as
+    // Highlightly's ID (found live 2026-09-10: the client's LeagueCatalog/MatchLeaguePreferences are
+    // both keyed on Highlightly's IDs regardless of which provider is live - storing API-Football's
+    // raw IDs meant every match failed MatchLeaguePreferences.IsVisible's check and the app showed
+    // no fixtures at all).
+    public static readonly Dictionary<long, long> ApiFootballToHighlightlyLeagueIds =
+        LeagueIds.ToDictionary(kv => kv.Value, kv => kv.Key);
 }
