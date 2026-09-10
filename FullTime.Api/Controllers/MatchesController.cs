@@ -33,7 +33,9 @@ public record UpcomingMatchDto(
 public record BetBuilderMarketDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore, decimal Price,
     string? PlayerName = null, string? Team = null);
-public record BetBuilderMarketsResponse(bool Available, List<BetBuilderMarketDto> Markets, string? Bookmaker, string? BookmakerLogoUrl);
+public record BetBuilderMarketsResponse(
+    bool Available, List<BetBuilderMarketDto> Markets, string? Bookmaker, string? BookmakerLogoUrl,
+    List<string> HomeForm, List<string> AwayForm);
 
 public record MatchEventDto(
     string Team, string Minute, string Type, string? PlayerName, string? AssistPlayerName, string? SubstitutedPlayerName);
@@ -46,6 +48,7 @@ public class MatchesController(
     IOptions<ApiFootballOptions> apiFootballOptions,
     IOptions<ProvidersOptions> providersOptions,
     OddsApiMarketService oddsApiMarkets,
+    ApiFootballTeamFormService teamFormService,
     IServiceScopeFactory scopeFactory,
     ILogger<MatchesController> logger) : ControllerBase
 {
@@ -173,6 +176,7 @@ public class MatchesController(
     [HttpGet("{id:guid}/bet-builder-markets")]
     public async Task<ActionResult<BetBuilderMarketsResponse>> GetBetBuilderMarkets(Guid id, CancellationToken ct)
     {
+        var match = await db.Matches.FindAsync([id], ct);
         string? bookmaker;
         string? bookmakerLogoUrl;
 
@@ -187,7 +191,6 @@ public class MatchesController(
 
         if (providersOptions.Value.MarketsSource == "OddsApi")
         {
-            var match = await db.Matches.FindAsync([id], ct);
             if (match is not null)
             {
                 await oddsApiMarkets.EnsureBetBuilderMarketsFreshAsync(match, ct);
@@ -227,7 +230,25 @@ public class MatchesController(
                 m.PredictedHomeScore, m.PredictedAwayScore, m.Price, m.PlayerName, m.Team))
             .ToListAsync(ct);
 
-        return Ok(new BetBuilderMarketsResponse(markets.Count > 0, markets, bookmaker, bookmakerLogoUrl));
+        // Sourced from API-Football's own /teams/statistics "form" field (ApiFootballTeamFormService),
+        // not derived from our own Matches table - gives real season-to-date form immediately instead
+        // of waiting for enough matches to complete under the current provider's team-ID scheme.
+        // Match.LeagueId is ALWAYS stored in Highlightly's own ID space regardless of which provider
+        // is live (see HighlightlyToApiFootballLeagueMap's own comment - a deliberate fix so the
+        // client's league catalog keeps working) - so it must be translated to API-Football's league
+        // ID before calling out, it is never directly usable as one. Home/AwayTeamId, unlike
+        // LeagueId, are NOT translated - they're only meaningfully API-Football IDs while ApiFootball
+        // is actually the live-score provider, so both checks are required, not just the league map.
+        List<string> homeForm = [];
+        List<string> awayForm = [];
+        if (match is not null && providersOptions.Value.LiveScoreSource == "ApiFootball"
+            && HighlightlyToApiFootballLeagueMap.LeagueIds.TryGetValue(match.LeagueId, out var apiFootballLeagueId))
+        {
+            homeForm = await teamFormService.GetFormAsync(match.HomeTeamId, apiFootballLeagueId, ct);
+            awayForm = await teamFormService.GetFormAsync(match.AwayTeamId, apiFootballLeagueId, ct);
+        }
+
+        return Ok(new BetBuilderMarketsResponse(markets.Count > 0, markets, bookmaker, bookmakerLogoUrl, homeForm, awayForm));
     }
 
     // Pure DB read - populated by BetBuilderSyncService.ResolveMatchEventsAsync once a match

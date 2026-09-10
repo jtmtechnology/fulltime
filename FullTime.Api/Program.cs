@@ -84,6 +84,7 @@ builder.Services.AddHttpClient<ApiFootballClient>((sp, client) =>
 });
 builder.Services.AddScoped<ApiFootballMatchSyncService>();
 builder.Services.AddScoped<ApiFootballSettlementSupportService>();
+builder.Services.AddScoped<ApiFootballTeamFormService>();
 builder.Services.AddScoped<ApiFootballOddsService>();
 
 builder.Services.Configure<OddsApiOptions>(builder.Configuration.GetSection(OddsApiOptions.SectionName));

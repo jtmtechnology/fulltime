@@ -322,3 +322,20 @@ public class BetValueDto
     [JsonConverter(typeof(FlexibleStringConverter))]
     public required string Odd { get; set; }
 }
+
+// /teams/statistics?league=&season=&team= - confirmed real 2026-09-10 against Manchester United
+// (team 33, league 39): "form" is a bare chronological string, oldest match first, one letter per
+// result ("W"/"D"/"L") - cross-checked against real fixture results/dates to confirm the ordering,
+// not assumed from docs. League-scoped only (the API rejects a request with no "league" param), so
+// this reflects "form in this specific competition", not a team's form across every competition.
+public class TeamStatisticsResponseDto
+{
+    [JsonPropertyName("response")]
+    public TeamStatisticsInfo? Response { get; set; }
+}
+
+public class TeamStatisticsInfo
+{
+    [JsonPropertyName("form")]
+    public string? Form { get; set; }
+}

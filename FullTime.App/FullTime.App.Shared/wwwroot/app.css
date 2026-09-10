@@ -369,6 +369,10 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
 .bb-team { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; width: 30%; }
 .bb-team .crest { width: 2.6rem; height: 2.6rem; object-fit: contain; }
 .bb-team span { font-size: 0.85rem; font-weight: 600; text-align: center; }
+.bb-form { display: flex; gap: 0.3rem; }
+.bb-form-dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--text-muted); }
+.bb-form-dot.win { background: var(--accent); }
+.bb-form-dot.loss { background: var(--danger); }
 .bb-kickoff { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding-top: 0.4rem; }
 .bb-kickoff span { font-size: 0.8rem; color: var(--text-muted); }
 

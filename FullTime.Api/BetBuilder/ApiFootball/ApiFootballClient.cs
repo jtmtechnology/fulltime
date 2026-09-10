@@ -42,6 +42,17 @@ public class ApiFootballClient(HttpClient httpClient, ILogger<ApiFootballClient>
     public Task<List<OddsFixtureResponseDto>> GetOddsAsync(long fixtureId, long bookmakerId, CancellationToken ct = default) =>
         GetListAsync<OddsFixtureResponseDto>($"odds?fixture={fixtureId}&bookmaker={bookmakerId}", ct);
 
+    // /teams/statistics?league=&season=&team= — unlike every other endpoint here, "response" is a
+    // bare object, not an array, so this bypasses GetListAsync and calls GetWithRetryAsync directly.
+    // "league" is a required param (confirmed live 2026-09-10 - the API rejects a call without one),
+    // so the result is that team's form within the given competition only, not across all of them.
+    public async Task<string?> GetTeamFormAsync(int leagueId, int season, long teamId, CancellationToken ct = default)
+    {
+        var result = await GetWithRetryAsync<TeamStatisticsResponseDto>(
+            $"teams/statistics?league={leagueId}&season={season}&team={teamId}", ct);
+        return result?.Response?.Form;
+    }
+
     // /players/squads?team={id} — one call per team, used to resolve which team a the-odds-api
     // player-prop outcome belongs to (the-odds-api has no roster data of its own).
     public async Task<List<string>> GetSquadPlayerNamesAsync(long teamId, CancellationToken ct = default)

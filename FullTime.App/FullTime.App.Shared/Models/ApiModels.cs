@@ -69,7 +69,9 @@ public record SpinResultDto(int WinningIndex, int Streak, decimal? MysteryCashAm
 public record BetBuilderMarketDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore,
     decimal Price, string? PlayerName = null, string? Team = null);
-public record BetBuilderMarketsResponse(bool Available, List<BetBuilderMarketDto> Markets, string? Bookmaker, string? BookmakerLogoUrl);
+public record BetBuilderMarketsResponse(
+    bool Available, List<BetBuilderMarketDto> Markets, string? Bookmaker, string? BookmakerLogoUrl,
+    List<string> HomeForm, List<string> AwayForm);
 
 public record LeaderboardEntryDto(Guid UserId, string Name, string LeagueName, decimal Balance, decimal Profit, string CurrencySymbol);
 

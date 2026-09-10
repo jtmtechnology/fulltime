@@ -14,6 +14,15 @@
     <div class="bb-team">
         <LogoImg Src="@HomeLogo" CssClass="crest" Alt="@HomeTeam" />
         <span>@HomeTeam</span>
+        @if (_homeForm.Count > 0)
+        {
+            <div class="bb-form">
+                @foreach (var result in _homeForm)
+                {
+                    <span class="bb-form-dot @FormDotClass(result)"></span>
+                }
+            </div>
+        }
     </div>
     <div class="bb-kickoff">
         <span>@KickoffTime.ToLocalTime().ToString("d MMM, HH:mm")</span>
@@ -22,6 +31,15 @@
     <div class="bb-team">
         <LogoImg Src="@AwayLogo" CssClass="crest" Alt="@AwayTeam" />
         <span>@AwayTeam</span>
+        @if (_awayForm.Count > 0)
+        {
+            <div class="bb-form">
+                @foreach (var result in _awayForm)
+                {
+                    <span class="bb-form-dot @FormDotClass(result)"></span>
+                }
+            </div>
+        }
     </div>
 </div>
 
@@ -347,6 +365,17 @@ else
     private List<BetBuilderMarketDto>? _markets;
     private string? _bookmaker;
     private string? _bookmakerLogoUrl;
+    private List<string> _homeForm = [];
+    private List<string> _awayForm = [];
+
+    // "W"/"D"/"L" from GetRecentFormAsync (MatchesController) - oldest to newest, so the rightmost
+    // dot is the most recent result.
+    private static string FormDotClass(string result) => result switch
+    {
+        "W" => "win",
+        "L" => "loss",
+        _ => "draw",
+    };
     private readonly List<OverUnderLine> _overUnderLines = [];
     private readonly List<OverUnderLine> _totalCorners = [];
     private readonly List<OverUnderLine> _homeCorners = [];
@@ -490,6 +519,8 @@ else
             _markets = response.Markets;
             _bookmaker = response.Bookmaker;
             _bookmakerLogoUrl = response.BookmakerLogoUrl;
+            _homeForm = response.HomeForm;
+            _awayForm = response.AwayForm;
 
             _overUnderLines.AddRange(_markets
                 .Where(m => m.MarketType == "OverUnder" && m.Line is not null)
