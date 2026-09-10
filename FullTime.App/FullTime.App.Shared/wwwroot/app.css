@@ -367,7 +367,7 @@ table.simple-table th { background: var(--bg-elevated); color: var(--text-muted)
    see BetBuilder.razor) Dynamic Odds toggle. */
 .bb-teams-row { display: flex; align-items: flex-start; justify-content: space-between; margin: 0.75rem 0; }
 .bb-team { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; width: 30%; }
-.bb-team .crest { width: 2.6rem; height: 2.6rem; }
+.bb-team .crest { width: 2.6rem; height: 2.6rem; object-fit: contain; }
 .bb-team span { font-size: 0.85rem; font-weight: 600; text-align: center; }
 .bb-kickoff { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding-top: 0.4rem; }
 .bb-kickoff span { font-size: 0.8rem; color: var(--text-muted); }
