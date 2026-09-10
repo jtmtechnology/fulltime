@@ -68,9 +68,18 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
     // AwayCards, populated by the same ApiFootballSettlementSupportService.ResolvePlayerStatsAsync
     // fetch that already sets PlayerStatsResolvedAt for the shots markets above - not
     // EventsDerivedMarketTypes, since they don't depend on Match.Events at all.
+    // TotalCorners is ALSO gated here (as well as in EventsDerivedMarketTypes above) - found
+    // 2026-09-10 while reviewing full sweep coverage: under Highlightly, TotalCorners and
+    // EventsFinalizedAt used to be set by the same method (BetBuilderSyncService.ResolveMatchEventsAsync),
+    // so gating it on EventsFinalizedAt alone was safe. Under API-Football that coupling no longer
+    // holds - ResolveMatchEventsAsync (sets EventsFinalizedAt) and ResolvePlayerStatsAsync (sets
+    // Match.TotalCorners itself) are separate calls on separate cadences, so a sweep landing between
+    // them would have settled a TotalCorners pick against a still-null value (defaulting to 0,
+    // permanently). Currently dormant - Phase 2 doesn't price TotalCorners from Bet365 today - but a
+    // real latent bug if that market is ever wired up.
     private static readonly MarketType[] TeamStatMarketTypes =
     [
-        MarketType.TeamCorners, MarketType.TeamCards,
+        MarketType.TeamCorners, MarketType.TeamCards, MarketType.TotalCorners,
     ];
 
     private async Task ResolvePicksAsync(CancellationToken ct)
