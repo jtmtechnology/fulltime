@@ -750,7 +750,7 @@ API keys in plaintext** — must never be committed.
     in.
 - **Deployed to `fulltime-api`** on the VM per `CLAUDE.md`'s standard publish/scp/systemd-restart
   pattern, after the owner explicitly confirmed the commit-and-deploy step (not just the plan
-  overall) — commit `<fill in after committing>`.
+  overall) — commit `916b1c2`.
 - **Not done this session**: Phases 2-4 of the plan (odds, Match Summary/event-fetch, quota-alert
   parity) — see §7 top priorities. `Providers:MarketsSource` is still `"Highlightly"`, so Bet
   Builder odds/markets are unaffected by this session's changes.
