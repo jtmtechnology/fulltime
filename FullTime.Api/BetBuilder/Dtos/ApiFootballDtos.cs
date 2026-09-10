@@ -1,6 +1,23 @@
+using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace FullTime.Api.BetBuilder.Dtos;
+
+// Confirmed live 2026-09-10: at least one bet type's "value" comes back as a raw JSON number
+// rather than a quoted string (crashed deserialization for the whole fixture's odds response
+// before this - "Cannot get the value of a token type 'Number' as a string"). Tolerates either
+// shape rather than assuming every bet type is string-valued.
+public class FlexibleStringConverter : JsonConverter<string>
+{
+    public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        reader.TokenType == JsonTokenType.Number
+            ? reader.GetDouble().ToString(CultureInfo.InvariantCulture)
+            : reader.GetString() ?? "";
+
+    public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value);
+}
 
 // Shapes confirmed against real responses from v3.football.api-sports.io — ported from
 // FullTime.Api.Sandbox/Dtos/ApiFootballDtos.cs, which validated these against the real API during
@@ -298,8 +315,10 @@ public class BetOddsDto
 public class BetValueDto
 {
     [JsonPropertyName("value")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
     public required string Value { get; set; }
 
     [JsonPropertyName("odd")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
     public required string Odd { get; set; }
 }
