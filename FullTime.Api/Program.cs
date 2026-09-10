@@ -166,9 +166,14 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<MatchUpdatesHub>("/hubs/matches");
 
-app.MapGet("/api/config", async (HighlightlyMatchSyncService syncService) =>
+app.MapGet("/api/config", async (
+    Microsoft.Extensions.Options.IOptions<ProvidersOptions> providersOptions,
+    HighlightlyMatchSyncService highlightlySyncService,
+    ApiFootballMatchSyncService apiFootballSyncService) =>
 {
-    var delay = await syncService.NextPollDelayAsync();
+    var delay = providersOptions.Value.LiveScoreSource == "ApiFootball"
+        ? await apiFootballSyncService.NextPollDelayAsync()
+        : await highlightlySyncService.NextPollDelayAsync();
     return Results.Ok(new { refreshIntervalSeconds = (int)delay.TotalSeconds });
 });
 

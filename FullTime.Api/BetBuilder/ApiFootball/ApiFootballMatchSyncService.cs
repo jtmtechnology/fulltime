@@ -173,8 +173,10 @@ public class ApiFootballMatchSyncService(
     {
         switch (statusShort)
         {
-            case "NS" or "TBD" or "PST":
+            case "NS" or "TBD":
                 return MatchStatus.Upcoming;
+            case "PST":
+                return MatchStatus.Postponed;
             case "FT" or "AET" or "PEN" or "AWD" or "WO" or "CANC" or "ABD":
                 return MatchStatus.Finished;
             case "1H" or "2H" or "HT" or "ET" or "P" or "SUSP" or "INT":
