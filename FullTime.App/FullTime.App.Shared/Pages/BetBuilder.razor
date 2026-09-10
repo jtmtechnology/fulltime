@@ -25,6 +25,13 @@
     </div>
 </div>
 
+@if (_bookmaker is not null)
+{
+    <div class="bet-builder-bookmaker-row muted">
+        Prices from <BookmakerLogo Name="@_bookmaker" LogoUrl="@_bookmakerLogoUrl" />
+    </div>
+}
+
 @if (_status == "Loading…")
 {
     <LoadingSpinner />
@@ -338,6 +345,8 @@ else
     private DateTime KickoffTime => DateTime.TryParse(Kickoff, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt) ? dt : DateTime.UtcNow;
 
     private List<BetBuilderMarketDto>? _markets;
+    private string? _bookmaker;
+    private string? _bookmakerLogoUrl;
     private readonly List<OverUnderLine> _overUnderLines = [];
     private readonly List<OverUnderLine> _totalCorners = [];
     private readonly List<OverUnderLine> _homeCorners = [];
@@ -479,6 +488,8 @@ else
         {
             var response = await Api.GetBetBuilderMarketsAsync(MatchId);
             _markets = response.Markets;
+            _bookmaker = response.Bookmaker;
+            _bookmakerLogoUrl = response.BookmakerLogoUrl;
 
             _overUnderLines.AddRange(_markets
                 .Where(m => m.MarketType == "OverUnder" && m.Line is not null)

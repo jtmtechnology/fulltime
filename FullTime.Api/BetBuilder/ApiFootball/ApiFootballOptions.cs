@@ -43,8 +43,12 @@ public class ApiFootballOptions
 
     // Bet365's api-sports.io bookmaker ID (confirmed live 2026-09-10: {"id":8,"name":"Bet365"}) -
     // same choice HighlightlyOptions.BookmakerName ("bet365") already made, for the richest
-    // coverage of the bookmakers available on this plan.
+    // coverage of the bookmakers available on this plan. BookmakerName is the matching display
+    // name/BookmakerLogos key for that same bookmaker (MatchesController.GetBetBuilderMarkets) -
+    // kept as a separate field rather than derived from the ID, same pattern as Highlightly's own
+    // BookmakerName.
     public long OddsBookmakerId { get; set; } = 8;
+    public string BookmakerName { get; set; } = "bet365";
 
     // How often ApiFootballOddsSyncBackgroundService ticks and checks every tracked Upcoming match
     // against NeedsOddsRefresh's TTL gate - the gate (not this interval) is what actually controls

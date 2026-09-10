@@ -1,4 +1,5 @@
 using FullTime.Api.BetBuilder;
+using FullTime.Api.BetBuilder.ApiFootball;
 using FullTime.Api.BetBuilder.OddsApi;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
@@ -42,6 +43,7 @@ public record MatchEventDto(
 public class MatchesController(
     AppDbContext db,
     IOptions<HighlightlyOptions> highlightlyOptions,
+    IOptions<ApiFootballOptions> apiFootballOptions,
     IOptions<ProvidersOptions> providersOptions,
     OddsApiMarketService oddsApiMarkets,
     IServiceScopeFactory scopeFactory,
@@ -194,11 +196,19 @@ public class MatchesController(
             // the-odds-api aggregates several bookmakers; the h2h snapshot (fetched in the same
             // pull) already records which one was actually used for this match, so that's reused
             // here as a single consistent label for the whole response rather than a fixed config
-            // value like Highlightly's BookmakerName.
+            // value like Highlightly's/API-Football's BookmakerName.
             var latestSnapshot = await db.OddsSnapshots
                 .Where(o => o.MatchId == id).OrderByDescending(o => o.FetchedAt).FirstOrDefaultAsync(ct);
             bookmaker = latestSnapshot?.Bookmaker;
             bookmakerLogoUrl = latestSnapshot?.BookmakerLogoUrl;
+        }
+        else if (providersOptions.Value.MarketsSource == "ApiFootball")
+        {
+            // Single fixed bookmaker (see ApiFootballOptions.OddsBookmakerId/BookmakerName), same
+            // reasoning as Highlightly's branch below - unlike the-odds-api there's no per-match
+            // "which bookmaker actually priced this" to look up, it's always the one we asked for.
+            bookmaker = apiFootballOptions.Value.BookmakerName;
+            bookmakerLogoUrl = BookmakerLogos.UrlFor(bookmaker);
         }
         else
         {
