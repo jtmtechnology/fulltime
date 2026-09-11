@@ -72,6 +72,12 @@ public class StatusInfo
 
     [JsonPropertyName("elapsed")]
     public int? Elapsed { get; set; }
+
+    // Stoppage/added time on top of Elapsed (e.g. Elapsed=90, Extra=3 during 90+3) - null outside
+    // stoppage time. Confirmed live 2026-09-11 against the same real fixtures this DTO already
+    // parses elsewhere.
+    [JsonPropertyName("extra")]
+    public int? Extra { get; set; }
 }
 
 public class LeagueInfo

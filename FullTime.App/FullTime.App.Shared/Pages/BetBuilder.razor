@@ -168,7 +168,13 @@ else
                     @foreach (var opt in FirstScorerOptions(firstScorer))
                     {
                         <div class="@ListRowClass(opt.Pick)" @onclick="() => TogglePick(opt.Pick)">
-                            <span>@opt.Label</span>
+                            <span class="player-name-cell">
+                                @if (opt.LogoUrl is not null)
+                                {
+                                    <LogoImg Src="@opt.LogoUrl" CssClass="player-team-logo" Alt="@opt.Label" />
+                                }
+                                <span>@opt.Label</span>
+                            </span>
                             <span class="odds-list-price">@OddsCell.FormatOdds(opt.Pick.Odds)</span>
                         </div>
                     }
@@ -181,7 +187,10 @@ else
             <AccordionSection Id="correctscore" Title="Correct score" Expanded="_expanded" OnToggle="ToggleSection">
                 <div class="score-stepper-row">
                     <div class="score-stepper">
-                        <span class="team-name">@HomeTeam</span>
+                        <span class="team-name">
+                            <LogoImg Src="@HomeLogo" CssClass="player-team-logo" Alt="@HomeTeam" />
+                            @HomeTeam
+                        </span>
                         <div class="stepper-controls">
                             <button type="button" class="stepper-btn" disabled="@(_correctScoreHome == 0)" @onclick="() => AdjustScore(home: true, delta: -1)">−</button>
                             <span class="stepper-value">@_correctScoreHome</span>
@@ -189,7 +198,10 @@ else
                         </div>
                     </div>
                     <div class="score-stepper">
-                        <span class="team-name">@AwayTeam</span>
+                        <span class="team-name">
+                            <LogoImg Src="@AwayLogo" CssClass="player-team-logo" Alt="@AwayTeam" />
+                            @AwayTeam
+                        </span>
                         <div class="stepper-controls">
                             <button type="button" class="stepper-btn" disabled="@(_correctScoreAway == 0)" @onclick="() => AdjustScore(home: false, delta: -1)">−</button>
                             <span class="stepper-value">@_correctScoreAway</span>
@@ -309,7 +321,7 @@ else
     private record OverUnderLine(decimal Line, decimal OverPrice, decimal UnderPrice);
     private record BttsOption(decimal YesPrice, decimal NoPrice);
     private record FirstScorerOption(decimal HomePrice, decimal NonePrice, decimal AwayPrice);
-    private record PickOption(string Label, SlipPick Pick);
+    private record PickOption(string Label, SlipPick Pick, string? LogoUrl = null);
     private record PlayerPropRow(string PlayerName, Dictionary<decimal, decimal> PricesByLine);
     private record TeamPropGroup(string Team, string? LogoUrl, List<PickOption> Options, List<decimal> Lines, List<PlayerPropRow> Rows);
     private record PlayerPropGroup(string MarketType, string Label, List<TeamPropGroup> Teams);
@@ -669,9 +681,9 @@ else
 
     private List<PickOption> FirstScorerOptions(FirstScorerOption option) =>
     [
-        new(HomeTeam, new SlipPick("FirstTeamToScore", null, "Home", option.HomePrice)),
+        new(HomeTeam, new SlipPick("FirstTeamToScore", null, "Home", option.HomePrice), HomeLogo),
         new("None", new SlipPick("FirstTeamToScore", null, "None", option.NonePrice)),
-        new(AwayTeam, new SlipPick("FirstTeamToScore", null, "Away", option.AwayPrice)),
+        new(AwayTeam, new SlipPick("FirstTeamToScore", null, "Away", option.AwayPrice), AwayLogo),
     ];
 
     private bool IsSelected(SlipPick pick) =>

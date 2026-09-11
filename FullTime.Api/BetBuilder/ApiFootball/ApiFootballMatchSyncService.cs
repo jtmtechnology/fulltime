@@ -245,19 +245,21 @@ public class ApiFootballMatchSyncService(
         var isHalfTime = dto.Fixture.Status.Short == "HT";
 
         var changed = match.HomeScore != dto.Goals?.Home || match.AwayScore != dto.Goals?.Away
-            || match.Status != newStatus || match.Minute != dto.Fixture.Status.Elapsed || match.IsHalfTime != isHalfTime;
+            || match.Status != newStatus || match.Minute != dto.Fixture.Status.Elapsed
+            || match.AddedTimeMinutes != dto.Fixture.Status.Extra || match.IsHalfTime != isHalfTime;
 
         match.HomeScore = dto.Goals?.Home;
         match.AwayScore = dto.Goals?.Away;
         match.Status = newStatus;
         match.Minute = dto.Fixture.Status.Elapsed;
+        match.AddedTimeMinutes = dto.Fixture.Status.Extra;
         match.IsHalfTime = isHalfTime;
 
         if (changed)
         {
             await hub.Clients.All.SendAsync(
                 "MatchUpdated",
-                new MatchLiveUpdate(match.Id, match.HomeScore, match.AwayScore, newStatus.ToString(), match.Minute, isHalfTime),
+                new MatchLiveUpdate(match.Id, match.HomeScore, match.AwayScore, newStatus.ToString(), match.Minute, match.AddedTimeMinutes, isHalfTime),
                 ct);
         }
     }

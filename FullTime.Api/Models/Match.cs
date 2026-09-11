@@ -38,6 +38,12 @@ public class Match
     // client shows "FT" instead of a stale minute once Status flips.
     public int? Minute { get; set; }
 
+    // Stoppage/added time on top of Minute (e.g. Minute=90, AddedTimeMinutes=3 during "90+3") -
+    // only ever populated by API-Football (its fixtures' status.extra field); Highlightly has no
+    // equivalent, so this stays null under that provider. Same "not meaningful once Finished"
+    // caveat as Minute above.
+    public int? AddedTimeMinutes { get; set; }
+
     // True only during the pause between halves — Highlightly's own description says so explicitly
     // (checked case-insensitively for "half" rather than an exact string match, since the confirmed
     // in-play vocabulary so far — "Not started"/"Finished"*/"Postponed" — didn't include a live

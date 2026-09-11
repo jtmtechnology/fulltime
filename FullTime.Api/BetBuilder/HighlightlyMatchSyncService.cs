@@ -216,7 +216,7 @@ public class HighlightlyMatchSyncService(
             // to block the sync loop or retry.
             await hub.Clients.All.SendAsync(
                 "MatchUpdated",
-                new MatchLiveUpdate(match.Id, homeScore, awayScore, newStatus.ToString(), dto.State.Clock, isHalfTime),
+                new MatchLiveUpdate(match.Id, homeScore, awayScore, newStatus.ToString(), dto.State.Clock, null, isHalfTime),
                 ct);
         }
     }

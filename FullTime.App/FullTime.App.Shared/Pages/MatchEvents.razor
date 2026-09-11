@@ -73,6 +73,7 @@ else
     [SupplyParameterFromQuery(Name = "awayScore")] public int? AwayScore { get; set; }
     [SupplyParameterFromQuery(Name = "status")] public string? Status { get; set; }
     [SupplyParameterFromQuery(Name = "minute")] public int? Minute { get; set; }
+    [SupplyParameterFromQuery(Name = "addedTime")] public int? AddedTime { get; set; }
     [SupplyParameterFromQuery(Name = "isHalfTime")] public bool IsHalfTime { get; set; }
 
     private string HomeTeam => Home ?? "";
@@ -84,7 +85,7 @@ else
     private string? MatchStatusText() => Status switch
     {
         "InProgress" when IsHalfTime => "HT",
-        "InProgress" when Minute is { } minute => $"{minute}'",
+        "InProgress" when Minute is { } minute => AddedTime is { } added && added > 0 ? $"{minute}+{added}'" : $"{minute}'",
         "Finished" => "FT",
         _ => null,
     };

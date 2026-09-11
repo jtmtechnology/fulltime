@@ -68,10 +68,15 @@
         _ => "vs",
     };
 
-    // Highlightly's own match minute ("clock"), null before kickoff. Half time is a distinct flag
-    // rather than inferred from the minute, since the clock alone can't tell "still 1st half, 45th
-    // minute" apart from "paused at half time, sitting at 45".
-    private string LiveClockText() => Match.IsHalfTime ? "HT" : Match.Minute is { } minute ? $"{minute}'" : "";
+    // Live match minute ("clock"), null before kickoff. Half time is a distinct flag rather than
+    // inferred from the minute, since the clock alone can't tell "still 1st half, 45th minute"
+    // apart from "paused at half time, sitting at 45". AddedTimeMinutes (API-Football only,
+    // Highlightly has no equivalent) shows stoppage time as "90+3'" rather than capping at "90'".
+    private string LiveClockText() => Match.IsHalfTime
+        ? "HT"
+        : Match.Minute is { } minute
+            ? Match.AddedTimeMinutes is { } added && added > 0 ? $"{minute}+{added}'" : $"{minute}'"
+            : "";
 
     private string BetBuilderHref() =>
         $"bet-builder/{Match.Id}?home={Uri.EscapeDataString(Match.HomeTeam)}&away={Uri.EscapeDataString(Match.AwayTeam)}" +
@@ -83,5 +88,5 @@
         $"&kickoff={Uri.EscapeDataString(Match.KickoffTime.ToString("O"))}" +
         $"&homeLogo={Uri.EscapeDataString(Match.HomeLogoUrl ?? "")}&awayLogo={Uri.EscapeDataString(Match.AwayLogoUrl ?? "")}" +
         $"&homeScore={Match.HomeScore}&awayScore={Match.AwayScore}" +
-        $"&status={Uri.EscapeDataString(Match.Status)}&minute={Match.Minute}&isHalfTime={Match.IsHalfTime}";
+        $"&status={Uri.EscapeDataString(Match.Status)}&minute={Match.Minute}&addedTime={Match.AddedTimeMinutes}&isHalfTime={Match.IsHalfTime}";
 }

@@ -35,6 +35,7 @@ public record UpcomingMatchDto(
     int? HomeScore,
     int? AwayScore,
     int? Minute,
+    int? AddedTimeMinutes,
     bool IsHalfTime,
     decimal? HomeOdds,
     decimal? DrawOdds,
