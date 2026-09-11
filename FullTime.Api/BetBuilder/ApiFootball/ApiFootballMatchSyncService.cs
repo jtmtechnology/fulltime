@@ -55,11 +55,21 @@ public class ApiFootballMatchSyncService(
 
         if (droppedFromLive.Count > 0)
         {
-            var followUp = await client.GetFixturesByIdsAsync(droppedFromLive.Select(long.Parse), ct);
-            foreach (var fixture in followUp)
+            // A failure here (e.g. a transient throttle) must not cost the tracked-fixtures upserts
+            // above their save - same "log and move on" resilience as RefreshFixturesAsync's
+            // per-league fetch, just for this narrower follow-up call.
+            try
             {
-                await UpsertMatchAsync(fixture, ct);
-                upsertedCount++;
+                var followUp = await client.GetFixturesByIdsAsync(droppedFromLive.Select(long.Parse), ct);
+                foreach (var fixture in followUp)
+                {
+                    await UpsertMatchAsync(fixture, ct);
+                    upsertedCount++;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to re-fetch {Count} match(es) dropped from live=all", droppedFromLive.Count);
             }
         }
 
