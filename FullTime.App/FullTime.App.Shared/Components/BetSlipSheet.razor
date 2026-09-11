@@ -67,7 +67,7 @@
                         {
                             <span class="live"> (🚀 @_pendingBoostLabel applied)</span>
                         }
-                        else if (BetBuilderBoostActiveForSlip && Slip.CombinedOdds > 2m)
+                        else if (BetBuilderBoostQualifies)
                         {
                             <span class="live"> (🚀 Bet Builder Boost @_bbBoostStatus!.Percent.ToString("0.##")% applied)</span>
                         }
@@ -81,12 +81,9 @@
                     {
                         <div class="muted">Join or create a league on the Leaderboard tab before placing a bet.</div>
                     }
-                    else if (BetBuilderBoostActiveForSlip && Slip.CombinedOdds <= 2m)
+                    else if (BetBuilderBoostActiveForSlip && !BetBuilderBoostQualifies)
                     {
-                        <div class="muted">
-                            🚀 This match's Bet Builder Boost needs combined odds over Evens (2.00) —
-                            add another selection to qualify for +@_bbBoostStatus!.Percent.ToString("0.##")%.
-                        </div>
+                        <div class="muted">🚀 @BetBuilderBoostGateMessage</div>
                     }
                     else
                     {
@@ -131,9 +128,38 @@
         && Slip.Legs.Count == 1
         && Slip.Legs.Keys.First() == status.MatchId;
 
+    // bet365's own "Boost your Bet Builder" terms: 3+ selections AND combined odds of evens or
+    // greater - both required, not either/or.
+    private bool BetBuilderBoostQualifies =>
+        BetBuilderBoostActiveForSlip
+        && Slip.Legs.Values.First().Picks.Count >= _bbBoostStatus!.MinSelections
+        && Slip.CombinedOdds > 2m;
+
     private decimal EffectiveBoostMultiplier =>
         _pendingBoostMultiplier
-        ?? (BetBuilderBoostActiveForSlip && Slip.CombinedOdds > 2m ? 1m + _bbBoostStatus!.Percent / 100m : 1m);
+        ?? (BetBuilderBoostQualifies ? 1m + _bbBoostStatus!.Percent / 100m : 1m);
+
+    // Names whichever of the two bet365-style requirements (3+ selections, combined odds over
+    // Evens) this slip is still short of, rather than always repeating both regardless of which one
+    // is actually the blocker.
+    private string BetBuilderBoostGateMessage
+    {
+        get
+        {
+            var status = _bbBoostStatus!;
+            var picksShort = status.MinSelections - Slip.Legs.Values.First().Picks.Count;
+            var needsOdds = Slip.CombinedOdds <= 2m;
+
+            var requirement = (picksShort > 0, needsOdds) switch
+            {
+                (true, true) => $"needs {status.MinSelections}+ selections and combined odds over Evens (2.00)",
+                (true, false) => $"needs {status.MinSelections}+ selections ({picksShort} more)",
+                (false, true) => "needs combined odds over Evens (2.00) — add another selection",
+                _ => "already qualifies",
+            };
+            return $"This match's Bet Builder Boost {requirement} for +{status.Percent:0.##}%.";
+        }
+    }
 
     private decimal BoostedPotentialReturn => _stake * Slip.CombinedOdds * EffectiveBoostMultiplier;
 

@@ -767,7 +767,7 @@ button[type="submit"] {
     background: var(--bg); border: 1.5px solid var(--accent);
     display: flex; align-items: center; justify-content: center; font-size: 1.3rem;
 }
-.bbboost-banner-text { flex: 1; min-width: 0; text-align: left; }
+.bbboost-banner-text { flex: 1; min-width: 0; text-align: left; margin-left: 0.6rem; }
 .bbboost-banner-title {
     color: var(--text); font-weight: 800; font-size: 0.95rem; letter-spacing: 0.04em;
     text-shadow: 0 1px 3px rgba(0,0,0,0.5);

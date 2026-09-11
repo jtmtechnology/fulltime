@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace FullTime.Api.Betting;
 
-public record BetBuilderBoostStatus(bool Available, Guid? MatchId, string? HomeTeam, string? AwayTeam, decimal Percent);
+public record BetBuilderBoostStatus(bool Available, Guid? MatchId, string? HomeTeam, string? AwayTeam, decimal Percent, int MinSelections);
 
 // Picks one match a day - shared by every user, not randomized per-user (a single "match of the
 // day" boost, the same way bet365's own Bet Builder Boost banner works) - eligible from the
@@ -26,7 +26,7 @@ public class BetBuilderBoostService(AppDbContext db, IOptions<BettingOptions> op
         var match = await GetOrPickTodaysMatchAsync(ct);
         if (match is null)
         {
-            return new BetBuilderBoostStatus(false, null, null, null, options.Value.BetBuilderBoostPercent);
+            return new BetBuilderBoostStatus(false, null, null, null, options.Value.BetBuilderBoostPercent, options.Value.BetBuilderBoostMinSelections);
         }
 
         var user = await db.Users.FindAsync([userId], ct)
@@ -34,7 +34,8 @@ public class BetBuilderBoostService(AppDbContext db, IOptions<BettingOptions> op
         var alreadyUsedToday = user.LastBetBuilderBoostDate == DateOnly.FromDateTime(DateTime.Now);
 
         return new BetBuilderBoostStatus(
-            !alreadyUsedToday, match.Id, match.HomeTeam, match.AwayTeam, options.Value.BetBuilderBoostPercent);
+            !alreadyUsedToday, match.Id, match.HomeTeam, match.AwayTeam,
+            options.Value.BetBuilderBoostPercent, options.Value.BetBuilderBoostMinSelections);
     }
 
     // Called from BetService at placement time - re-reads today's featured match itself rather than
@@ -44,7 +45,7 @@ public class BetBuilderBoostService(AppDbContext db, IOptions<BettingOptions> op
     // the featured match via the UI, but a bypassed/direct API call just places a normal, unboosted
     // bet rather than being refused.
     public async Task<(bool Applied, decimal Multiplier, string? Label)> TryConsumeBoostAsync(
-        User user, Guid singleMatchId, decimal combinedOddsBeforeBoost, CancellationToken ct = default)
+        User user, Guid singleMatchId, int pickCount, decimal combinedOddsBeforeBoost, CancellationToken ct = default)
     {
         var today = DateOnly.FromDateTime(DateTime.Now);
         if (user.LastBetBuilderBoostDate == today)
@@ -58,7 +59,7 @@ public class BetBuilderBoostService(AppDbContext db, IOptions<BettingOptions> op
             return (false, 1m, null);
         }
 
-        if (combinedOddsBeforeBoost <= 2m)
+        if (pickCount < options.Value.BetBuilderBoostMinSelections || combinedOddsBeforeBoost <= 2m)
         {
             return (false, 1m, null);
         }

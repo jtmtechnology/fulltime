@@ -31,6 +31,10 @@ public class BettingOptions
 
     // Winnings boost applied to a same-game multi (Bet Builder) placed entirely on the day's
     // featured match - see BetBuilderBoostService. Only one bet per user per day, and only if that
-    // bet's combined odds clear evens before the boost is applied.
+    // bet has at least BetBuilderBoostMinSelections picks with combined odds clearing evens.
     public decimal BetBuilderBoostPercent { get; set; } = 25;
+
+    // Matches bet365's own "Boost your Bet Builder" terms (3+ selections, combined odds of evens or
+    // greater) - see BetBuilderBoostService.TryConsumeBoostAsync.
+    public int BetBuilderBoostMinSelections { get; set; } = 3;
 }

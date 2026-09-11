@@ -134,7 +134,8 @@ public class BetService(AppDbContext db, BetBuilderBoostService boostService, IL
             // Bet Builder Boost (see BetBuilderBoostService) only ever applies to a same-game multi
             // confined entirely to today's featured match - takes a back seat to an already-won
             // Daily Spinner boost rather than stacking with it.
-            var (applied, betBuilderMultiplier, label) = await boostService.TryConsumeBoostAsync(user, betLegs[0].MatchId, combinedOdds, ct);
+            var (applied, betBuilderMultiplier, label) = await boostService.TryConsumeBoostAsync(
+                user, betLegs[0].MatchId, betLegs[0].Picks.Count, combinedOdds, ct);
             if (applied)
             {
                 combinedOdds *= betBuilderMultiplier;

@@ -13,8 +13,8 @@
 @if (_boostActive)
 {
     <div class="bb-boost-label">
-        🚀 <strong>Bet Builder Boost</strong> — build a same-game multi here with combined odds
-        over Evens (2.00) for a <strong>+@_boostPercent.ToString("0.##")%</strong> winnings boost.
+        🚀 <strong>Bet Builder Boost</strong> — pick <strong>@_boostMinSelections+ selections</strong>
+        here with combined odds over Evens (2.00) for a <strong>+@_boostPercent.ToString("0.##")%</strong> odds boost.
     </div>
 }
 
@@ -390,6 +390,7 @@ else
 
     private bool _boostActive;
     private decimal _boostPercent;
+    private int _boostMinSelections;
 
     // "W"/"D"/"L" from GetRecentFormAsync (MatchesController) - oldest to newest, so the rightmost
     // dot is the most recent result.
@@ -668,6 +669,7 @@ else
             var boostStatus = await Api.GetBetBuilderBoostStatusAsync();
             _boostActive = boostStatus.Available && boostStatus.MatchId == MatchId;
             _boostPercent = boostStatus.Percent;
+            _boostMinSelections = boostStatus.MinSelections;
         }
         catch (ApiException)
         {

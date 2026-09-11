@@ -1,5 +1,7 @@
+@implements IDisposable
 @inject ApiClient Api
 @inject NavigationManager Nav
+@inject BetSlipState Slip
 
 @if (_available)
 {
@@ -8,7 +10,7 @@
         <div class="bbboost-banner-text">
             <div class="bbboost-banner-title">BET BUILDER BOOST</div>
             <div class="bbboost-banner-match">@_homeTeam v @_awayTeam</div>
-            <div class="bbboost-banner-pct">+@_percent.ToString("0.##")% winnings</div>
+            <div class="bbboost-banner-pct">+@_percent.ToString("0.##")% Odds Boost</div>
         </div>
         <div class="bbboost-banner-arrow">›</div>
     </button>
@@ -23,6 +25,18 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Placing a bet always clears the slip - re-checking here means a bet placed without ever
+        // navigating away from this page (the slip sheet is a same-page overlay, not a navigation)
+        // still hides this banner immediately once today's boost has been used, instead of only
+        // refreshing on a full page remount.
+        Slip.Changed += OnSlipChanged;
+        await RefreshAsync();
+    }
+
+    private void OnSlipChanged() => _ = InvokeAsync(RefreshAsync);
+
+    private async Task RefreshAsync()
+    {
         try
         {
             // Only ever shown alongside (never instead of) the Daily Spinner's own banner — if that
@@ -31,12 +45,14 @@
             var spinStatus = await Api.GetSpinStatusAsync();
             if (spinStatus.CanSpin)
             {
+                _available = false;
                 return;
             }
 
             var boostStatus = await Api.GetBetBuilderBoostStatusAsync();
             if (!boostStatus.Available || boostStatus.MatchId is not { } matchId)
             {
+                _available = false;
                 return;
             }
 
@@ -49,8 +65,15 @@
         catch (ApiException)
         {
             // best-effort - banner just stays hidden if either status check fails
+            _available = false;
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
         }
     }
 
     private void Go() => Nav.NavigateTo($"/bet-builder/{_matchId}");
+
+    public void Dispose() => Slip.Changed -= OnSlipChanged;
 }
