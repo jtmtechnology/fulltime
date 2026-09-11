@@ -11,6 +11,7 @@
             <div class="bbboost-banner-title">BET BUILDER BOOST</div>
             <div class="bbboost-banner-match">@_homeTeam v @_awayTeam</div>
             <div class="bbboost-banner-pct">+@_percent.ToString("0.##")% Odds Boost</div>
+            <div class="bbboost-banner-terms">@_minSelections+ selections, combined odds Evens or above</div>
         </div>
         <div class="bbboost-banner-arrow">›</div>
     </button>
@@ -22,6 +23,7 @@
     private string _homeTeam = "";
     private string _awayTeam = "";
     private decimal _percent;
+    private int _minSelections;
     private DateTime _kickoffTime;
     private string? _homeLogoUrl;
     private string? _awayLogoUrl;
@@ -64,6 +66,7 @@
             _homeTeam = boostStatus.HomeTeam ?? "";
             _awayTeam = boostStatus.AwayTeam ?? "";
             _percent = boostStatus.Percent;
+            _minSelections = boostStatus.MinSelections;
             _kickoffTime = boostStatus.KickoffTime ?? DateTime.UtcNow;
             _homeLogoUrl = boostStatus.HomeLogoUrl;
             _awayLogoUrl = boostStatus.AwayLogoUrl;
