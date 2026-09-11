@@ -28,4 +28,9 @@ public class BettingOptions
     // Checked often enough that the reminder lands reasonably close to SpinReminderHour rather than
     // up to an hour late, same reasoning as WeeklyTopUpCheckIntervalMinutes.
     public int SpinReminderCheckIntervalMinutes { get; set; } = 15;
+
+    // Winnings boost applied to a same-game multi (Bet Builder) placed entirely on the day's
+    // featured match - see BetBuilderBoostService. Only one bet per user per day, and only if that
+    // bet's combined odds clear evens before the boost is applied.
+    public decimal BetBuilderBoostPercent { get; set; } = 25;
 }

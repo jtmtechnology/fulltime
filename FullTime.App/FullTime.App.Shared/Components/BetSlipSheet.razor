@@ -67,6 +67,10 @@
                         {
                             <span class="live"> (🚀 @_pendingBoostLabel applied)</span>
                         }
+                        else if (BetBuilderBoostActiveForSlip && Slip.CombinedOdds > 2m)
+                        {
+                            <span class="live"> (🚀 Bet Builder Boost @_bbBoostStatus!.Percent.ToString("0.##")% applied)</span>
+                        }
                     </div>
 
                     @if (!AuthState.IsLoggedIn)
@@ -76,6 +80,13 @@
                     else if (ContextState.Current.LeagueId is null)
                     {
                         <div class="muted">Join or create a league on the Leaderboard tab before placing a bet.</div>
+                    }
+                    else if (BetBuilderBoostActiveForSlip && Slip.CombinedOdds <= 2m)
+                    {
+                        <div class="muted">
+                            🚀 This match's Bet Builder Boost needs combined odds over Evens (2.00) —
+                            add another selection to qualify for +@_bbBoostStatus!.Percent.ToString("0.##")%.
+                        </div>
                     }
                     else
                     {
@@ -110,8 +121,21 @@
     private string? _placedBoostLabel;
     private decimal? _pendingBoostMultiplier;
     private string? _pendingBoostLabel;
+    private BetBuilderBoostStatusDto? _bbBoostStatus;
 
-    private decimal BoostedPotentialReturn => _stake * Slip.CombinedOdds * (_pendingBoostMultiplier ?? 1);
+    // Only "just this match's Bet Builder" bets are eligible - a slip with any other leg mixed in
+    // (or more than one leg) isn't the featured match's own same-game multi any more, so the
+    // evens-gate/boost preview both stand down and the bet places completely normally.
+    private bool BetBuilderBoostActiveForSlip =>
+        _bbBoostStatus is { Available: true } status
+        && Slip.Legs.Count == 1
+        && Slip.Legs.Keys.First() == status.MatchId;
+
+    private decimal EffectiveBoostMultiplier =>
+        _pendingBoostMultiplier
+        ?? (BetBuilderBoostActiveForSlip && Slip.CombinedOdds > 2m ? 1m + _bbBoostStatus!.Percent / 100m : 1m);
+
+    private decimal BoostedPotentialReturn => _stake * Slip.CombinedOdds * EffectiveBoostMultiplier;
 
     protected override async Task OnInitializedAsync()
     {
@@ -173,6 +197,17 @@
             // best-effort - the slip just won't preview the boost if this fails, still applies
             // correctly server-side at placement either way
         }
+
+        try
+        {
+            _bbBoostStatus = await Api.GetBetBuilderBoostStatusAsync();
+        }
+        catch (ApiException)
+        {
+            // best-effort - same as above; the evens gate/preview just won't show, but the actual
+            // boost eligibility is re-checked from scratch server-side at placement regardless.
+        }
+
         await InvokeAsync(StateHasChanged);
     }
 

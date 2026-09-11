@@ -1,0 +1,56 @@
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+@if (_available)
+{
+    <button type="button" class="bbboost-banner" @onclick="Go">
+        <div class="bbboost-banner-icon">🚀</div>
+        <div class="bbboost-banner-text">
+            <div class="bbboost-banner-title">BET BUILDER BOOST</div>
+            <div class="bbboost-banner-match">@_homeTeam v @_awayTeam</div>
+            <div class="bbboost-banner-pct">+@_percent.ToString("0.##")% winnings</div>
+        </div>
+        <div class="bbboost-banner-arrow">›</div>
+    </button>
+}
+
+@code {
+    private bool _available;
+    private Guid _matchId;
+    private string _homeTeam = "";
+    private string _awayTeam = "";
+    private decimal _percent;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Only ever shown alongside (never instead of) the Daily Spinner's own banner — if that
+            // one is still available, it takes the single promo slot on this page and this banner
+            // stays hidden, per the owner's explicit ask.
+            var spinStatus = await Api.GetSpinStatusAsync();
+            if (spinStatus.CanSpin)
+            {
+                return;
+            }
+
+            var boostStatus = await Api.GetBetBuilderBoostStatusAsync();
+            if (!boostStatus.Available || boostStatus.MatchId is not { } matchId)
+            {
+                return;
+            }
+
+            _matchId = matchId;
+            _homeTeam = boostStatus.HomeTeam ?? "";
+            _awayTeam = boostStatus.AwayTeam ?? "";
+            _percent = boostStatus.Percent;
+            _available = true;
+        }
+        catch (ApiException)
+        {
+            // best-effort - banner just stays hidden if either status check fails
+        }
+    }
+
+    private void Go() => Nav.NavigateTo($"/bet-builder/{_matchId}");
+}

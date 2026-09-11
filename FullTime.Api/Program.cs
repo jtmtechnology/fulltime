@@ -133,6 +133,7 @@ else if (providers.MarketsSource != "OddsApi")
     builder.Services.AddHostedService<BetBuilderSyncBackgroundService>();
 }
 
+builder.Services.AddScoped<BetBuilderBoostService>();
 builder.Services.AddScoped<BetService>();
 builder.Services.AddScoped<SettlementService>();
 builder.Services.AddHostedService<SettlementSweepService>();

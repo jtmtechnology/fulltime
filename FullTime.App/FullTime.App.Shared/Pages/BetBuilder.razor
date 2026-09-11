@@ -10,6 +10,14 @@
     <h1>Bet Builder</h1>
 </div>
 
+@if (_boostActive)
+{
+    <div class="bb-boost-label">
+        🚀 <strong>Bet Builder Boost</strong> — build a same-game multi here with combined odds
+        over Evens (2.00) for a <strong>+@_boostPercent.ToString("0.##")%</strong> winnings boost.
+    </div>
+}
+
 <div class="bb-teams-row">
     <div class="bb-team">
         <LogoImg Src="@HomeLogo" CssClass="crest" Alt="@HomeTeam" />
@@ -380,6 +388,9 @@ else
     private List<string> _homeForm = [];
     private List<string> _awayForm = [];
 
+    private bool _boostActive;
+    private decimal _boostPercent;
+
     // "W"/"D"/"L" from GetRecentFormAsync (MatchesController) - oldest to newest, so the rightmost
     // dot is the most recent result.
     private static string FormDotClass(string result) => result switch
@@ -650,6 +661,18 @@ else
         {
             _status = $"Error: {ex.Message}";
             _error = true;
+        }
+
+        try
+        {
+            var boostStatus = await Api.GetBetBuilderBoostStatusAsync();
+            _boostActive = boostStatus.Available && boostStatus.MatchId == MatchId;
+            _boostPercent = boostStatus.Percent;
+        }
+        catch (ApiException)
+        {
+            // best-effort - the boost label just doesn't show if this fails; the boost itself (and
+            // the evens requirement) is still enforced server-side at placement regardless.
         }
     }
 

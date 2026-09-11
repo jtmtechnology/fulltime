@@ -17,6 +17,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<BetBuilderMarket> BetBuilderMarkets => Set<BetBuilderMarket>();
     public DbSet<MatchPlayerStat> MatchPlayerStats => Set<MatchPlayerStat>();
     public DbSet<MatchEvent> MatchEvents => Set<MatchEvent>();
+    public DbSet<BetBuilderBoost> BetBuilderBoosts => Set<BetBuilderBoost>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -143,5 +144,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasOne(s => s.Match)
             .WithMany(m => m.PlayerStats)
             .HasForeignKey(s => s.MatchId);
+
+        modelBuilder.Entity<BetBuilderBoost>()
+            .HasOne(b => b.Match)
+            .WithMany()
+            .HasForeignKey(b => b.MatchId);
+
+        modelBuilder.Entity<BetBuilderBoost>()
+            .HasIndex(b => b.Date)
+            .IsUnique();
     }
 }

@@ -35,6 +35,12 @@ public class User
     public decimal? PendingBoostMultiplier { get; set; }
     public string? PendingBoostLabel { get; set; }
 
+    // Local date (same convention as LastSpinDate) this user last had a Bet Builder Boost applied
+    // to a bet - see BetBuilderBoostService. Unlike the spinner's boost, this isn't "won" ahead of
+    // time; it's granted automatically the moment a qualifying bet is placed, so this field is only
+    // ever stamped at that point, never pre-set.
+    public DateOnly? LastBetBuilderBoostDate { get; set; }
+
     // ISO 3166-1 alpha-2 (e.g. "GB", "US") - drives which currency symbol this user's own amounts
     // are shown with (see Localization.CurrencyCatalog). Null means "never set", which falls back to
     // £ - the symbol every user's amounts were hardcoded to before this field existed.

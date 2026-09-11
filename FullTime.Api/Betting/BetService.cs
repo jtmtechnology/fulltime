@@ -9,7 +9,7 @@ public record LegPickInput(
     string? PlayerName = null, string? Team = null);
 public record LegInput(Guid MatchId, List<LegPickInput> Picks);
 
-public class BetService(AppDbContext db, ILogger<BetService> logger)
+public class BetService(AppDbContext db, BetBuilderBoostService boostService, ILogger<BetService> logger)
 {
     public async Task<PlaceBetResult> PlaceBetAsync(
         Guid userId, decimal stake, List<LegInput> legs, Guid? leagueId,
@@ -128,6 +128,18 @@ public class BetService(AppDbContext db, ILogger<BetService> logger)
             appliedBoostLabel = user.PendingBoostLabel;
             user.PendingBoostMultiplier = null;
             user.PendingBoostLabel = null;
+        }
+        else if (betLegs.Count == 1)
+        {
+            // Bet Builder Boost (see BetBuilderBoostService) only ever applies to a same-game multi
+            // confined entirely to today's featured match - takes a back seat to an already-won
+            // Daily Spinner boost rather than stacking with it.
+            var (applied, betBuilderMultiplier, label) = await boostService.TryConsumeBoostAsync(user, betLegs[0].MatchId, combinedOdds, ct);
+            if (applied)
+            {
+                combinedOdds *= betBuilderMultiplier;
+                appliedBoostLabel = label;
+            }
         }
 
         var bet = new Bet
