@@ -119,14 +119,32 @@ public class BetService(AppDbContext db, BetBuilderBoostService boostService, IL
             });
         }
 
+        // Bet Builder Boost (see BetBuilderBoostService) is tried first - it only ever applies to a
+        // same-game multi confined entirely to today's featured match, placed from a Bet Builder
+        // visit that actually came from the boost banner (viaBetBuilderBoost). That's a deliberate
+        // opt-in for this specific bet, so it takes priority over an already-won Daily Spinner boost
+        // rather than the spinner silently consuming itself on a bet the owner built for the other
+        // boost entirely (a real bug found live: the spinner boost applied instead, leaving
+        // LastBetBuilderBoostDate unstamped and the banner still showing as unused).
+        string? appliedBoostLabel = null;
+        string? boostSkippedReason = null;
+        if (betLegs.Count == 1 && viaBetBuilderBoost)
+        {
+            var (applied, betBuilderMultiplier, label) = await boostService.TryConsumeBoostAsync(
+                user, betLegs[0].MatchId, betLegs[0].Picks.Count, combinedOdds, ct);
+            if (applied)
+            {
+                combinedOdds *= betBuilderMultiplier;
+                appliedBoostLabel = label;
+            }
+        }
+
         // A pending Daily Spinner boost (see SpinService) applies to this bet's odds and is
         // consumed immediately - it's a one-shot "next bet" prize, never stacked or reused. Only
         // ever applies at combined odds of Evens (2.00) or higher - a bet placed under that stays
         // completely normal and the boost is left pending rather than wasted, so it carries over to
         // a later bet that does qualify.
-        string? appliedBoostLabel = null;
-        string? boostSkippedReason = null;
-        if (user.PendingBoostMultiplier is { } boostMultiplier)
+        if (appliedBoostLabel is null && user.PendingBoostMultiplier is { } boostMultiplier)
         {
             if (combinedOdds >= 2m)
             {
@@ -138,20 +156,6 @@ public class BetService(AppDbContext db, BetBuilderBoostService boostService, IL
             else
             {
                 boostSkippedReason = $"Your {user.PendingBoostLabel} needs combined odds of Evens (2.00) or higher — it's still available for your next bet.";
-            }
-        }
-        else if (betLegs.Count == 1 && viaBetBuilderBoost)
-        {
-            // Bet Builder Boost (see BetBuilderBoostService) only ever applies to a same-game multi
-            // confined entirely to today's featured match, placed from a Bet Builder visit that
-            // actually came from the boost banner (viaBetBuilderBoost) - takes a back seat to an
-            // already-won Daily Spinner boost rather than stacking with it.
-            var (applied, betBuilderMultiplier, label) = await boostService.TryConsumeBoostAsync(
-                user, betLegs[0].MatchId, betLegs[0].Picks.Count, combinedOdds, ct);
-            if (applied)
-            {
-                combinedOdds *= betBuilderMultiplier;
-                appliedBoostLabel = label;
             }
         }
 

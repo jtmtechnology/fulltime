@@ -67,13 +67,13 @@
                     </div>
                     <div>
                         Potential return: <strong>@ContextState.CurrencySymbol@BoostedPotentialReturn.ToString("0.00")</strong>
-                        @if (PendingBoostQualifies)
-                        {
-                            <span class="live"> (🚀 @_pendingBoostLabel applied)</span>
-                        }
-                        else if (BetBuilderBoostQualifies)
+                        @if (BetBuilderBoostQualifies)
                         {
                             <span class="live"> (🚀 Bet Builder Boost @_bbBoostStatus!.Percent.ToString("0.##")% applied)</span>
+                        }
+                        else if (PendingBoostQualifies)
+                        {
+                            <span class="live"> (🚀 @_pendingBoostLabel applied)</span>
                         }
                     </div>
 
@@ -157,9 +157,12 @@
         && Slip.Legs.Values.First().Picks.Count >= _bbBoostStatus!.MinSelections
         && Slip.CombinedOdds > 2m;
 
+    // Same priority as BetService.PlaceBetAsync: a deliberate Bet Builder Boost opt-in wins over an
+    // already-won Daily Spinner boost, which stays pending rather than silently consuming itself on
+    // a bet the owner built for the other boost entirely.
     private decimal EffectiveBoostMultiplier =>
-        PendingBoostQualifies ? _pendingBoostMultiplier!.Value
-        : BetBuilderBoostQualifies ? 1m + _bbBoostStatus!.Percent / 100m
+        BetBuilderBoostQualifies ? 1m + _bbBoostStatus!.Percent / 100m
+        : PendingBoostQualifies ? _pendingBoostMultiplier!.Value
         : 1m;
 
     // Names whichever of the two bet365-style requirements (3+ selections, combined odds over
