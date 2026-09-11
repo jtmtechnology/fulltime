@@ -101,6 +101,39 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
         return Ok(bets.Select(ToBetDto).ToList());
     }
 
+    // Backs the leaderboard's "tap a name to see their last 5 bets" - deliberately not open to any
+    // authenticated user for any userId (that would let a stranger enumerate/scrape another family's
+    // bet history just by guessing a GUID): only visible if the caller shares at least one league
+    // with the target, the same boundary GetLeagueLeaderboard/GetPendingBets already draw. Returns
+    // 404 rather than 403 for a non-shared user, matching those endpoints' "don't confirm the id
+    // exists" convention.
+    [HttpGet("user/{userId:guid}")]
+    public async Task<ActionResult<List<BetDto>>> GetUserBets(Guid userId, CancellationToken ct)
+    {
+        var myLeagueIds = await db.LeagueMemberships
+            .Where(m => m.UserId == CurrentUserId)
+            .Select(m => m.LeagueId)
+            .ToListAsync(ct);
+
+        var sharesLeague = myLeagueIds.Count > 0
+            && await db.LeagueMemberships.AnyAsync(m => m.UserId == userId && myLeagueIds.Contains(m.LeagueId), ct);
+        if (!sharesLeague)
+        {
+            return NotFound(new { error = "User not found." });
+        }
+
+        var bets = await db.Bets
+            .Include(b => b.League)
+            .Include(b => b.Legs).ThenInclude(l => l.Match)
+            .Include(b => b.Legs).ThenInclude(l => l.Picks)
+            .Where(b => b.UserId == userId)
+            .OrderByDescending(b => b.PlacedAt)
+            .Take(5)
+            .ToListAsync(ct);
+
+        return Ok(bets.Select(ToBetDto).ToList());
+    }
+
     private async Task<BetDto?> LoadBetDtoAsync(Guid betId, CancellationToken ct)
     {
         var bet = await db.Bets

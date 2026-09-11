@@ -1,0 +1,46 @@
+@* Shared bet-card/leg/pick rendering - used by MyBets.razor and Leaderboard.razor's "tap a name"
+   friend-bets panel, so the two views can't drift on how a pick reads (same reasoning BetDisplay.cs
+   already documents). *@
+
+@foreach (var bet in Bets)
+{
+    <div class="bet-card">
+        <div>
+            <span class="context-badge">@(bet.LeagueName ?? "Worldwide")</span>
+            <strong>@bet.PlacedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong> —
+            Stake @CurrencySymbol@bet.Stake.ToString("0.00") ·
+            Combined odds @bet.CombinedOdds.ToString("0.00") ·
+            Potential return @CurrencySymbol@bet.PotentialReturn.ToString("0.00") ·
+            <span class="@BetDisplay.StatusClass(bet.Status)">@bet.Status</span>
+            @if (bet.BoostApplied is not null)
+            {
+                <span class="live"> · 🚀 @bet.BoostApplied applied</span>
+            }
+        </div>
+        <ul>
+            @foreach (var leg in bet.Legs)
+            {
+                <li>
+                    <div class="bet-leg-header">
+                        <span class="muted">@leg.KickoffTime.ToLocalTime().ToString("ddd d MMM HH:mm")</span> —
+                        <LogoImg Src="@leg.HomeLogoUrl" CssClass="team-logo" Alt="@leg.HomeTeam" />@leg.HomeTeam v
+                        <LogoImg Src="@leg.AwayLogoUrl" CssClass="team-logo" Alt="@leg.AwayTeam" />@leg.AwayTeam
+                    </div>
+                    <ul class="bet-leg-picks">
+                        @foreach (var pick in leg.Picks)
+                        {
+                            <li class="@BetDisplay.StatusClass(pick.Outcome)">
+                                @BetDisplay.PickLabel(pick, leg.HomeTeam, leg.AwayTeam) (@pick.Outcome)
+                            </li>
+                        }
+                    </ul>
+                </li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public List<BetDto> Bets { get; set; } = [];
+    [Parameter] public string CurrencySymbol { get; set; } = "£";
+}

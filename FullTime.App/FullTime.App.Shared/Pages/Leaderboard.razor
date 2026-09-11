@@ -26,6 +26,7 @@ else if (!string.IsNullOrEmpty(_status))
 {
     @if (_worldwide is { Count: > 0 })
     {
+        <p class="muted">Tap a name to see their last 5 bets.</p>
         <div class="table-scroll">
             <table class="simple-table">
                 <thead>
@@ -35,12 +36,18 @@ else if (!string.IsNullOrEmpty(_status))
                     @for (var i = 0; i < _worldwide.Count; i++)
                     {
                         var entry = _worldwide[i];
-                        <tr>
+                        <tr class="clickable-row" @onclick="() => ToggleFriendBets(entry.UserId)">
                             <td>@(i + 1)</td>
                             <td>@entry.Name</td>
                             <td>@entry.LeagueName</td>
                             <td class="@(entry.Profit >= 0 ? "live" : "error")">@(entry.Profit >= 0 ? "+" : "-")@entry.CurrencySymbol@Math.Abs(entry.Profit).ToString("0.00")</td>
                         </tr>
+                        @if (_expandedUserId == entry.UserId)
+                        {
+                            <tr class="friend-bets-row">
+                                <td colspan="4"><FriendBetsPanel UserId="@entry.UserId" CurrencySymbol="@entry.CurrencySymbol" /></td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
@@ -84,6 +91,7 @@ else
                         ? pendingBets.GroupBy(b => b.UserName).ToDictionary(g => g.Key, g => g.Sum(b => b.Stake))
                         : [];
 
+                    <p class="muted">Tap a name to see their last 5 bets.</p>
                     <div class="table-scroll">
                         <table class="simple-table">
                             <thead><tr><th>#</th><th>Name</th><th>Balance</th><th>Profit</th><th>Bets Placed</th></tr></thead>
@@ -91,7 +99,7 @@ else
                                 @for (var i = 0; i < entries.Count; i++)
                                 {
                                     var entry = entries[i];
-                                    <tr>
+                                    <tr class="clickable-row" @onclick="() => ToggleFriendBets(entry.UserId)">
                                         <td>@(i + 1)</td>
                                         <td>@entry.Name</td>
                                         <td>@entry.CurrencySymbol@entry.Balance.ToString("0.00")</td>
@@ -107,6 +115,12 @@ else
                                             }
                                         </td>
                                     </tr>
+                                    @if (_expandedUserId == entry.UserId)
+                                    {
+                                        <tr class="friend-bets-row">
+                                            <td colspan="5"><FriendBetsPanel UserId="@entry.UserId" CurrencySymbol="@entry.CurrencySymbol" /></td>
+                                        </tr>
+                                    }
                                 }
                             </tbody>
                         </table>
@@ -168,6 +182,12 @@ else
     private Dictionary<Guid, List<PendingBetDto>> _leaguePendingBets = [];
     private bool _loadingLeagues = true;
     private Guid? _confirmingLeaveLeagueId;
+    private Guid? _expandedUserId;
+
+    // One row expanded at a time (across either table) - collapses on a second tap of the same
+    // name; FriendBetsPanel does its own fetch on mount, so there's nothing else to load here.
+    private void ToggleFriendBets(Guid userId) =>
+        _expandedUserId = _expandedUserId == userId ? null : userId;
 
     private string _status = "Loading…";
     private bool _error;

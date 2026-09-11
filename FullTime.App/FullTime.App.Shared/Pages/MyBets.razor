@@ -19,43 +19,7 @@ else if (!string.IsNullOrEmpty(_status))
 
 @if (_bets is not null)
 {
-    @foreach (var bet in _bets)
-    {
-        <div class="bet-card">
-            <div>
-                <span class="context-badge">@(bet.LeagueName ?? "Worldwide")</span>
-                <strong>@bet.PlacedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong> —
-                Stake @ContextState.CurrencySymbol@bet.Stake.ToString("0.00") ·
-                Combined odds @bet.CombinedOdds.ToString("0.00") ·
-                Potential return @ContextState.CurrencySymbol@bet.PotentialReturn.ToString("0.00") ·
-                <span class="@BetDisplay.StatusClass(bet.Status)">@bet.Status</span>
-                @if (bet.BoostApplied is not null)
-                {
-                    <span class="live"> · 🚀 @bet.BoostApplied applied</span>
-                }
-            </div>
-            <ul>
-                @foreach (var leg in bet.Legs)
-                {
-                    <li>
-                        <div class="bet-leg-header">
-                            <span class="muted">@leg.KickoffTime.ToLocalTime().ToString("ddd d MMM HH:mm")</span> —
-                            <LogoImg Src="@leg.HomeLogoUrl" CssClass="team-logo" Alt="@leg.HomeTeam" />@leg.HomeTeam v
-                            <LogoImg Src="@leg.AwayLogoUrl" CssClass="team-logo" Alt="@leg.AwayTeam" />@leg.AwayTeam
-                        </div>
-                        <ul class="bet-leg-picks">
-                            @foreach (var pick in leg.Picks)
-                            {
-                                <li class="@BetDisplay.StatusClass(pick.Outcome)">
-                                    @BetDisplay.PickLabel(pick, leg.HomeTeam, leg.AwayTeam) (@pick.Outcome)
-                                </li>
-                            }
-                        </ul>
-                    </li>
-                }
-            </ul>
-        </div>
-    }
+    <BetList Bets="_bets" CurrencySymbol="@ContextState.CurrencySymbol" />
 }
 
 @code {

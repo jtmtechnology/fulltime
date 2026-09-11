@@ -1,0 +1,45 @@
+@* Expands under a tapped leaderboard row (either table) - fetches on mount rather than the parent
+   pre-loading every row's bets up front, since only one row is ever expanded at a time. *@
+@inject ApiClient Api
+
+@if (_loading)
+{
+    <LoadingSpinner />
+}
+else if (_error)
+{
+    <div class="status error">Couldn't load bets.</div>
+}
+else if (_bets is { Count: 0 })
+{
+    <p class="muted">No bets placed yet.</p>
+}
+else if (_bets is not null)
+{
+    <BetList Bets="_bets" CurrencySymbol="@CurrencySymbol" />
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid UserId { get; set; }
+    [Parameter, EditorRequired] public string CurrencySymbol { get; set; } = "£";
+
+    private List<BetDto>? _bets;
+    private bool _loading = true;
+    private bool _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _bets = await Api.GetUserBetsAsync(UserId);
+        }
+        catch (Exception)
+        {
+            _error = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
