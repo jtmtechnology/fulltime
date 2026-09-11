@@ -26,7 +26,6 @@ else if (!string.IsNullOrEmpty(_status))
 {
     @if (_worldwide is { Count: > 0 })
     {
-        <p class="muted">Tap a name to see their last 5 bets.</p>
         <div class="table-scroll">
             <table class="simple-table">
                 <thead>
@@ -36,18 +35,12 @@ else if (!string.IsNullOrEmpty(_status))
                     @for (var i = 0; i < _worldwide.Count; i++)
                     {
                         var entry = _worldwide[i];
-                        <tr class="clickable-row" @onclick="() => ToggleFriendBets(entry.UserId)">
+                        <tr>
                             <td>@(i + 1)</td>
                             <td>@entry.Name</td>
                             <td>@entry.LeagueName</td>
                             <td class="@(entry.Profit >= 0 ? "live" : "error")">@(entry.Profit >= 0 ? "+" : "-")@entry.CurrencySymbol@Math.Abs(entry.Profit).ToString("0.00")</td>
                         </tr>
-                        @if (_expandedUserId == entry.UserId)
-                        {
-                            <tr class="friend-bets-row">
-                                <td colspan="4"><FriendBetsPanel UserId="@entry.UserId" CurrencySymbol="@entry.CurrencySymbol" /></td>
-                            </tr>
-                        }
                     }
                 </tbody>
             </table>
