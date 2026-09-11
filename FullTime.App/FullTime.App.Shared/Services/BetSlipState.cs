@@ -6,7 +6,7 @@ public record SlipPick(
     string MarketType, decimal? Line, string? Side, decimal Odds, int? PredictedHomeScore = null,
     int? PredictedAwayScore = null, string? PlayerName = null, string? Team = null);
 
-public record SlipLeg(List<SlipPick> Picks, string HomeTeam, string AwayTeam, DateTime KickoffTime)
+public record SlipLeg(List<SlipPick> Picks, string HomeTeam, string AwayTeam, DateTime KickoffTime, bool ViaBoost = false)
 {
     public decimal CombinedOdds => Picks.Aggregate(1m, (acc, p) => acc * p.Odds);
 }
@@ -82,10 +82,14 @@ public class BetSlipState(ISlipStore slipStore)
     }
 
     // Adds a same-game multi leg (or replaces whatever leg already exists for this match) —
-    // same one-leg-per-match rule as ToggleMatchResultAsync, just with 2+ picks.
-    public async Task SetLegAsync(Guid matchId, List<SlipPick> picks, string homeTeam, string awayTeam, DateTime kickoffTime)
+    // same one-leg-per-match rule as ToggleMatchResultAsync, just with 2+ picks. viaBoost marks
+    // that this leg was built from a Bet Builder visit reached through the boost banner - see
+    // BetBuilder.razor's "boost" query param - so BetSlipSheet only offers/applies the day's Bet
+    // Builder Boost when the owner actually opted into it that way, not just by picking the
+    // featured match normally from the Matches list.
+    public async Task SetLegAsync(Guid matchId, List<SlipPick> picks, string homeTeam, string awayTeam, DateTime kickoffTime, bool viaBoost = false)
     {
-        _legs[matchId] = new SlipLeg(picks, homeTeam, awayTeam, kickoffTime);
+        _legs[matchId] = new SlipLeg(picks, homeTeam, awayTeam, kickoffTime, viaBoost);
         await SaveAsync();
     }
 

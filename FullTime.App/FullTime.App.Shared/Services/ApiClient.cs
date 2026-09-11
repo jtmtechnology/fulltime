@@ -121,10 +121,10 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
     public async Task<ConfigResponse> GetConfigAsync() =>
         await httpClient.GetFromJsonAsync<ConfigResponse>("api/config") ?? new ConfigResponse(600);
 
-    public async Task<BetDto> PlaceBetAsync(decimal stake, List<LegRequest> legs, Guid? leagueId)
+    public async Task<BetDto> PlaceBetAsync(decimal stake, List<LegRequest> legs, Guid? leagueId, bool viaBetBuilderBoost = false)
     {
         Authorize();
-        var res = await httpClient.PostAsJsonAsync("api/bets", new PlaceBetRequest(stake, legs, leagueId));
+        var res = await httpClient.PostAsJsonAsync("api/bets", new PlaceBetRequest(stake, legs, leagueId, viaBetBuilderBoost));
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
         return (await res.Content.ReadFromJsonAsync<BetDto>())!;
     }

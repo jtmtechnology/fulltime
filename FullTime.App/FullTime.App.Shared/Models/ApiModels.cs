@@ -52,7 +52,7 @@ public record MatchEventDto(
 
 public record PickRequest(string MarketType, decimal? Line, string? Side, int? PredictedHomeScore = null, int? PredictedAwayScore = null, string? PlayerName = null, string? Team = null);
 public record LegRequest(Guid MatchId, List<PickRequest> Picks);
-public record PlaceBetRequest(decimal Stake, List<LegRequest> Legs, Guid? LeagueId);
+public record PlaceBetRequest(decimal Stake, List<LegRequest> Legs, Guid? LeagueId, bool ViaBetBuilderBoost = false);
 
 public record BetLegPickDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore,

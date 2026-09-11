@@ -123,10 +123,14 @@
     // Only "just this match's Bet Builder" bets are eligible - a slip with any other leg mixed in
     // (or more than one leg) isn't the featured match's own same-game multi any more, so the
     // evens-gate/boost preview both stand down and the bet places completely normally.
+    // ViaBoost is only ever true if this leg was built on a Bet Builder visit reached through the
+    // boost banner itself (see BetBuilder.razor's "boost" query param) - reaching the same match's
+    // Bet Builder any other way must never apply the boost or show its rules.
     private bool BetBuilderBoostActiveForSlip =>
         _bbBoostStatus is { Available: true } status
         && Slip.Legs.Count == 1
-        && Slip.Legs.Keys.First() == status.MatchId;
+        && Slip.Legs.Keys.First() == status.MatchId
+        && Slip.Legs.Values.First().ViaBoost;
 
     // bet365's own "Boost your Bet Builder" terms: 3+ selections AND combined odds of evens or
     // greater - both required, not either/or.
@@ -295,7 +299,7 @@
             var legs = Slip.Legs.Select(kv => new LegRequest(
                 kv.Key, kv.Value.Picks.Select(p => new PickRequest(
                     p.MarketType, p.Line, p.Side, p.PredictedHomeScore, p.PredictedAwayScore, p.PlayerName, p.Team)).ToList())).ToList();
-            var placedBet = await Api.PlaceBetAsync(_stake, legs, ContextState.Current.LeagueId);
+            var placedBet = await Api.PlaceBetAsync(_stake, legs, ContextState.Current.LeagueId, BetBuilderBoostActiveForSlip);
 
             await Slip.ClearAsync();
             await ContextState.RefreshBalanceAsync();

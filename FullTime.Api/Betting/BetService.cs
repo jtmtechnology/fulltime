@@ -13,7 +13,7 @@ public class BetService(AppDbContext db, BetBuilderBoostService boostService, IL
 {
     public async Task<PlaceBetResult> PlaceBetAsync(
         Guid userId, decimal stake, List<LegInput> legs, Guid? leagueId,
-        CancellationToken ct = default)
+        bool viaBetBuilderBoost = false, CancellationToken ct = default)
     {
         if (legs.Count == 0 || legs.Any(l => l.Picks.Count == 0))
         {
@@ -129,11 +129,12 @@ public class BetService(AppDbContext db, BetBuilderBoostService boostService, IL
             user.PendingBoostMultiplier = null;
             user.PendingBoostLabel = null;
         }
-        else if (betLegs.Count == 1)
+        else if (betLegs.Count == 1 && viaBetBuilderBoost)
         {
             // Bet Builder Boost (see BetBuilderBoostService) only ever applies to a same-game multi
-            // confined entirely to today's featured match - takes a back seat to an already-won
-            // Daily Spinner boost rather than stacking with it.
+            // confined entirely to today's featured match, placed from a Bet Builder visit that
+            // actually came from the boost banner (viaBetBuilderBoost) - takes a back seat to an
+            // already-won Daily Spinner boost rather than stacking with it.
             var (applied, betBuilderMultiplier, label) = await boostService.TryConsumeBoostAsync(
                 user, betLegs[0].MatchId, betLegs[0].Picks.Count, combinedOdds, ct);
             if (applied)

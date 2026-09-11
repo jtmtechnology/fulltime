@@ -73,7 +73,7 @@
         }
     }
 
-    private void Go() => Nav.NavigateTo($"/bet-builder/{_matchId}");
+    private void Go() => Nav.NavigateTo($"/bet-builder/{_matchId}?boost=1");
 
     public void Dispose() => Slip.Changed -= OnSlipChanged;
 }

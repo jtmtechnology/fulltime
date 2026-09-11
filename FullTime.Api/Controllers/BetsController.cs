@@ -11,7 +11,7 @@ namespace FullTime.Api.Controllers;
 
 public record PickRequest(string MarketType, decimal? Line, string? Side, int? PredictedHomeScore = null, int? PredictedAwayScore = null, string? PlayerName = null, string? Team = null);
 public record LegRequest(Guid MatchId, List<PickRequest> Picks);
-public record PlaceBetRequest(decimal Stake, List<LegRequest> Legs, Guid? LeagueId);
+public record PlaceBetRequest(decimal Stake, List<LegRequest> Legs, Guid? LeagueId, bool ViaBetBuilderBoost = false);
 
 public record BetLegPickDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore,
@@ -64,7 +64,7 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
             legs.Add(new LegInput(legRequest.MatchId, picks));
         }
 
-        var result = await betService.PlaceBetAsync(CurrentUserId, request.Stake, legs, request.LeagueId, ct);
+        var result = await betService.PlaceBetAsync(CurrentUserId, request.Stake, legs, request.LeagueId, request.ViaBetBuilderBoost, ct);
 
         if (result.Outcome != PlaceBetOutcome.Success)
         {

@@ -378,6 +378,10 @@ else
     [SupplyParameterFromQuery(Name = "homeLogo")] public string? HomeLogo { get; set; }
     [SupplyParameterFromQuery(Name = "awayLogo")] public string? AwayLogo { get; set; }
 
+    // Set only by BetBuilderBoostBanner's own link - reaching this same match's Bet Builder any
+    // other way (the Matches list, a direct link) must never apply today's boost or its rules.
+    [SupplyParameterFromQuery(Name = "boost")] public string? BoostFlag { get; set; }
+
     private string HomeTeam => Home ?? "";
     private string AwayTeam => Away ?? "";
     private DateTime KickoffTime => DateTime.TryParse(Kickoff, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt) ? dt : DateTime.UtcNow;
@@ -667,7 +671,7 @@ else
         try
         {
             var boostStatus = await Api.GetBetBuilderBoostStatusAsync();
-            _boostActive = boostStatus.Available && boostStatus.MatchId == MatchId;
+            _boostActive = BoostFlag == "1" && boostStatus.Available && boostStatus.MatchId == MatchId;
             _boostPercent = boostStatus.Percent;
             _boostMinSelections = boostStatus.MinSelections;
         }
@@ -752,7 +756,7 @@ else
 
     private async Task AddToSlipAsync()
     {
-        await Slip.SetLegAsync(MatchId, EffectiveSelectedPicks.ToList(), HomeTeam, AwayTeam, KickoffTime);
+        await Slip.SetLegAsync(MatchId, EffectiveSelectedPicks.ToList(), HomeTeam, AwayTeam, KickoffTime, _boostActive);
         Slip.SetOpen(true);
         Nav.NavigateTo(BackToMatchesUrl);
     }
