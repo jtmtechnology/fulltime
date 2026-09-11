@@ -81,12 +81,12 @@
                     {
                         <div class="muted">Join or create a league on the Leaderboard tab before placing a bet.</div>
                     }
+                    else if (BetBuilderBoostActiveForSlip && !BetBuilderBoostQualifies)
+                    {
+                        <div class="muted">🚀 @BetBuilderBoostGateMessage</div>
+                    }
                     else
                     {
-                        @if (BetBuilderBoostActiveForSlip && !BetBuilderBoostQualifies)
-                        {
-                            <div class="muted">🚀 @BetBuilderBoostGateMessage This bet can still be placed - just without the boost.</div>
-                        }
                         <div class="muted">
                             Betting in: <strong>@ContextState.Current.Name</strong>
                             @if (ContextState.Balance is not null)
