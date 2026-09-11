@@ -5,7 +5,9 @@ using Microsoft.Extensions.Options;
 
 namespace FullTime.Api.Betting;
 
-public record BetBuilderBoostStatus(bool Available, Guid? MatchId, string? HomeTeam, string? AwayTeam, decimal Percent, int MinSelections);
+public record BetBuilderBoostStatus(
+    bool Available, Guid? MatchId, string? HomeTeam, string? AwayTeam, decimal Percent, int MinSelections,
+    DateTime? KickoffTime = null, string? HomeLogoUrl = null, string? AwayLogoUrl = null, long? LeagueId = null);
 
 // Picks one match a day - shared by every user, not randomized per-user (a single "match of the
 // day" boost, the same way bet365's own Bet Builder Boost banner works) - eligible from the
@@ -35,7 +37,8 @@ public class BetBuilderBoostService(AppDbContext db, IOptions<BettingOptions> op
 
         return new BetBuilderBoostStatus(
             !alreadyUsedToday, match.Id, match.HomeTeam, match.AwayTeam,
-            options.Value.BetBuilderBoostPercent, options.Value.BetBuilderBoostMinSelections);
+            options.Value.BetBuilderBoostPercent, options.Value.BetBuilderBoostMinSelections,
+            match.KickoffTime, match.HomeTeamLogoUrl, match.AwayTeamLogoUrl, match.LeagueId);
     }
 
     // Called from BetService at placement time - re-reads today's featured match itself rather than

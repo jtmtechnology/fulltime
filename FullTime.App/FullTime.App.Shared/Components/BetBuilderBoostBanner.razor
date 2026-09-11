@@ -22,6 +22,10 @@
     private string _homeTeam = "";
     private string _awayTeam = "";
     private decimal _percent;
+    private DateTime _kickoffTime;
+    private string? _homeLogoUrl;
+    private string? _awayLogoUrl;
+    private long _leagueId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -60,6 +64,10 @@
             _homeTeam = boostStatus.HomeTeam ?? "";
             _awayTeam = boostStatus.AwayTeam ?? "";
             _percent = boostStatus.Percent;
+            _kickoffTime = boostStatus.KickoffTime ?? DateTime.UtcNow;
+            _homeLogoUrl = boostStatus.HomeLogoUrl;
+            _awayLogoUrl = boostStatus.AwayLogoUrl;
+            _leagueId = boostStatus.LeagueId ?? 0;
             _available = true;
         }
         catch (ApiException)
@@ -73,7 +81,13 @@
         }
     }
 
-    private void Go() => Nav.NavigateTo($"/bet-builder/{_matchId}?boost=1");
+    // Same query params MatchCard.BetBuilderHref() sends for a normal match tap, plus boost=1 - the
+    // owner reported blank team names/wrong kickoff/no crests on Bet Builder when reached from this
+    // banner because it originally sent none of these, unlike every other entry point.
+    private void Go() => Nav.NavigateTo(
+        $"/bet-builder/{_matchId}?boost=1&home={Uri.EscapeDataString(_homeTeam)}&away={Uri.EscapeDataString(_awayTeam)}" +
+        $"&kickoff={Uri.EscapeDataString(_kickoffTime.ToString("O"))}&league={Uri.EscapeDataString(LeagueCatalog.Name(_leagueId))}" +
+        $"&homeLogo={Uri.EscapeDataString(_homeLogoUrl ?? "")}&awayLogo={Uri.EscapeDataString(_awayLogoUrl ?? "")}");
 
     public void Dispose() => Slip.Changed -= OnSlipChanged;
 }

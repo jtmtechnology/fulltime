@@ -67,7 +67,9 @@ public record PendingBetDto(Guid BetId, string UserName, decimal Stake);
 public record SpinStatusDto(bool CanSpin, int Streak, decimal? PendingBoostMultiplier, string? PendingBoostLabel);
 public record SpinResultDto(int WinningIndex, int Streak, decimal? MysteryCashAmount, decimal? StreakBonusAmount, string? BoostLabel);
 
-public record BetBuilderBoostStatusDto(bool Available, Guid? MatchId, string? HomeTeam, string? AwayTeam, decimal Percent, int MinSelections);
+public record BetBuilderBoostStatusDto(
+    bool Available, Guid? MatchId, string? HomeTeam, string? AwayTeam, decimal Percent, int MinSelections,
+    DateTime? KickoffTime, string? HomeLogoUrl, string? AwayLogoUrl, long? LeagueId);
 
 public record BetBuilderMarketDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore,

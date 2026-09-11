@@ -321,6 +321,10 @@ else
         else
         {
             <button type="button" class="place-bet-btn" @onclick="AddToSlipAsync">Add to slip</button>
+            @if (!string.IsNullOrEmpty(_addToSlipStatus))
+            {
+                <div class="status">@_addToSlipStatus</div>
+            }
         }
     </div>
 }
@@ -395,6 +399,7 @@ else
     private bool _boostActive;
     private decimal _boostPercent;
     private int _boostMinSelections;
+    private string? _addToSlipStatus;
 
     // "W"/"D"/"L" from GetRecentFormAsync (MatchesController) - oldest to newest, so the rightmost
     // dot is the most recent result.
@@ -752,11 +757,24 @@ else
         {
             _selected[pick.MarketType] = pick;
         }
+
+        _addToSlipStatus = null;
     }
 
     private async Task AddToSlipAsync()
     {
         await Slip.SetLegAsync(MatchId, EffectiveSelectedPicks.ToList(), HomeTeam, AwayTeam, KickoffTime, _boostActive);
+
+        // Opted into today's boost but not yet at its minimum selection count - stay right here so
+        // the owner can keep adding picks toward it, instead of being bounced back to Matches (and
+        // shown the slip's "needs more selections" gate) after every single tap of this button.
+        var pickCount = EffectiveSelectedPicks.Count();
+        if (_boostActive && pickCount < _boostMinSelections)
+        {
+            _addToSlipStatus = $"Added to slip — pick {_boostMinSelections - pickCount} more selection(s) for the +{_boostPercent:0.##}% boost.";
+            return;
+        }
+
         Slip.SetOpen(true);
         Nav.NavigateTo(BackToMatchesUrl);
     }
