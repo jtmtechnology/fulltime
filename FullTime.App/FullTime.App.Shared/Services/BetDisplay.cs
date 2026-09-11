@@ -16,7 +16,7 @@ public static class BetDisplay
     public static string PickLabel(BetLegPickDto pick, string homeTeam, string awayTeam) => pick.MarketType switch
     {
         "MatchResult" => pick.Side switch { "Home" => "Home win", "Away" => "Away win", _ => "Draw" },
-        "OverUnder" => $"{pick.Side} {pick.Line:0.##}",
+        "OverUnder" => $"{pick.Side} {pick.Line:0.##} goals",
         "TotalCorners" => $"{pick.Side} {pick.Line:0.##} corners",
         "TeamCorners" => $"{TeamName(pick.Team, homeTeam, awayTeam)} {pick.Side} {pick.Line:0.##} corners",
         "TeamCards" => $"{TeamName(pick.Team, homeTeam, awayTeam)} {pick.Side} {pick.Line:0.##} cards",
