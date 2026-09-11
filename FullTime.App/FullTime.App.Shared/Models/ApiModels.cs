@@ -61,7 +61,8 @@ public record BetLegDto(
     Guid MatchId, string HomeTeam, string AwayTeam, string? HomeLogoUrl, string? AwayLogoUrl,
     DateTime KickoffTime, decimal OddsAtPlacement, string Outcome, List<BetLegPickDto> Picks);
 public record BetDto(Guid Id, decimal Stake, decimal CombinedOdds, decimal PotentialReturn, string Status,
-    DateTime PlacedAt, DateTime? SettledAt, Guid? LeagueId, string? LeagueName, string? BoostApplied, List<BetLegDto> Legs);
+    DateTime PlacedAt, DateTime? SettledAt, Guid? LeagueId, string? LeagueName, string? BoostApplied, List<BetLegDto> Legs,
+    string? BoostSkippedReason = null);
 public record PendingBetDto(Guid BetId, string UserName, decimal Stake);
 
 public record SpinStatusDto(bool CanSpin, int Streak, decimal? PendingBoostMultiplier, string? PendingBoostLabel);

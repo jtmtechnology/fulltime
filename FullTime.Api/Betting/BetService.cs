@@ -120,14 +120,25 @@ public class BetService(AppDbContext db, BetBuilderBoostService boostService, IL
         }
 
         // A pending Daily Spinner boost (see SpinService) applies to this bet's odds and is
-        // consumed immediately - it's a one-shot "next bet" prize, never stacked or reused.
+        // consumed immediately - it's a one-shot "next bet" prize, never stacked or reused. Only
+        // ever applies at combined odds of Evens (2.00) or higher - a bet placed under that stays
+        // completely normal and the boost is left pending rather than wasted, so it carries over to
+        // a later bet that does qualify.
         string? appliedBoostLabel = null;
+        string? boostSkippedReason = null;
         if (user.PendingBoostMultiplier is { } boostMultiplier)
         {
-            combinedOdds *= boostMultiplier;
-            appliedBoostLabel = user.PendingBoostLabel;
-            user.PendingBoostMultiplier = null;
-            user.PendingBoostLabel = null;
+            if (combinedOdds >= 2m)
+            {
+                combinedOdds *= boostMultiplier;
+                appliedBoostLabel = user.PendingBoostLabel;
+                user.PendingBoostMultiplier = null;
+                user.PendingBoostLabel = null;
+            }
+            else
+            {
+                boostSkippedReason = $"Your {user.PendingBoostLabel} needs combined odds of Evens (2.00) or higher — it's still available for your next bet.";
+            }
         }
         else if (betLegs.Count == 1 && viaBetBuilderBoost)
         {
@@ -166,7 +177,7 @@ public class BetService(AppDbContext db, BetBuilderBoostService boostService, IL
         logger.LogInformation("User {UserId} placed a {LegCount}-leg bet {BetId} for {Stake} at combined odds {CombinedOdds}",
             userId, betLegs.Count, bet.Id, stake, combinedOdds);
 
-        return new PlaceBetResult(PlaceBetOutcome.Success, bet);
+        return new PlaceBetResult(PlaceBetOutcome.Success, bet, boostSkippedReason);
     }
 
     private async Task<decimal?> GetMatchResultOddsAsync(Guid matchId, MarketType marketType, SelectionSide? side, CancellationToken ct)

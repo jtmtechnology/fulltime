@@ -33,6 +33,10 @@
                     {
                         <p class="bet-success-boost">🚀 @_placedBoostLabel applied!</p>
                     }
+                    else if (_placedBoostSkippedReason is not null)
+                    {
+                        <p class="bet-success-boost">🎁 @_placedBoostSkippedReason</p>
+                    }
                 </div>
             }
             else
@@ -63,7 +67,7 @@
                     </div>
                     <div>
                         Potential return: <strong>@ContextState.CurrencySymbol@BoostedPotentialReturn.ToString("0.00")</strong>
-                        @if (_pendingBoostLabel is not null)
+                        @if (PendingBoostQualifies)
                         {
                             <span class="live"> (🚀 @_pendingBoostLabel applied)</span>
                         }
@@ -72,6 +76,14 @@
                             <span class="live"> (🚀 Bet Builder Boost @_bbBoostStatus!.Percent.ToString("0.##")% applied)</span>
                         }
                     </div>
+
+                    @if (_pendingBoostLabel is not null && !PendingBoostQualifies)
+                    {
+                        <div class="muted">
+                            🎁 Your @_pendingBoostLabel needs combined odds of Evens (2.00) or higher to apply —
+                            it'll carry over to a future bet that qualifies.
+                        </div>
+                    }
 
                     @if (!AuthState.IsLoggedIn)
                     {
@@ -116,9 +128,15 @@
     private bool _justPlaced;
     private decimal _placedReturn;
     private string? _placedBoostLabel;
+    private string? _placedBoostSkippedReason;
     private decimal? _pendingBoostMultiplier;
     private string? _pendingBoostLabel;
     private BetBuilderBoostStatusDto? _bbBoostStatus;
+
+    // Same evens-or-greater rule as the Bet Builder Boost - a pending Daily Spinner boost
+    // (BetBoost25/50, 2x Odds Boost) only ever applies to a bet whose combined odds already clear
+    // Evens, otherwise it's left pending server-side rather than wasted (see BetService.PlaceBetAsync).
+    private bool PendingBoostQualifies => _pendingBoostMultiplier is not null && Slip.CombinedOdds >= 2m;
 
     // Only "just this match's Bet Builder" bets are eligible - a slip with any other leg mixed in
     // (or more than one leg) isn't the featured match's own same-game multi any more, so the
@@ -140,8 +158,9 @@
         && Slip.CombinedOdds > 2m;
 
     private decimal EffectiveBoostMultiplier =>
-        _pendingBoostMultiplier
-        ?? (BetBuilderBoostQualifies ? 1m + _bbBoostStatus!.Percent / 100m : 1m);
+        PendingBoostQualifies ? _pendingBoostMultiplier!.Value
+        : BetBuilderBoostQualifies ? 1m + _bbBoostStatus!.Percent / 100m
+        : 1m;
 
     // Names whichever of the two bet365-style requirements (3+ selections, combined odds over
     // Evens) this slip is still short of, rather than always repeating both regardless of which one
@@ -312,10 +331,15 @@
             // on-screen forever when the two overlapped.
             _placedReturn = placedBet.PotentialReturn;
             _placedBoostLabel = placedBet.BoostApplied;
-            // Consumed server-side by this placement - clear the local preview so a stray reopen of
-            // the (now-empty) slip before the next status refresh doesn't still show it as pending.
-            _pendingBoostMultiplier = null;
-            _pendingBoostLabel = null;
+            _placedBoostSkippedReason = placedBet.BoostSkippedReason;
+            // Only actually consumed server-side when BoostSkippedReason is null (either applied, or
+            // there was nothing pending) - a skipped boost (odds under Evens) stays pending server-side
+            // for a future bet, so the local preview must keep showing it as pending too.
+            if (placedBet.BoostSkippedReason is null)
+            {
+                _pendingBoostMultiplier = null;
+                _pendingBoostLabel = null;
+            }
             _justPlaced = true;
             Haptics.Tap();
             StateHasChanged();

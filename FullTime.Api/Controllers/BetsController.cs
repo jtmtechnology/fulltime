@@ -20,7 +20,8 @@ public record BetLegDto(
     Guid MatchId, string HomeTeam, string AwayTeam, string? HomeLogoUrl, string? AwayLogoUrl,
     DateTime KickoffTime, decimal OddsAtPlacement, string Outcome, List<BetLegPickDto> Picks);
 public record BetDto(Guid Id, decimal Stake, decimal CombinedOdds, decimal PotentialReturn, string Status,
-    DateTime PlacedAt, DateTime? SettledAt, Guid? LeagueId, string? LeagueName, string? BoostApplied, List<BetLegDto> Legs);
+    DateTime PlacedAt, DateTime? SettledAt, Guid? LeagueId, string? LeagueName, string? BoostApplied, List<BetLegDto> Legs,
+    string? BoostSkippedReason = null);
 
 [ApiController]
 [Route("api/bets")]
@@ -83,7 +84,7 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
         }
 
         var dto = await LoadBetDtoAsync(result.Bet!.Id, ct);
-        return Created(string.Empty, dto);
+        return Created(string.Empty, dto! with { BoostSkippedReason = result.BoostSkippedReason });
     }
 
     [HttpGet("me")]
