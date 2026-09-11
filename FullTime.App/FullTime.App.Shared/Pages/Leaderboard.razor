@@ -84,7 +84,7 @@ else
                         ? pendingBets.GroupBy(b => b.UserName).ToDictionary(g => g.Key, g => g.Sum(b => b.Stake))
                         : [];
 
-                    <p class="muted">Tap a name to see their last 5 bets.</p>
+                    <p class="muted tap-hint">Tap a name to see their last 5 bets.</p>
                     <div class="table-scroll">
                         <table class="simple-table">
                             <thead><tr><th>#</th><th>Name</th><th>Balance</th><th>Profit</th><th>Bets Placed</th></tr></thead>

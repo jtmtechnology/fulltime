@@ -150,6 +150,7 @@ button {
 table.simple-table { width: 100%; border-collapse: collapse; }
 table.simple-table th, table.simple-table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
 table.simple-table th { background: var(--bg-elevated); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; }
+.tap-hint { margin-top: 0.75rem; }
 table.simple-table tr.clickable-row { cursor: pointer; }
 table.simple-table tr.clickable-row:hover { background: var(--bg-elevated); }
 table.simple-table tr.friend-bets-row td { white-space: normal; background: var(--bg); }
