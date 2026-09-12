@@ -385,6 +385,7 @@ else
     // Set only by BetBuilderBoostBanner's own link - reaching this same match's Bet Builder any
     // other way (the Matches list, a direct link) must never apply today's boost or its rules.
     [SupplyParameterFromQuery(Name = "boost")] public string? BoostFlag { get; set; }
+    [SupplyParameterFromQuery(Name = "return")] public string? Return { get; set; }
 
     private string HomeTeam => Home ?? "";
     private string AwayTeam => Away ?? "";
@@ -784,5 +785,7 @@ else
 
     // Returns to whichever date this match's card was on (Matches.razor's day-picker), rather than
     // always resetting to today.
-    private string BackToMatchesUrl => $"/?date={DateOnly.FromDateTime(KickoffTime.ToLocalTime()):yyyy-MM-dd}";
+    private string BackToMatchesUrl => !string.IsNullOrEmpty(Return)
+        ? Return
+        : $"/?date={DateOnly.FromDateTime(KickoffTime.ToLocalTime()):yyyy-MM-dd}";
 }

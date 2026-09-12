@@ -50,13 +50,19 @@
         }
         else if ((Match.Status == "Finished" || Match.Status == "InProgress") && Match.EventsAvailable)
         {
-            <a class="bet-builder-link" href="@MatchEventsHref()">Match Summary</a>
+            <button type="button" class="bet-builder-link" @onclick="() => Summary.Open(Match)">Match Summary</button>
         }
     </div>
 </div>
 
 @code {
+    [Inject] private MatchSummaryState Summary { get; set; } = default!;
+
     [Parameter, EditorRequired] public UpcomingMatchDto Match { get; set; } = default!;
+
+    // Set by the parent page (Matches.razor / LeagueMatches.razor) so Match Summary's back button
+    // returns to wherever this card was shown, not always the main Matches list.
+    [Parameter] public string? ReturnUrl { get; set; }
 
     // No odds fetched yet for this match (e.g. too far out) - showing three "—" cells and a "—"
     // bookmaker placeholder reads as broken, not "coming soon", so hide the whole section instead.
@@ -81,12 +87,6 @@
     private string BetBuilderHref() =>
         $"bet-builder/{Match.Id}?home={Uri.EscapeDataString(Match.HomeTeam)}&away={Uri.EscapeDataString(Match.AwayTeam)}" +
         $"&kickoff={Uri.EscapeDataString(Match.KickoffTime.ToString("O"))}&league={Uri.EscapeDataString(LeagueCatalog.Name(Match.LeagueId))}" +
-        $"&homeLogo={Uri.EscapeDataString(Match.HomeLogoUrl ?? "")}&awayLogo={Uri.EscapeDataString(Match.AwayLogoUrl ?? "")}";
-
-    private string MatchEventsHref() =>
-        $"match-events/{Match.Id}?home={Uri.EscapeDataString(Match.HomeTeam)}&away={Uri.EscapeDataString(Match.AwayTeam)}" +
-        $"&kickoff={Uri.EscapeDataString(Match.KickoffTime.ToString("O"))}" +
         $"&homeLogo={Uri.EscapeDataString(Match.HomeLogoUrl ?? "")}&awayLogo={Uri.EscapeDataString(Match.AwayLogoUrl ?? "")}" +
-        $"&homeScore={Match.HomeScore}&awayScore={Match.AwayScore}" +
-        $"&status={Uri.EscapeDataString(Match.Status)}&minute={Match.Minute}&addedTime={Match.AddedTimeMinutes}&isHalfTime={Match.IsHalfTime}";
+        $"&return={Uri.EscapeDataString(ReturnUrl ?? "/")}";
 }

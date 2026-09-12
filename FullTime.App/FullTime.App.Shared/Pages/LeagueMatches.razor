@@ -1,0 +1,237 @@
+@page "/matches/league/{LeagueId:long}"
+@implements IDisposable
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject MatchUpdatesClient MatchUpdates
+@inject IJSRuntime JS
+
+<PageTitle>FullTime — @LeagueCatalog.Name(LeagueId)</PageTitle>
+
+<div class="page-header-row">
+    <button type="button" class="back-btn" @onclick="GoBack" aria-label="Back">‹</button>
+    <LogoImg Src="@LeagueCatalog.LogoUrl(LeagueId)" Alt="@LeagueCatalog.Name(LeagueId)" CssClass="league-header-crest" />
+    <div class="league-header-text">
+        <h1>@LeagueCatalog.Name(LeagueId)</h1>
+        @if (!string.IsNullOrEmpty(LeagueCatalog.Country(LeagueId)))
+        {
+            <span class="muted">@LeagueCatalog.Country(LeagueId)</span>
+        }
+    </div>
+</div>
+
+<div class="day-picker">
+    @foreach (var day in _days)
+    {
+        <button type="button" class="day-pill @(day == _selectedDate ? "selected" : "")" @onclick="() => SelectDateAsync(day)">@DayLabel(day)</button>
+    }
+</div>
+
+@if (_status == "Loading…")
+{
+    <LoadingSpinner />
+}
+else if (!string.IsNullOrEmpty(_status))
+{
+    <div class="status @(_error ? "error" : "")">@_status</div>
+}
+
+@foreach (var m in _matches)
+{
+    <MatchCard Match="m" ReturnUrl="@($"/matches/league/{LeagueId}?date={_selectedDate:yyyy-MM-dd}")" />
+}
+
+@code {
+    [Parameter] public long LeagueId { get; set; }
+
+    // Same visible window as Matches.razor - see that file's comment for why (matches
+    // HighlightlyOptions.MatchSyncDaysAhead).
+    private readonly List<DateOnly> _days = Enumerable.Range(-1, 9)
+        .Select(i => DateOnly.FromDateTime(DateTime.Today.AddDays(i)))
+        .ToList();
+
+    [SupplyParameterFromQuery(Name = "date")] public string? Date { get; set; }
+
+    private DateOnly _selectedDate = DateOnly.FromDateTime(DateTime.Today);
+    private bool _hasQueried;
+    private List<UpcomingMatchDto> _matches = [];
+    private string _status = "Loading…";
+    private bool _error;
+    private readonly CancellationTokenSource _cts = new();
+
+    // See Matches.razor's matching fields for why - same scroll-restore mechanism, keyed by this
+    // page's own route+date instead.
+    private bool _scrollRestored;
+    private string? _attachedScrollKey;
+    private string ScrollKey => $"scroll:/matches/league/{LeagueId}:{_selectedDate:yyyy-MM-dd}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (DateOnly.TryParse(Date, out var requestedDate) && _days.Contains(requestedDate))
+        {
+            _selectedDate = requestedDate;
+        }
+
+        await LoadMatchesAsync(quiet: false);
+        _ = AutoRefreshLoopAsync(_cts.Token);
+
+        MatchUpdates.MatchUpdated += OnMatchUpdated;
+        try
+        {
+            await MatchUpdates.EnsureStartedAsync();
+        }
+        catch
+        {
+            // Falls back to the existing poll loop.
+        }
+    }
+
+    private void OnMatchUpdated(MatchLiveUpdate update)
+    {
+        var index = _matches.FindIndex(m => m.Id == update.MatchId);
+        if (index < 0)
+        {
+            return;
+        }
+
+        _matches[index] = _matches[index] with
+        {
+            Status = update.Status,
+            HomeScore = update.HomeScore,
+            AwayScore = update.AwayScore,
+            Minute = update.Minute,
+            AddedTimeMinutes = update.AddedTimeMinutes,
+            IsHalfTime = update.IsHalfTime,
+        };
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SelectDateAsync(DateOnly day)
+    {
+        _selectedDate = day;
+        await LoadMatchesAsync(quiet: false);
+        await AttachScrollTrackingAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_hasQueried && !_scrollRestored)
+        {
+            _scrollRestored = true;
+            await AttachScrollTrackingAsync();
+            try
+            {
+                await JS.InvokeVoidAsync("fullTimeScroll.restore", ScrollKey);
+            }
+            catch
+            {
+                // Best-effort - a page without the runtime attached yet just skips the restore.
+            }
+        }
+    }
+
+    private async Task AttachScrollTrackingAsync()
+    {
+        if (_attachedScrollKey == ScrollKey)
+        {
+            return;
+        }
+
+        _attachedScrollKey = ScrollKey;
+        try
+        {
+            await JS.InvokeVoidAsync("fullTimeScroll.attach", ScrollKey);
+        }
+        catch
+        {
+            // Best-effort, see above.
+        }
+    }
+
+    private string DayLabel(DateOnly day)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (day == today) return "Today";
+        if (day == today.AddDays(1)) return "Tomorrow";
+        if (day == today.AddDays(-1)) return "Yesterday";
+        return day.ToString("ddd d");
+    }
+
+    private static bool IsPollRegression(UpcomingMatchDto? existing, UpcomingMatchDto incoming) =>
+        existing is { Status: "InProgress", Minute: { } existingMinute }
+        && incoming is { Status: "InProgress", Minute: { } incomingMinute }
+        && incomingMinute < existingMinute;
+
+    private async Task LoadMatchesAsync(bool quiet)
+    {
+        _hasQueried = true;
+
+        if (!quiet)
+        {
+            _status = "Loading…";
+            _error = false;
+        }
+
+        try
+        {
+            var allMatches = await Api.GetUpcomingMatchesAsync(_selectedDate);
+            var previousById = _matches.ToDictionary(m => m.Id);
+
+            _matches = allMatches
+                .Where(m => LeagueCatalog.GroupKey(m.LeagueId) == LeagueId)
+                .Select(m => previousById.TryGetValue(m.Id, out var previous) && IsPollRegression(previous, m) ? previous : m)
+                .OrderBy(m => m.Status == "Finished" ? 1 : 0)
+                .ThenBy(m => m.KickoffTime)
+                .ThenBy(m => m.HomeTeam)
+                .ToList();
+
+            _status = _matches.Count == 0 ? "No matches found" : "";
+            _error = false;
+        }
+        catch (Exception ex)
+        {
+            _status = $"Error: {ex.Message}";
+            _error = true;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task AutoRefreshLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            var seconds = 600;
+            try
+            {
+                seconds = (await Api.GetConfigAsync()).RefreshIntervalSeconds;
+            }
+            catch
+            {
+                // fall back to the default above if /api/config isn't reachable
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(Math.Max(1, seconds)), ct);
+            }
+            catch (TaskCanceledException)
+            {
+                break;
+            }
+
+            if (_hasQueried)
+            {
+                await LoadMatchesAsync(quiet: true);
+            }
+        }
+    }
+
+    private void GoBack() => Nav.NavigateTo($"/?date={_selectedDate:yyyy-MM-dd}");
+
+    public void Dispose()
+    {
+        MatchUpdates.MatchUpdated -= OnMatchUpdated;
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

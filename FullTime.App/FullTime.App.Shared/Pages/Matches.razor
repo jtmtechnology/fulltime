@@ -3,6 +3,8 @@
 @inject ApiClient Api
 @inject MatchLeaguePreferences Prefs
 @inject MatchUpdatesClient MatchUpdates
+@inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>FullTime — Matches</PageTitle>
 
@@ -21,16 +23,16 @@
 @if (_leagues is { Count: > 0 })
 {
     <div class="league-list">
-        <button type="button" class="league-list-row @(_selectedLeagueId is null ? "selected" : "")" @onclick="() => SelectLeague(null)">
+        <div class="league-list-row league-list-header">
             <span class="league-list-text">
                 <span class="league-list-name">All competitions</span>
             </span>
             <span class="league-list-count">@_leagues.Sum(l => l.Matches.Count)</span>
-        </button>
+        </div>
         @foreach (var league in _leagues)
         {
             var liveCount = league.Matches.Count(m => m.Status == "InProgress");
-            <button type="button" class="league-list-row @(_selectedLeagueId == league.LeagueId ? "selected" : "")" @onclick="() => SelectLeague(league.LeagueId)">
+            <button type="button" class="league-list-row" @onclick="() => OpenLeague(league.LeagueId)">
                 <LogoImg Src="@LeagueCatalog.LogoUrl(league.LeagueId)" Alt="@LeagueCatalog.Name(league.LeagueId)" />
                 <span class="league-list-text">
                     <span class="league-list-name">@LeagueCatalog.Name(league.LeagueId)</span>
@@ -69,7 +71,7 @@ else if (!string.IsNullOrEmpty(_status))
         </div>
         @foreach (var m in leagueGroup)
         {
-            <MatchCard Match="m" />
+            <MatchCard Match="m" ReturnUrl="@($"/?date={_selectedDate:yyyy-MM-dd}")" />
         }
     }
 }
@@ -89,12 +91,19 @@ else if (!string.IsNullOrEmpty(_status))
     [SupplyParameterFromQuery(Name = "date")] public string? Date { get; set; }
 
     private DateOnly _selectedDate = DateOnly.FromDateTime(DateTime.Today);
-    private long? _selectedLeagueId;
     private bool _hasQueried;
     private List<LeagueGroup>? _leagues;
     private string _status = "Loading…";
     private bool _error;
     private readonly CancellationTokenSource _cts = new();
+
+    // Restores/tracks scroll position across leaving for Match Summary or Bet Builder and coming
+    // back (see MatchCard.ReturnUrl) - keyed by date since that's the only thing that changes this
+    // page's content. Blazor swaps content in place rather than doing a real browser navigation, so
+    // there's no scroll restoration to lean on without this.
+    private bool _scrollRestored;
+    private string? _attachedScrollKey;
+    private string ScrollKey => $"scroll:/:{_selectedDate:yyyy-MM-dd}";
 
     protected override async Task OnInitializedAsync()
     {
@@ -163,9 +172,46 @@ else if (!string.IsNullOrEmpty(_status))
     {
         _selectedDate = day;
         await LoadMatchesAsync(quiet: false);
+        await AttachScrollTrackingAsync();
     }
 
-    private void SelectLeague(long? leagueId) => _selectedLeagueId = leagueId;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_leagues is not null && !_scrollRestored)
+        {
+            _scrollRestored = true;
+            await AttachScrollTrackingAsync();
+            try
+            {
+                await JS.InvokeVoidAsync("fullTimeScroll.restore", ScrollKey);
+            }
+            catch
+            {
+                // Best-effort - a page without the runtime attached yet (e.g. prerendering) just
+                // skips the restore rather than breaking the page.
+            }
+        }
+    }
+
+    private async Task AttachScrollTrackingAsync()
+    {
+        if (_attachedScrollKey == ScrollKey)
+        {
+            return;
+        }
+
+        _attachedScrollKey = ScrollKey;
+        try
+        {
+            await JS.InvokeVoidAsync("fullTimeScroll.attach", ScrollKey);
+        }
+        catch
+        {
+            // Best-effort, see above.
+        }
+    }
+
+    private void OpenLeague(long leagueId) => Nav.NavigateTo($"/matches/league/{leagueId}?date={_selectedDate:yyyy-MM-dd}");
 
     private string DayLabel(DateOnly day)
     {
@@ -236,22 +282,13 @@ else if (!string.IsNullOrEmpty(_status))
             .Concat(byLeague.Keys.Where(id => !LeagueCatalog.DisplayOrder.Contains(id)).OrderBy(id => id));
 
         _leagues = orderedIds.Select(id => new LeagueGroup(id, byLeague[id])).ToList();
-
-        if (_selectedLeagueId is not null && !_leagues.Any(l => l.LeagueId == _selectedLeagueId))
-        {
-            _selectedLeagueId = null;
-        }
     }
 
     private IEnumerable<IGrouping<DateOnly, UpcomingMatchDto>> VisibleMatches()
     {
         if (_leagues is null) return [];
 
-        var matches = _selectedLeagueId is null
-            ? _leagues.SelectMany(l => l.Matches)
-            : _leagues.Where(l => l.LeagueId == _selectedLeagueId).SelectMany(l => l.Matches);
-
-        return matches
+        return _leagues.SelectMany(l => l.Matches)
             .OrderBy(m => DateOnly.FromDateTime(m.KickoffTime.ToLocalTime().Date))
             .ThenBy(m => LeagueSortRank(m.LeagueId))
             .ThenBy(m => m.LeagueId)
