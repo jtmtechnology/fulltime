@@ -254,18 +254,27 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 }
 .day-pill.selected { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
 
-/* ===== League chips ===== */
-.league-chips { display: flex; gap: 0.5rem; overflow-x: auto; padding: 0 0 0.75rem; }
-.league-chip {
-    flex-shrink: 0; display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem;
-    border-radius: 999px; border: 1px solid var(--border); background: var(--bg-elevated);
-    color: var(--text-muted); font-size: 0.82rem; cursor: pointer; white-space: nowrap;
+/* ===== Competition list ===== */
+.league-list { display: flex; flex-direction: column; margin-bottom: 0.75rem; border-top: 1px solid var(--border); }
+.league-list-row {
+    display: flex; align-items: center; gap: 0.75rem; width: 100%;
+    padding: 0.65rem 0.25rem; border: none; border-bottom: 1px solid var(--border);
+    background: none; color: var(--text); text-align: left; cursor: pointer;
 }
-.league-chip.selected { border-color: var(--accent); color: var(--text); background: rgba(57,255,136,0.12); }
-.league-chip img {
-    width: 26px; height: 26px; object-fit: contain;
+.league-list-row.selected { background: rgba(57,255,136,0.08); }
+.league-list-row img {
+    width: 32px; height: 32px; object-fit: contain; flex-shrink: 0;
     background: #f4f7fa; border-radius: 50%; padding: 3px; box-sizing: border-box;
 }
+.league-list-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.league-list-name { font-weight: 700; font-size: 0.95rem; }
+.league-list-country { font-size: 0.72rem; color: var(--text-muted); letter-spacing: 0.03em; text-transform: uppercase; }
+.league-list-live {
+    flex-shrink: 0; background: var(--danger); color: white; font-size: 0.72rem; font-weight: 700;
+    border-radius: 999px; min-width: 1.3rem; height: 1.3rem; display: flex; align-items: center; justify-content: center;
+    padding: 0 0.4rem;
+}
+.league-list-count { flex-shrink: 0; color: var(--text-muted); font-size: 0.85rem; min-width: 1.5rem; text-align: right; }
 
 .league-header {
     display: flex; align-items: center; gap: 0.5rem; margin: 1rem 0 0.5rem;

@@ -20,13 +20,30 @@
 
 @if (_leagues is { Count: > 0 })
 {
-    <div class="league-chips">
-        <button type="button" class="league-chip @(_selectedLeagueId is null ? "selected" : "")" @onclick="() => SelectLeague(null)">All</button>
+    <div class="league-list">
+        <button type="button" class="league-list-row @(_selectedLeagueId is null ? "selected" : "")" @onclick="() => SelectLeague(null)">
+            <span class="league-list-text">
+                <span class="league-list-name">All competitions</span>
+            </span>
+            <span class="league-list-count">@_leagues.Sum(l => l.Matches.Count)</span>
+        </button>
         @foreach (var league in _leagues)
         {
-            <button type="button" class="league-chip @(_selectedLeagueId == league.LeagueId ? "selected" : "")" @onclick="() => SelectLeague(league.LeagueId)">
+            var liveCount = league.Matches.Count(m => m.Status == "InProgress");
+            <button type="button" class="league-list-row @(_selectedLeagueId == league.LeagueId ? "selected" : "")" @onclick="() => SelectLeague(league.LeagueId)">
                 <LogoImg Src="@LeagueCatalog.LogoUrl(league.LeagueId)" Alt="@LeagueCatalog.Name(league.LeagueId)" />
-                <span>@LeagueCatalog.Name(league.LeagueId)</span>
+                <span class="league-list-text">
+                    <span class="league-list-name">@LeagueCatalog.Name(league.LeagueId)</span>
+                    @if (!string.IsNullOrEmpty(LeagueCatalog.Country(league.LeagueId)))
+                    {
+                        <span class="league-list-country">@LeagueCatalog.Country(league.LeagueId)</span>
+                    }
+                </span>
+                @if (liveCount > 0)
+                {
+                    <span class="league-list-live">@liveCount</span>
+                }
+                <span class="league-list-count">@league.Matches.Count</span>
             </button>
         }
     </div>

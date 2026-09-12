@@ -49,11 +49,33 @@ public static class LeagueCatalog
     public static readonly long[] DisplayOrder =
         [.. AlwaysVisible, .. OptionalLeagues.SelectMany(l => l.LeagueIds).Distinct()];
 
+    // Display-only subtitle for the competition list row (Matches.razor) - not used for any
+    // matching/sync logic, so a missing entry just renders no subtitle rather than breaking anything.
+    private static readonly Dictionary<long, string> Countries = new()
+    {
+        [33973] = "England",
+        [34824] = "England",
+        [35675] = "England",
+        [36526] = "England",
+        [39079] = "England",
+        [41632] = "England",
+        [450112] = "England",
+        [67162] = "Germany",
+        [119924] = "Spain",
+        [52695] = "France",
+        [115669] = "Italy",
+        [2486] = "Europe",
+        [3337] = "Europe",
+        [722432] = "Europe",
+    };
+
     // No-op now that every competition (main draw and qualifying alike) lives under one Highlightly
     // ID — kept so callers that group/chip/select by this key don't need to change.
     public static long GroupKey(long leagueId) => leagueId;
 
     public static string Name(long leagueId) => Names.GetValueOrDefault(leagueId, $"League {leagueId}");
+
+    public static string Country(long leagueId) => Countries.GetValueOrDefault(leagueId, "");
 
     public static string LogoUrl(long leagueId) => $"https://highlightly.net/soccer/images/leagues/{leagueId}.png";
 }
