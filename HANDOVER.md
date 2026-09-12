@@ -496,12 +496,14 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-11, see §16 for the latest):**
+**Top priorities for whoever picks this up next (updated end of 2026-09-12, see §17 for the latest):**
 1. **fulltime-web is now significantly behind `main`** — every commit from `9694f6b` onward (§16: the
    entire Bet Builder Boost feature, the Daily Spinner evens+ rule) has not been deployed there, per
-   the owner's explicit "I never use the app on the web" this session. Don't assume web reflects
-   current `main` the way it normally would; redeploy (`X=web`, standard publish/scp/restart) if the
-   owner starts using it again or a family member reports it missing these features.
+   the owner's explicit "I never use the app on the web" that session. **Now also missing all of
+   §17's Matches-screen redesign** (competition list, league drill-down page, Match Summary's
+   conversion to a full-screen overlay) on top of that. Don't assume web reflects current `main` the
+   way it normally would; redeploy (`X=web`, standard publish/scp/restart) if the owner starts using
+   it again or a family member reports it missing these features.
 2. **Bet Builder Boost (§16.3) is brand new and only ever tested against one account** — the shared
    "one match per day" pick and per-user `LastBetBuilderBoostDate` gating are both designed to work
    correctly with multiple family members using it independently the same day, but that hasn't
@@ -514,10 +516,12 @@ still in effect:
    per-build rather than reading the live bundle.
 4. **Upload a build to Play Console** —
    `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`
-   (version 1.4, code 11, §13.1, commit `a379ab3`, pushed) is now stale on **many** counts, most
-   recently the entire §16 session (Bet Builder Boost, Daily Spinner evens+ rule, football tab icon,
-   bet-card spacing fixes) on top of everything already listed from §13.3/§14/§15. Rebuild with all of
-   it folded in before uploading (bump to 1.5/12 first, per §13's version-code convention).
+   (version 1.5, code 12, §17.1, commit `e85aa3a`, pushed) is stale **again already** — it predates
+   §17.2-§17.4's entire Matches-screen redesign (competition list, league drill-down page, Match
+   Summary's conversion to a full-screen overlay). Rebuild with all of that folded in before
+   uploading (bump to 1.6/13 first, per §13's version-code convention). This has now been stale at
+   the end of every session since §13 — genuinely worth just uploading the next build the moment
+   it's made, rather than batching more work into it first.
 5. **Club crests couldn't be verified on this dev machine this session** (§16.3.5) — confirmed a
    pre-existing network block (`media.api-sports.io` unreachable, same root cause as the already-known
    `v3.football.api-sports.io` block), not a code bug. Owner said they'd check crests on a real device
@@ -530,14 +534,17 @@ still in effect:
    email, porting `29f05f2`'s Highlightly pattern to `ApiFootballClient`) — still genuinely open.
    Don't confuse this with the narrower stale-InProgress-match alert added in §12.4, which is a
    different thing (a stuck-match detector, not a call-volume tracker).
-8. **Watch `journalctl -u fulltime-api`** for both real 429s (§11.4's cadence math says a heavy
-   multi-league day could plausibly approach or exceed Pro's 7,500/day ceiling) and the
-   "Failed to re-fetch N match(es) dropped from live=all" warning added in §15's resilience fix
-   (`5b72c41`) - it has never actually fired yet, so its log-and-continue path is code-reviewed but
-   not battle-tested against a real API failure mid-tick.
-9. **Confirm the account tier before pushing cadences any lower** — still Pro (7,500/day) as of
-   2026-09-10; the owner wants to design for up to 75,000/day eventually (needs an Ultra-class
-   upgrade first, see §6.13).
+8. **Watch `journalctl -u fulltime-api`** for real 429s now that live-score polling runs at **5s**
+   (§17.5, lowered from 10s — the account is now on 75,000 calls/day, up from Pro's 7,500, so this
+   should be very safe, but hasn't been watched over a genuinely heavy multi-league matchday yet at
+   the new cadence). Also still watching for the "Failed to re-fetch N match(es) dropped from
+   live=all" warning added in §15's resilience fix (`5b72c41`) - it has never actually fired yet, so
+   its log-and-continue path is code-reviewed but not battle-tested against a real API failure
+   mid-tick.
+9. **API-Football account upgraded to 75,000 calls/day** (§17.5, was Pro/7,500) — the old
+   §6.13/§11.4 "needs an upgrade before pushing cadences lower" blocker is resolved. Phase 4 (a real
+   call-budget/quota-alert tracker for `ApiFootballClient`, item 7 below) is still worth building
+   despite the new headroom, just less urgently.
 10. **Low priority**: R8/obfuscation for the Android build (§13.2) — Play Console flagged it, but the
     deadline is Feb 2027 and enabling it risks silently breaking push/ads/billing/UMP without careful
     proguard keep rules. Deferred on purpose, not forgotten.
@@ -1545,3 +1552,120 @@ with unrestricted internet; owner said they'd check there later. No code change 
   them originally carried the `home`/`away`/`kickoff`/`league`/logo query params the page actually
   needs; the other left every one of those fields blank/wrong. Worth checking new banner-style
   entry points against existing ones for exactly this next time.
+
+---
+
+## 17. 2026-09-12 session — Matches screen redesign (competition list + league drill-down), Match Summary → full-screen overlay, live-poll cadence lowered to 5s
+
+New session, continuing from §16. Started with a Play Store build, then a multi-round Matches-screen
+redesign driven by the owner testing each step live on the `FullTime_Pixel8_API35` emulator, then a
+cadence change prompted by an API-Football quota upgrade.
+
+### 17.1 Play Store release build v1.5 (code 12) - now stale again, see §7
+
+Owner confirmed code 11 (1.4, §13.1) was already uploaded, so bumped
+`ApplicationDisplayVersion`/`ApplicationVersion` 1.4/11 → 1.5/12 (commit `e85aa3a`) and rebuilt the
+signed AAB per `signing/README.md`, folding in everything through §16 (Bet Builder Boost, Daily
+Spinner evens+ rule, football tab icon, bet-card spacing fixes). **This AAB was built before
+everything in §17.2-§17.4 below** - it's stale again already; needs another version bump (1.6/13)
+and rebuild before the next Play Console upload.
+
+### 17.2 Matches screen: competition list replaces league chips
+
+Owner shared a reference screenshot (a "browse by competition" list: crest, name, country, a red
+live-match-count badge, a grey total-count) and asked for the Matches page's league filter to look
+like it. `Matches.razor`'s horizontal `.league-chips` row became a vertical `.league-list` - one row
+per competition, "All competitions" as a plain (non-interactive) header row above it. New
+`LeagueCatalog.Country(leagueId)` (display-only subtitle lookup, no matching/sync impact) added for
+the country line. Commit `8778371`.
+
+### 17.3 Discovered live: tapping a competition needs its own page, not just an in-place filter
+
+Once the owner tested with extra (opt-in) leagues enabled, the competition list grew tall enough to
+push the actual match results below the fold - tapping a league visibly did nothing without
+scrolling first ("league not opening"). Fixed by making competition selection navigate to a new
+page instead of filtering in place:
+
+- **New `LeagueMatches.razor`** (`/matches/league/{LeagueId:long}`) - same day-picker/live-update
+  pattern as `Matches.razor`, scoped to one league, with a back button (`page-header-row`/`back-btn`,
+  the same convention `MatchEvents.razor` used to use).
+- **`Matches.razor`** simplified back to always showing every league's matches below the list (no
+  more `_selectedLeagueId` filter state) - tapping a competition row now calls
+  `Nav.NavigateTo($"/matches/league/{id}?date=...")` via a new `OpenLeague` method instead.
+- **Back-navigation now returns to wherever you came from, not always home**: `MatchCard.razor` gained
+  a `ReturnUrl` parameter (set by whichever page renders it - `/?date=...` from `Matches.razor`,
+  `/matches/league/{id}?date=...` from `LeagueMatches.razor`), threaded into Bet Builder's link as a
+  `return` query param; `BetBuilder.razor`'s `BackToMatchesUrl` uses it when present. (Match Summary
+  needed this too at first, but see §17.4 - it was later converted to a same-page overlay that makes
+  the whole return-URL problem moot for it specifically.)
+- **Scroll position is restored on return** - new `wwwroot/scrollRestore.js` (referenced from both
+  `FullTime.App/wwwroot/index.html` and `FullTime.App.Web/Components/App.razor`) persists each page's
+  scroll offset to `sessionStorage`, keyed by route+date, restored via `IJSRuntime` after the page's
+  data loads. Needed because Blazor swaps content in place rather than doing a real browser
+  navigation - there's no built-in scroll restoration to lean on otherwise.
+- Commit `ff268ad` (bundled with §17.4 below, tested together).
+
+### 17.4 Match Summary converted from a routed page to a same-page overlay sheet
+
+Owner asked for Match Summary to open "in a new window" and just close on back, rather than being a
+real page navigation - once explored, the existing `BetSlipSheet.razor`/`ContextSwitcherSheet.razor`
+same-page-overlay pattern was the right fit, reused directly rather than inventing something new:
+
+- **New `MatchSummaryState`** (scoped service, `Services/MatchSummaryState.cs`) - holds the tapped
+  `UpcomingMatchDto` plus `IsOpen`, same `Changed` event shape as `BetSlipState`. Registered in both
+  `MauiProgram.cs` and `FullTime.App.Web/Program.cs`.
+- **New `Components/MatchSummarySheet.razor`** - the old `MatchEvents.razor` page's content (team
+  crests/score/half-by-half event list, fetched via `Api.GetMatchEventsAsync` on open), rendered in
+  `MainLayout.razor` alongside the other sheets so it overlays whichever page is currently showing.
+  `MatchCard.razor`'s "Match Summary" link is now a button calling `Summary.Open(Match)` directly
+  (the match data is already in hand client-side - no more query-string round-trip, no more
+  `/match-events/{id}` route at all, that page file was deleted).
+- **Made genuinely full-screen, not a partial bottom sheet**, after the owner asked for it to "cover
+  the whole page apart from the header": new `--top-bar-height` CSS variable (mirrors `.top-bar`'s
+  own padding-top/padding-bottom/content-height/border formula) lets `.match-summary-sheet` sit
+  `position: fixed` from just under the sticky top bar down to the bottom of the screen, z-index
+  above the bottom tab bar.
+- Because opening/closing this never navigates anywhere, it needed none of §17.3's return-URL/
+  scroll-restore plumbing - the underlying page is simply never left, so its scroll position is
+  untouched by construction. Bet Builder still uses the return-URL mechanism (it's a real page).
+- Commit `ff268ad` (same commit as §17.3 - built and tested as one pass).
+
+### 17.5 API-Football quota upgraded to 75,000/day - live-poll cadence lowered
+
+Owner upgraded the API-Football account from Pro (7,500/day) to 75,000/day and asked how often live
+matches are polled. Answered from `ApiFootballOptions`/`appsettings.json` (10s live / 3600s idle, see
+§11.4's cadence table) and the owner asked to try 5s:
+
+- `FullTime.Api/appsettings.json` - `ApiFootball:LiveRefreshIntervalSeconds` 10 → 5. Commit
+  `0a4547f`, deployed to `fulltime-api` (standard publish/scp/systemd-restart), confirmed live via
+  `curl http://34.23.16.148:5199/api/config` returning `{"refreshIntervalSeconds":5}` during a live
+  match.
+- **Not yet done**: Phase 4 quota-alert *call-budget* parity for API-Football (§7 item, carried over
+  from §11.4/§12) - still worth building now there's real headroom to design around, but more so
+  worth confirming actual call volume in the logs at the new 5s cadence over a heavy matchday before
+  assuming 75k/day makes this a non-issue.
+
+### 17.6 Deploy state as of this handover
+
+- `fulltime-api` running commit `0a4547f` (latest - includes the 5s cadence change, live and
+  confirmed).
+- `fulltime-web` **not redeployed this session** - still behind from §16 onward (Bet Builder Boost,
+  Daily Spinner evens+ rule), now also missing all of §17.2-§17.4's Matches/Match Summary redesign.
+  Redeploy (`X=web`) before assuming web reflects `main`.
+- Android: signed AAB is 1.5/12 (§17.1) but was built *before* §17.2-§17.4 - stale, needs a rebuild
+  (bump to 1.6/13 first) before the next Play Console upload. **Still not uploaded to Play Console at
+  all** - carried over from every prior session, see §7.
+- All commits this session, pushed to `main`: `e85aa3a` (version bump), `8778371` (competition list),
+  `ff268ad` (league drill-down + Match Summary sheet + scroll-restore), `0a4547f` (5s cadence).
+
+### 17.7 Gotchas discovered this session
+
+- **A vertical list that grows with user preferences (opt-in leagues) can push interactive content
+  below the fold without any bug in the tap handler itself** - the competition-list filter worked
+  correctly the whole time; the actual problem was purely that the result rendered off-screen once
+  enough leagues were enabled, reading identically to "the tap did nothing." Worth checking scroll
+  position/content height, not just event wiring, when a tap "does nothing" on a list-heavy page.
+- **When reusing an existing same-page-overlay pattern (`BetSlipSheet`), check whether the new
+  overlay's content is large enough to need full-screen space rather than a partial bottom sheet** -
+  match events for a busy game can run much longer than a bet slip's few lines; a fixed `max-height:
+  75vh` bottom sheet would have made a full-screen ask look identical to a bug otherwise.
