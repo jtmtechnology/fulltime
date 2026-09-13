@@ -496,14 +496,15 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-12, see §17 for the latest):**
+**Top priorities for whoever picks this up next (updated end of 2026-09-13, see §18 for the latest):**
 1. **fulltime-web is now significantly behind `main`** — every commit from `9694f6b` onward (§16: the
    entire Bet Builder Boost feature, the Daily Spinner evens+ rule) has not been deployed there, per
    the owner's explicit "I never use the app on the web" that session. **Now also missing all of
    §17's Matches-screen redesign** (competition list, league drill-down page, Match Summary's
-   conversion to a full-screen overlay) on top of that. Don't assume web reflects current `main` the
-   way it normally would; redeploy (`X=web`, standard publish/scp/restart) if the owner starts using
-   it again or a family member reports it missing these features.
+   conversion to a full-screen overlay) **and all of §18's work** (league Table pages, Match
+   Summary's Stats/Players tabs, the Leaderboard toggle styling fix) on top of that. Don't assume web
+   reflects current `main` the way it normally would; redeploy (`X=web`, standard publish/scp/restart)
+   if the owner starts using it again or a family member reports it missing these features.
 2. **Bet Builder Boost (§16.3) is brand new and only ever tested against one account** — the shared
    "one match per day" pick and per-user `LastBetBuilderBoostDate` gating are both designed to work
    correctly with multiple family members using it independently the same day, but that hasn't
@@ -518,10 +519,12 @@ still in effect:
    `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`
    (version 1.5, code 12, §17.1, commit `e85aa3a`, pushed) is stale **again already** — it predates
    §17.2-§17.4's entire Matches-screen redesign (competition list, league drill-down page, Match
-   Summary's conversion to a full-screen overlay). Rebuild with all of that folded in before
-   uploading (bump to 1.6/13 first, per §13's version-code convention). This has now been stale at
-   the end of every session since §13 — genuinely worth just uploading the next build the moment
-   it's made, rather than batching more work into it first.
+   Summary's conversion to a full-screen overlay) **and now also §18's league Table pages and Match
+   Summary Stats/Players tabs**. No new AAB was built this session (§18 was tested only via the
+   `dotnet build -t:Run` emulator loop, never a release build). Rebuild with everything through §18
+   folded in before uploading (bump to 1.6/13 first, per §13's version-code convention). This has now
+   been stale at the end of every session since §13 — genuinely worth just uploading the next build
+   the moment it's made, rather than batching more work into it first.
 5. **Club crests couldn't be verified on this dev machine this session** (§16.3.5) — confirmed a
    pre-existing network block (`media.api-sports.io` unreachable, same root cause as the already-known
    `v3.football.api-sports.io` block), not a code bug. Owner said they'd check crests on a real device
@@ -560,6 +563,19 @@ still in effect:
     tried in §15 and deliberately reverted at the owner's request, since Worldwide can list people you
     don't share a league with, who `GetUserBets`' own privacy check would just reject anyway (404).
     My Leagues only.
+15. **New (§18): three new on-demand API-Football-backed caches** (`ApiFootballStandingsService`,
+    `ApiFootballMatchStatsService`, `ApiFootballPlayerStatsService`) all follow the same
+    short-TTL-static-`Dictionary` shape as the pre-existing `ApiFootballTeamFormService` — deliberately
+    not background services, per the standing no-polling preference. If a future feature needs more
+    API-Football data (lineups, H2H, etc.), reuse this same pattern rather than inventing a new one.
+16. **Gotcha worth remembering**: API-Football's per-player `passes.accuracy` field (from
+    `/fixtures/players`) is a raw **count** of completed passes despite its name, not a percentage -
+    confirmed live 2026-09-13 (§18.2). If any future feature reads this field directly, compute the
+    percentage from `accuracy/total`, don't display the raw value with a "%" suffix.
+17. **Low priority**: audit other pages for CSS classes referenced in `.razor` files with no matching
+    rule in `app.css` - `.league-chips`/`.league-chip` (Leaderboard's My Leagues/Worldwide toggle) had
+    silently rendered as unstyled default buttons for who knows how long until §18 caught it by
+    accident. Not known to be systemic, but never actually swept for other instances either.
 
 Full list:
 
@@ -1669,3 +1685,119 @@ matches are polled. Answered from `ApiFootballOptions`/`appsettings.json` (10s l
   overlay's content is large enough to need full-screen space rather than a partial bottom sheet** -
   match events for a busy game can run much longer than a bet slip's few lines; a fixed `max-height:
   75vh` bottom sheet would have made a full-screen ask look identical to a bug otherwise.
+
+---
+
+## 18. 2026-09-13 session — league standings tables, Match Summary Stats + Player Stats tabs, Leaderboard toggle styling fix
+
+New session, continuing from §17. Two new features built and shipped in the same sitting (league
+tables, then match/player stats), several live bugs found and fixed along the way, all tested against
+production data and the `FullTime_Pixel8_API35` emulator before pushing.
+
+### 18.1 League standings ("Table") pages
+
+- Added a **"Table" link** on `LeagueMatches.razor`'s header (right-justified, per owner request),
+  opening a new **`LeagueStandings.razor`** page (`/matches/league/{LeagueId}/table`) - position,
+  team crest+name, Played, GD, Points, same header/back-button convention as the league drill-down
+  page itself.
+- New `ApiFootballClient.GetStandingsAsync` (`/standings?league=&season=`) + new
+  **`ApiFootballStandingsService`** (on-demand cache, 6h TTL, same shape as `ApiFootballTeamFormService`).
+  New `GET /api/matches/standings/{leagueId}` endpoint on `MatchesController` - `leagueId` here is
+  Highlightly's own ID space (same as everywhere else client-side), translated to API-Football's ID
+  via the existing `HighlightlyToApiFootballLeagueMap` before calling out.
+- `LeagueCatalog.HasTable(leagueId)` hides the link for pure-knockout competitions (FA Cup, EFL Cup,
+  Community Shield) that have no table at all - confirmed live that these return an empty response
+  rather than erroring, so the check is a UX nicety (avoids a dead-end link) not a correctness fix.
+- Verified live against the real Premier League table (Arsenal top on 12 points from 4 games) and
+  confirmed FA Cup correctly returns an empty list.
+
+### 18.2 Match Summary: Stats tab, then Player Stats tab
+
+- **Stats tab**: home-vs-away bar comparisons (Ball Possession, Total Shots, Shots on Target, Corner
+  Kicks, Fouls, Offsides, Passes+accuracy, Yellow/Red Cards, Expected Goals when the provider has it).
+  New `ApiFootballClient.GetFixtureStatisticsAsync` caller wrapped in new
+  **`ApiFootballMatchStatsService`** (45s TTL on-demand cache - short-lived since this covers
+  still-in-play matches, unlike the existing corners/cards settlement path which only ever runs
+  post-Finished). New `GET /api/matches/{id}/stats` endpoint - `Match.ExternalId` is trusted directly
+  as the API-Football fixture ID (confirmed true since the provider cutover, same assumption
+  `ResolveMatchEventsAsync` already makes), no league-ID translation needed here unlike §18.1's
+  standings endpoint.
+- **Player Stats tab** (same session, added right after Stats): per-player rows grouped by team -
+  photo, name, colour-coded rating badge, minutes/position, goals/assists/shots/passes(+accuracy)/
+  cards. New `ApiFootballClient.GetFixturePlayerStatsAsync` (already existed, used only for
+  settlement before) wrapped in new **`ApiFootballPlayerStatsService`** (same cache shape again). New
+  `GET /api/matches/{id}/player-stats` endpoint, new `PlayerStatRow.razor` component. Only players
+  with `Games.Minutes > 0` are returned - unused substitutes are filtered server-side.
+- Both tabs are lazy-loaded (only fetched the first time their tab is actually opened, not alongside
+  Events) and reuse the `.bb-tabs`/`.bb-tab` CSS already established for Bet Builder's own tabs -
+  `MatchSummarySheet.razor` now has three: Events / Stats / Players.
+- **Real bug found and fixed**: API-Football's per-player `passes.accuracy` field (from
+  `/fixtures/players`) is a raw **count** of completed passes despite its name, not a percentage -
+  confirmed live by finding a player with 68 total passes and `"accuracy":"59"` (an 87% completion
+  rate, not 59%; every sampled player had `accuracy <= total`, which a genuine percentage field would
+  eventually violate for a low-volume passer). Was briefly deployed showing nonsense like "68 passes
+  (59%)" before being caught and fixed to compute a real percentage from the two counts
+  (`MatchesController.PassAccuracyPercent`). The team-level Stats tab's own passes row was unaffected
+  - it sources from a differently-shaped, already-count-based field pair (`Total passes`/
+  `Passes accurate`) and computes its own percentage the same correct way.
+- **Real bug found and fixed**: `LoadStatsAsync` originally only caught `ApiException`, so any other
+  exception type (never actually identified/confirmed which one) skipped the loading-flag reset
+  entirely, leaving the sheet stuck on "Loading…" forever with no way to retry - reported live by the
+  owner against the Sheffield Utd v Wolves match. Fixed by broadening the catch, moving the reset into
+  a `finally` block, and only marking a fetch "loaded" on success (it used to mark itself loaded
+  *before* the fetch even started, permanently blocking any retry after a failure). Applied to both
+  the Stats and Players tabs.
+- **Away-bar color iterated per owner feedback**: started as `var(--text-muted)` (read as "no data" on
+  a lopsided stat like 0-6 corners, since it was too close to the empty track's own grey), changed to
+  a blue (`#4d8dff`), then to two different shades of green per explicit owner requests, landing on a
+  dark forest green (`#146b3a`, new `--stat-away` CSS variable) - clearly distinct from the bright
+  neon `--accent` used for the home side.
+- Verified end-to-end against the real, live Sheffield Utd v Wolves Championship match (confirmed via
+  direct `curl` with the real API-Football key, DB lookups for fixture/match IDs, and the emulator)
+  throughout - not just unit-level checks.
+
+### 18.3 Leaderboard toggle styling fix
+
+- Owner flagged the "My Leagues"/"Worldwide Top 50" buttons as looking wrong. Root cause: `.league-chips`/
+  `.league-chip` (used only on `Leaderboard.razor`) had **no CSS rule at all anywhere in `app.css`** -
+  they'd been rendering as plain unstyled default HTML buttons (light background, black text,
+  visually broken against the dark theme) for an unknown but clearly long amount of time, unrelated to
+  anything changed this session. Fixed by styling them to match the existing `.day-pill`/
+  `.day-pill.selected` pattern (same pill shape/colors used by the Matches day-picker). Purely a CSS
+  addition, no component/markup changes needed.
+
+### 18.4 Deploy state as of this handover
+
+- `fulltime-api` running commit `1dff61d` (latest, includes everything in §18.1/§18.2) - deployed and
+  confirmed live via direct `curl` checks against real fixtures/leagues.
+- `fulltime-web` **not redeployed this session** - see updated §7 item 1, now also missing all of
+  §18's work on top of everything already listed there.
+- Android: **no new build made this session** - still the stale 1.5/12 AAB from §17.1, now missing
+  §18 too. See updated §7 item 4.
+- All commits this session, pushed to `main`: `3db702d` (league standings + Match Summary Stats tab),
+  `1dff61d` (Player Stats tab, Stats-tab hang fix, Leaderboard toggle styling fix).
+- No DB schema changes this session - all three new services are pure API passthrough with an
+  in-memory cache, nothing persisted.
+
+### 18.5 Gotchas discovered this session
+
+- **API-Football's per-player `passes.accuracy` is a count, not a percentage** - see §18.2, now also
+  called out in §7 item 16. Worth remembering for any future feature touching per-player pass data.
+- **An uncaught exception type in a fire-and-forget async load method can permanently wedge a "Loading…"
+  state** if the loading-flag reset sits after a too-narrowly-typed `catch` rather than in a `finally`
+  - and if the "already loaded, don't refetch" guard is set *before* the fetch completes rather than
+  only on success, there's no way to recover short of restarting the app. Both fixed in §18.2; worth
+  checking any other lazy-tab-load pattern in the app for the same shape of bug.
+- **Hit `APT2258: The data is invalid` on the very first emulator build attempt this session** - a
+  corrupted/stale Android resource-flattening cache, unrelated to any code change (no Android
+  resources were touched). `CLAUDE.md`'s existing MAUI build-lock guidance fixed it immediately:
+  `dotnet build-server shutdown`, then force-clean the `net10.0-android` `obj`/`bin` folders with
+  PowerShell's `Remove-Item -Recurse -Force`.
+- **A CSS class referenced in markup with no matching rule anywhere doesn't error or warn** - it just
+  silently renders as an unstyled default element. `.league-chips`/`.league-chip` (§18.3) is the
+  confirmed instance; worth a deliberate sweep of `.razor` class names against `app.css` at some point
+  since there's no tooling here that would catch this automatically.
+- **`gcloud compute scp`/`ssh` had a couple of transient connection failures this session**
+  ("Software caused connection abort", "exited with return code [1]") that cleared on a plain
+  immediate retry with no other change - consistent with §7's already-noted "auto-mode safety
+  classifier/network can intermittently block these commands" gotcha, not a new/different problem.
