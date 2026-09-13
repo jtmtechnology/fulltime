@@ -199,6 +199,13 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         return (await res.Content.ReadFromJsonAsync<MatchStatsResponse>())!;
     }
 
+    public async Task<MatchPlayerStatsResponse> GetPlayerStatsAsync(Guid matchId)
+    {
+        var res = await httpClient.GetAsync($"api/matches/{matchId}/player-stats");
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+        return (await res.Content.ReadFromJsonAsync<MatchPlayerStatsResponse>())!;
+    }
+
     public async Task<List<LeaderboardEntryDto>> GetLeaderboardAsync()
     {
         Authorize();

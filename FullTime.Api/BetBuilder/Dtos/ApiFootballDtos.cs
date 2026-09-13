@@ -212,23 +212,69 @@ public class FixturePlayerEntry
 
 public class PlayerInfo
 {
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
     [JsonPropertyName("name")]
     public required string Name { get; set; }
+
+    // Only populated by /fixtures/players - /fixtures/squads (SquadPlayerDto) has no photo field,
+    // so this stays null there rather than every PlayerInfo caller needing one.
+    [JsonPropertyName("photo")]
+    public string? Photo { get; set; }
 }
 
 public class PlayerMatchStatistics
 {
+    // Confirmed live 2026-09-13 against an in-progress fixture - "games" is present even for a
+    // player who hasn't kicked off yet (minutes 0), so Minutes alone (not presence/absence of this
+    // object) is what decides whether a player actually appeared, for the Player Stats tab.
+    [JsonPropertyName("games")]
+    public GamesStat? Games { get; set; }
+
     [JsonPropertyName("shots")]
     public ShotsStat? Shots { get; set; }
 
     [JsonPropertyName("goals")]
     public GoalsStat? Goals { get; set; }
 
+    // "accuracy" comes back as a quoted plain number string ("30", not "30%") - confirmed live
+    // 2026-09-13, unlike FixtureStatisticsTeam's "Ball Possession"/"Passes %" which do include the
+    // % sign themselves.
+    [JsonPropertyName("passes")]
+    public PassesStat? Passes { get; set; }
+
     [JsonPropertyName("cards")]
     public CardsStat? Cards { get; set; }
 
     [JsonPropertyName("fouls")]
     public FoulsStat? Fouls { get; set; }
+}
+
+public class GamesStat
+{
+    [JsonPropertyName("minutes")]
+    public int? Minutes { get; set; }
+
+    [JsonPropertyName("position")]
+    public string? Position { get; set; }
+
+    // Plain decimal as a string (e.g. "6.45") - null for a player who hasn't played enough to be
+    // rated yet, confirmed live 2026-09-13 against an in-progress fixture's not-yet-used substitutes.
+    [JsonPropertyName("rating")]
+    public string? Rating { get; set; }
+
+    [JsonPropertyName("substitute")]
+    public bool Substitute { get; set; }
+}
+
+public class PassesStat
+{
+    [JsonPropertyName("total")]
+    public int? Total { get; set; }
+
+    [JsonPropertyName("accuracy")]
+    public string? Accuracy { get; set; }
 }
 
 public class FoulsStat

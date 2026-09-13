@@ -9,6 +9,11 @@
     --accent-ink: #05130a;
     --warn: #ffb020;
     --danger: #ff4d5e;
+    /* Away side of the Match Summary stat bars only - text-muted reads too close to the empty
+       track color, so a fully one-sided stat (e.g. 0 corners home, 6 away) rendered as a flat grey
+       bar indistinguishable from "no data" instead of clearly showing the away team's share. A
+       darker/more desaturated green than --accent, not a different hue, per owner preference. */
+    --stat-away: #146b3a;
     --slip-fab-height: 3.25rem;
     /* Set from native code on Android only (MainPage.xaml.cs) - Android's WebView doesn't populate
        env(safe-area-inset-bottom) the way iOS's WKWebView does, so without this the 3-button/gesture
@@ -258,6 +263,17 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 }
 .day-pill.selected { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
 
+/* ===== Leaderboard's My Leagues / Worldwide Top 50 toggle =====
+   Never had any CSS at all until now - .league-chip(s) rendered as plain default HTML buttons
+   (light background, black text) regardless of theme. Same pill shape/colors as .day-pill above for
+   visual consistency with the rest of the app's toggle buttons. */
+.league-chips { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+.league-chip {
+    padding: 0.5rem 0.9rem; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--bg-elevated); color: var(--text-muted); font-size: 0.85rem; cursor: pointer; white-space: nowrap;
+}
+.league-chip.selected { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+
 /* ===== Competition list ===== */
 .league-list { display: flex; flex-direction: column; margin-bottom: 0.75rem; border-top: 1px solid var(--border); }
 .league-list-row {
@@ -466,8 +482,31 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 .match-stat-label { color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; }
 .match-stat-bar { display: flex; height: 6px; border-radius: 999px; overflow: hidden; margin-top: 0.35rem; background: var(--border); }
 .match-stat-bar-home { background: var(--accent); }
-.match-stat-bar-away { background: var(--text-muted); }
+.match-stat-bar-away { background: var(--stat-away); }
 .match-stat-bar.neutral .match-stat-bar-home, .match-stat-bar.neutral .match-stat-bar-away { background: var(--border); }
+
+/* Match Summary's Players tab - per-player line, grouped under a team header. */
+.player-stats { margin-top: 0.25rem; }
+.player-stats-team-header {
+    margin: 1rem 0 0.4rem; font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.03em; color: var(--text-muted);
+}
+.player-stats-team-header:first-child { margin-top: 0; }
+.player-stat-row {
+    display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border);
+}
+.player-stat-photo { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #f4f7fa; }
+.player-stat-main { flex: 1; min-width: 0; }
+.player-stat-name-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.player-stat-name { font-size: 0.88rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-stat-rating {
+    flex-shrink: 0; font-size: 0.75rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 6px; color: var(--accent-ink);
+}
+.player-stat-rating.rating-high { background: var(--accent); }
+.player-stat-rating.rating-mid { background: var(--text-muted); }
+.player-stat-rating.rating-low { background: var(--danger); color: white; }
+.player-stat-line { display: flex; flex-wrap: wrap; gap: 0.3rem; font-size: 0.72rem; margin-top: 0.2rem; }
+.player-stat-line span:not(:last-child)::after { content: "\00b7"; margin-left: 0.3rem; color: var(--text-muted); }
 
 /* Collapsible market sections - replaces always-expanded .market-group for Bet Builder specifically. */
 .accordion-section { border: 1px solid var(--border); border-radius: 8px; margin-top: 0.75rem; overflow: hidden; }

@@ -1,0 +1,61 @@
+@* One row in the Match Summary sheet's Player Stats tab - only players who actually appeared
+   (Games.Minutes > 0, filtered server-side) ever reach this component. *@
+<div class="player-stat-row">
+    <LogoImg Src="@Player.PhotoUrl" Alt="@Player.Name" CssClass="player-stat-photo" />
+    <div class="player-stat-main">
+        <div class="player-stat-name-row">
+            <span class="player-stat-name">@Player.Name</span>
+            @if (Player.Rating is { } rating)
+            {
+                <span class="player-stat-rating @RatingClass(rating)">@rating</span>
+            }
+        </div>
+        <div class="player-stat-line muted">
+            <span>@Player.Minutes'</span>
+            @if (Player.Position is { } pos)
+            {
+                <span>@pos</span>
+            }
+            @if (Player.Substitute)
+            {
+                <span>SUB</span>
+            }
+            @if (Player.Goals > 0)
+            {
+                <span>⚽ @Player.Goals</span>
+            }
+            @if (Player.Assists > 0)
+            {
+                <span>🅰 @Player.Assists</span>
+            }
+            @if (Player.ShotsTotal > 0)
+            {
+                <span>@Player.ShotsOnTarget/@Player.ShotsTotal shots</span>
+            }
+            @if (Player.PassesTotal > 0)
+            {
+                <span>@Player.PassesTotal passes@(Player.PassAccuracyPercent is { } acc ? $" ({acc}%)" : "")</span>
+            }
+            @if (Player.YellowCards > 0)
+            {
+                <span>🟨</span>
+            }
+            @if (Player.RedCards > 0)
+            {
+                <span>🟥</span>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PlayerStatRowDto Player { get; set; } = default!;
+
+    // Loosely mirrors typical match-rating colour conventions (>=7.5 good, <6 poor) - a
+    // non-numeric/missing rating (a player who came on too late to be rated yet) falls back to the
+    // neutral shade rather than guessing.
+    private static string RatingClass(string rating) =>
+        double.TryParse(rating, out var r)
+            ? r switch { >= 7.5 => "rating-high", < 6 => "rating-low", _ => "rating-mid" }
+            : "rating-mid";
+}

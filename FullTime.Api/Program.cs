@@ -88,6 +88,7 @@ builder.Services.AddScoped<ApiFootballTeamFormService>();
 builder.Services.AddScoped<ApiFootballOddsService>();
 builder.Services.AddScoped<ApiFootballStandingsService>();
 builder.Services.AddScoped<ApiFootballMatchStatsService>();
+builder.Services.AddScoped<ApiFootballPlayerStatsService>();
 
 builder.Services.Configure<OddsApiOptions>(builder.Configuration.GetSection(OddsApiOptions.SectionName));
 // The-odds-api's key is a query-string param per request, not a header (unlike Highlightly/

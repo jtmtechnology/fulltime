@@ -47,6 +47,12 @@ public record TeamStandingDto(int Position, string TeamName, string? CrestUrl, i
 public record MatchStatRowDto(string Label, string HomeDisplay, string AwayDisplay, double HomeValue, double AwayValue);
 public record MatchStatsResponse(bool Available, List<MatchStatRowDto> Rows);
 
+public record PlayerStatRowDto(
+    long PlayerId, string Name, string? PhotoUrl, string? Position, int Minutes, bool Substitute,
+    string? Rating, int Goals, int Assists, int ShotsOnTarget, int ShotsTotal, int PassesTotal,
+    int? PassAccuracyPercent, int YellowCards, int RedCards);
+public record MatchPlayerStatsResponse(bool Available, List<PlayerStatRowDto> Home, List<PlayerStatRowDto> Away);
+
 [ApiController]
 [Route("api/matches")]
 public class MatchesController(
@@ -58,6 +64,7 @@ public class MatchesController(
     ApiFootballTeamFormService teamFormService,
     ApiFootballStandingsService standingsService,
     ApiFootballMatchStatsService matchStatsService,
+    ApiFootballPlayerStatsService playerStatsService,
     IServiceScopeFactory scopeFactory,
     ILogger<MatchesController> logger) : ControllerBase
 {
@@ -397,6 +404,61 @@ public class MatchesController(
                 // formatting as a plain number keeps this consistent with FormatStatValue's "73%".
                 ? $"{total:F0}"
                 : $"{total:F0} ({accurate / total * 100:F0}%)";
+
+    // Match Summary's Player Stats tab. Same ExternalId-is-the-fixture-ID assumption as
+    // GetMatchStats. Only players who actually appeared (Games.Minutes > 0) are returned - a full
+    // squad list includes unused substitutes with every stat at zero/null, which is just noise here.
+    [HttpGet("{id:guid}/player-stats")]
+    public async Task<ActionResult<MatchPlayerStatsResponse>> GetPlayerStats(Guid id, CancellationToken ct)
+    {
+        var match = await db.Matches.FindAsync([id], ct);
+        if (match is null || !long.TryParse(match.ExternalId, out var fixtureId))
+        {
+            return Ok(new MatchPlayerStatsResponse(false, [], []));
+        }
+
+        var teams = await playerStatsService.GetPlayerStatsAsync(fixtureId, ct);
+        var home = teams.FirstOrDefault(t => t.Team.Id == match.HomeTeamId) ?? teams.ElementAtOrDefault(0);
+        var away = teams.FirstOrDefault(t => t.Team.Id == match.AwayTeamId) ?? teams.ElementAtOrDefault(1);
+
+        var homeRows = MapPlayerRows(home);
+        var awayRows = MapPlayerRows(away);
+        return Ok(new MatchPlayerStatsResponse(homeRows.Count > 0 || awayRows.Count > 0, homeRows, awayRows));
+    }
+
+    private static List<PlayerStatRowDto> MapPlayerRows(FixturePlayersResponseTeam? team) =>
+        team?.Players
+            .Select(p => (p.Player, Stats: p.Statistics.FirstOrDefault()))
+            .Where(p => p.Stats?.Games?.Minutes > 0)
+            .Select(p => new PlayerStatRowDto(
+                p.Player.Id,
+                p.Player.Name,
+                p.Player.Photo,
+                p.Stats!.Games!.Position,
+                p.Stats.Games.Minutes ?? 0,
+                p.Stats.Games.Substitute,
+                p.Stats.Games.Rating,
+                p.Stats.Goals?.Total ?? 0,
+                p.Stats.Goals?.Assists ?? 0,
+                p.Stats.Shots?.On ?? 0,
+                p.Stats.Shots?.Total ?? 0,
+                p.Stats.Passes?.Total ?? 0,
+                PassAccuracyPercent(p.Stats.Passes),
+                p.Stats.Cards?.Yellow ?? 0,
+                p.Stats.Cards?.Red ?? 0))
+            .ToList() ?? [];
+
+    // Despite its name, API-Football's per-player "passes.accuracy" is a raw COUNT of completed
+    // passes, not a percentage - confirmed live 2026-09-13 (e.g. a player with 68 total passes and
+    // "accuracy":"59" is an 87% completion rate, not a 59% one; every sampled player had accuracy
+    // <= total, which a genuine percentage field would eventually violate for a low-volume passer).
+    // This computes a real percentage from the two counts, the same way FormatPasses does for the
+    // team-level Stats tab (which sources from a differently-shaped, already-count-based pair of
+    // fields - "Total passes"/"Passes accurate" - so isn't affected by this same mix-up).
+    private static int? PassAccuracyPercent(PassesStat? passes) =>
+        passes is { Total: > 0 } && int.TryParse(passes.Accuracy, out var accurate)
+            ? (int)Math.Round(100.0 * accurate / passes.Total.Value)
+            : null;
 
     // Same stoppage-time-aware parsing as BetBuilderSyncService.ParseMinute - "45+2" sorts right
     // after "45" and before "46", not lexicographically before "9".

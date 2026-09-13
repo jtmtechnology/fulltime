@@ -32,6 +32,7 @@
         <div class="bb-tabs">
             <button type="button" class="bb-tab @(_activeTab == "Events" ? "active" : "")" @onclick='() => SelectTab("Events")'>Events</button>
             <button type="button" class="bb-tab @(_activeTab == "Stats" ? "active" : "")" @onclick='() => SelectTab("Stats")'>Stats</button>
+            <button type="button" class="bb-tab @(_activeTab == "Players" ? "active" : "")" @onclick='() => SelectTab("Players")'>Players</button>
         </div>
 
         @if (_activeTab == "Events")
@@ -70,11 +71,15 @@
                 }
             }
         }
-        else
+        else if (_activeTab == "Stats")
         {
             @if (_statsLoading)
             {
                 <div class="status">Loading…</div>
+            }
+            else if (_statsError is { } statsError)
+            {
+                <div class="status error">Error: @statsError</div>
             }
             else if (_statRows.Count == 0)
             {
@@ -98,6 +103,42 @@
                 </div>
             }
         }
+        else
+        {
+            @if (_playersLoading)
+            {
+                <div class="status">Loading…</div>
+            }
+            else if (_playersError is { } playersError)
+            {
+                <div class="status error">Error: @playersError</div>
+            }
+            else if (_homePlayers.Count == 0 && _awayPlayers.Count == 0)
+            {
+                <div class="muted">No player stats available yet.</div>
+            }
+            else
+            {
+                <div class="player-stats">
+                    @if (_homePlayers.Count > 0)
+                    {
+                        <div class="player-stats-team-header">@match.HomeTeam</div>
+                        @foreach (var p in _homePlayers)
+                        {
+                            <PlayerStatRow Player="p" />
+                        }
+                    }
+                    @if (_awayPlayers.Count > 0)
+                    {
+                        <div class="player-stats-team-header">@match.AwayTeam</div>
+                        @foreach (var p in _awayPlayers)
+                        {
+                            <PlayerStatRow Player="p" />
+                        }
+                    }
+                </div>
+            }
+        }
     </div>
 }
 
@@ -111,8 +152,15 @@
 
     private string _activeTab = "Events";
     private bool _statsLoading;
+    private string? _statsError;
     private Guid? _statsLoadedForMatchId;
     private List<MatchStatRowDto> _statRows = [];
+
+    private bool _playersLoading;
+    private string? _playersError;
+    private Guid? _playersLoadedForMatchId;
+    private List<PlayerStatRowDto> _homePlayers = [];
+    private List<PlayerStatRowDto> _awayPlayers = [];
 
     protected override void OnInitialized()
     {
@@ -131,36 +179,82 @@
         InvokeAsync(StateHasChanged);
     }
 
-    // Stats are fetched lazily (only once the Stats tab is actually opened), not alongside Events -
-    // most sheet views never touch this tab, so this avoids a second API-Football-backed call on
-    // every single Match Summary open.
+    // Stats/Players are both fetched lazily (only once their tab is actually opened), not alongside
+    // Events - most sheet views never touch either, so this avoids extra API-Football-backed calls
+    // on every single Match Summary open. Each guarded on its own !loading flag too, so re-tapping a
+    // tab while its fetch is still in flight doesn't fire a second concurrent one.
     private void SelectTab(string tab)
     {
         _activeTab = tab;
-        if (tab == "Stats" && Summary is { Match: { } match } && _statsLoadedForMatchId != match.Id)
+        if (Summary is not { Match: { } match })
         {
-            _statsLoadedForMatchId = match.Id;
+            return;
+        }
+
+        if (tab == "Stats" && !_statsLoading && _statsLoadedForMatchId != match.Id)
+        {
             _ = LoadStatsAsync(match.Id);
+        }
+        else if (tab == "Players" && !_playersLoading && _playersLoadedForMatchId != match.Id)
+        {
+            _ = LoadPlayerStatsAsync(match.Id);
+        }
+    }
+
+    private async Task LoadPlayerStatsAsync(Guid matchId)
+    {
+        _playersLoading = true;
+        _playersError = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var response = await Api.GetPlayerStatsAsync(matchId);
+            _homePlayers = response.Home;
+            _awayPlayers = response.Away;
+            _playersLoadedForMatchId = matchId;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _homePlayers = [];
+            _awayPlayers = [];
+            _playersError = ex.Message;
+        }
+        finally
+        {
+            _playersLoading = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
     private async Task LoadStatsAsync(Guid matchId)
     {
         _statsLoading = true;
+        _statsError = null;
         await InvokeAsync(StateHasChanged);
 
         try
         {
             var response = await Api.GetMatchStatsAsync(matchId);
             _statRows = response.Rows;
+            // Only marked loaded on success - if this throws, _statsLoadedForMatchId stays unset for
+            // this match so re-tapping the Stats tab retries instead of being stuck showing nothing
+            // forever (this used to be set unconditionally before the fetch even started).
+            _statsLoadedForMatchId = matchId;
         }
-        catch (ApiException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            // Deliberately not narrowed to ApiException - an unmatched exception type here used to
+            // skip the loading-flag reset below entirely, leaving the sheet stuck on "Loading…"
+            // forever with no way to retry (found live 2026-09-13).
             _statRows = [];
+            _statsError = ex.Message;
         }
-
-        _statsLoading = false;
-        await InvokeAsync(StateHasChanged);
+        finally
+        {
+            _statsLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private static double HomeBarPercent(MatchStatRowDto row)

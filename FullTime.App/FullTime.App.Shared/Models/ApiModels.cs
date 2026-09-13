@@ -86,6 +86,12 @@ public record TeamStandingDto(int Position, string TeamName, string? CrestUrl, i
 public record MatchStatRowDto(string Label, string HomeDisplay, string AwayDisplay, double HomeValue, double AwayValue);
 public record MatchStatsResponse(bool Available, List<MatchStatRowDto> Rows);
 
+public record PlayerStatRowDto(
+    long PlayerId, string Name, string? PhotoUrl, string? Position, int Minutes, bool Substitute,
+    string? Rating, int Goals, int Assists, int ShotsOnTarget, int ShotsTotal, int PassesTotal,
+    int? PassAccuracyPercent, int YellowCards, int RedCards);
+public record MatchPlayerStatsResponse(bool Available, List<PlayerStatRowDto> Home, List<PlayerStatRowDto> Away);
+
 public record CreateLeagueRequest(string Name);
 public record JoinLeagueRequest(string InviteCode);
 public record InviteToLeagueRequest(string Email);
