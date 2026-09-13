@@ -1,5 +1,6 @@
 using FullTime.Api.BetBuilder;
 using FullTime.Api.BetBuilder.ApiFootball;
+using FullTime.Api.BetBuilder.Dtos;
 using FullTime.Api.BetBuilder.OddsApi;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
@@ -41,6 +42,11 @@ public record BetBuilderMarketsResponse(
 public record MatchEventDto(
     string Team, string Minute, string Type, string? PlayerName, string? AssistPlayerName, string? SubstitutedPlayerName);
 
+public record TeamStandingDto(int Position, string TeamName, string? CrestUrl, int Played, int GoalDifference, int Points);
+
+public record MatchStatRowDto(string Label, string HomeDisplay, string AwayDisplay, double HomeValue, double AwayValue);
+public record MatchStatsResponse(bool Available, List<MatchStatRowDto> Rows);
+
 [ApiController]
 [Route("api/matches")]
 public class MatchesController(
@@ -50,6 +56,8 @@ public class MatchesController(
     IOptions<ProvidersOptions> providersOptions,
     OddsApiMarketService oddsApiMarkets,
     ApiFootballTeamFormService teamFormService,
+    ApiFootballStandingsService standingsService,
+    ApiFootballMatchStatsService matchStatsService,
     IServiceScopeFactory scopeFactory,
     ILogger<MatchesController> logger) : ControllerBase
 {
@@ -268,6 +276,127 @@ public class MatchesController(
 
         return Ok(events.OrderBy(e => ParseMinute(e.Minute)).ToList());
     }
+
+    // League table for the Table page. LeagueId here is Highlightly's own ID (the same space
+    // Match.LeagueId/LeagueCatalog use, regardless of which provider is actually live - see
+    // HighlightlyToApiFootballLeagueMap's own comment) - translated to API-Football's league ID
+    // before calling out, same as GetBetBuilderMarkets' team-form lookup does. Unlike that lookup,
+    // this doesn't need to gate on LiveScoreSource == "ApiFootball" first: the league-ID map is a
+    // static correspondence between two ID spaces, not dependent on which provider populated any
+    // particular Match row. Pure knockout competitions (no map entry meaningfully has a table) and
+    // any provider miss both just return an empty list - the client renders that as "no table
+    // available" rather than an error.
+    [HttpGet("standings/{leagueId:long}")]
+    public async Task<ActionResult<List<TeamStandingDto>>> GetStandings(long leagueId, CancellationToken ct)
+    {
+        if (!HighlightlyToApiFootballLeagueMap.LeagueIds.TryGetValue(leagueId, out var apiFootballLeagueId))
+        {
+            return Ok(new List<TeamStandingDto>());
+        }
+
+        var standings = await standingsService.GetStandingsAsync(apiFootballLeagueId, ct);
+        return Ok(standings
+            .Select(s => new TeamStandingDto(s.Rank, s.Team.Name, s.Team.Logo, s.All.Played, s.GoalsDiff, s.Points))
+            .ToList());
+    }
+
+    // Match Summary's Stats tab. Match.ExternalId holds API-Football's own fixture ID directly (true
+    // since the 2026-09-10 cutover made ApiFootball the live-score provider - see
+    // ApiFootballMatchSyncService.UpsertMatchAsync - same assumption ResolveMatchEventsAsync already
+    // relies on for settlement), so no league/ID-space translation is needed here unlike GetStandings.
+    // Rows are built defensively per stat type - a type the provider doesn't return for this fixture
+    // (e.g. expected_goals isn't priced for every competition/plan) is simply omitted rather than
+    // shown as a blank/zero row.
+    [HttpGet("{id:guid}/stats")]
+    public async Task<ActionResult<MatchStatsResponse>> GetMatchStats(Guid id, CancellationToken ct)
+    {
+        var match = await db.Matches.FindAsync([id], ct);
+        if (match is null || !long.TryParse(match.ExternalId, out var fixtureId))
+        {
+            return Ok(new MatchStatsResponse(false, []));
+        }
+
+        var teams = await matchStatsService.GetStatisticsAsync(fixtureId, ct);
+        var home = teams.FirstOrDefault(t => t.Team.Id == match.HomeTeamId) ?? teams.ElementAtOrDefault(0);
+        var away = teams.FirstOrDefault(t => t.Team.Id == match.AwayTeamId) ?? teams.ElementAtOrDefault(1);
+
+        var rows = new List<MatchStatRowDto>();
+
+        void AddRow(string label, string apiType, string suffix = "", int decimals = 0)
+        {
+            var h = ExtractStatValue(home, apiType);
+            var a = ExtractStatValue(away, apiType);
+            if (h is null && a is null)
+            {
+                return;
+            }
+
+            rows.Add(new MatchStatRowDto(label, FormatStatValue(h, suffix, decimals), FormatStatValue(a, suffix, decimals), h ?? 0, a ?? 0));
+        }
+
+        AddRow("Expected Goals (xG)", "expected_goals", decimals: 2);
+        AddRow("Ball Possession", "Ball Possession", suffix: "%");
+        AddRow("Total Shots", "Total Shots");
+        AddRow("Shots on Target", "Shots on Goal");
+        AddRow("Corner Kicks", "Corner Kicks");
+        AddRow("Fouls", "Fouls");
+        AddRow("Offsides", "Offsides");
+
+        // Passes doesn't fit AddRow's single-stat-type shape - it combines two source fields
+        // (Total passes/Passes accurate) into one "154 (73%)"-style display.
+        var homePasses = ExtractStatValue(home, "Total passes");
+        var awayPasses = ExtractStatValue(away, "Total passes");
+        if (homePasses is not null || awayPasses is not null)
+        {
+            var homeAccurate = ExtractStatValue(home, "Passes accurate");
+            var awayAccurate = ExtractStatValue(away, "Passes accurate");
+            rows.Add(new MatchStatRowDto(
+                "Passes",
+                FormatPasses(homePasses, homeAccurate),
+                FormatPasses(awayPasses, awayAccurate),
+                homePasses ?? 0,
+                awayPasses ?? 0));
+        }
+
+        AddRow("Yellow Cards", "Yellow Cards");
+        AddRow("Red Cards", "Red Cards");
+
+        return Ok(new MatchStatsResponse(rows.Count > 0, rows));
+    }
+
+    // Value comes back from API-Football as a plain number, a percentage string ("38%"), or a
+    // decimal string (expected_goals, e.g. "1.83") depending on stat type - this handles all three
+    // rather than assuming one shape per type, since nothing in this codebase had parsed the
+    // string cases before this endpoint (only plain-int types were read previously, for corners/
+    // cards settlement - see ApiFootballSettlementSupportService.ExtractStat).
+    private static double? ExtractStatValue(FixtureStatisticsTeam? team, string type)
+    {
+        var entry = team?.Statistics.FirstOrDefault(s => s.Type == type);
+        if (entry is null)
+        {
+            return null;
+        }
+
+        return entry.Value.ValueKind switch
+        {
+            System.Text.Json.JsonValueKind.Number => entry.Value.GetDouble(),
+            System.Text.Json.JsonValueKind.String when double.TryParse(
+                entry.Value.GetString()?.TrimEnd('%'), out var parsed) => parsed,
+            _ => null,
+        };
+    }
+
+    private static string FormatStatValue(double? value, string suffix, int decimals) =>
+        value is null ? "-" : $"{value.Value.ToString($"F{decimals}")}{suffix}";
+
+    private static string FormatPasses(double? total, double? accurate) =>
+        total is null
+            ? "-"
+            : accurate is null || total == 0
+                // "P0" inserts a space before "%" under invariant culture ("73 %") - multiplying and
+                // formatting as a plain number keeps this consistent with FormatStatValue's "73%".
+                ? $"{total:F0}"
+                : $"{total:F0} ({accurate / total * 100:F0}%)";
 
     // Same stoppage-time-aware parsing as BetBuilderSyncService.ParseMinute - "45+2" sorts right
     // after "45" and before "46", not lexicographically before "9".

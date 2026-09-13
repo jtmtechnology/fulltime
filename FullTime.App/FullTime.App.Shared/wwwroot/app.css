@@ -332,9 +332,29 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
     width: 36px; height: 36px; object-fit: contain; flex-shrink: 0;
     background: #f4f7fa; border-radius: 50%; padding: 4px; box-sizing: border-box;
 }
-.league-header-text { display: flex; flex-direction: column; min-width: 0; }
+.league-header-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .league-header-text h1 { font-size: 1.3rem; }
 .league-header-text .muted { font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.league-header-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; }
+
+/* ===== League table (standings) ===== */
+.standings-table { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 0.5rem; }
+.standings-row {
+    display: grid; grid-template-columns: 1.8rem 1fr 2.2rem 2.6rem 2.6rem;
+    align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+}
+.standings-row:last-child { border-bottom: none; }
+.standings-header {
+    background: var(--bg-elevated); color: var(--text-muted); font-size: 0.72rem;
+    text-transform: uppercase; letter-spacing: 0.03em; font-weight: 700;
+}
+.standings-pos { text-align: center; font-weight: 700; }
+.standings-team { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.standings-crest { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
+.standings-team-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.standings-stat { text-align: center; font-variant-numeric: tabular-nums; }
+.standings-points { font-weight: 700; }
 
 .bet-builder-bookmaker-row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.3rem; }
 
@@ -437,6 +457,17 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 .match-event-icon { font-size: 0.9rem; line-height: 1; flex-shrink: 0; }
 .match-event-text { flex: 0 1 auto; }
 .match-event-minute { color: var(--text-muted); font-size: 0.7rem; flex-shrink: 0; }
+
+/* Match Summary's Stats tab - home-vs-away bar comparisons. */
+.match-stats { margin-top: 0.5rem; }
+.match-stat-row { display: flex; align-items: center; justify-content: space-between; margin-top: 1rem; font-size: 0.85rem; }
+.match-stat-row:first-child { margin-top: 0; }
+.match-stat-value { font-weight: 700; min-width: 2.5rem; text-align: center; }
+.match-stat-label { color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.match-stat-bar { display: flex; height: 6px; border-radius: 999px; overflow: hidden; margin-top: 0.35rem; background: var(--border); }
+.match-stat-bar-home { background: var(--accent); }
+.match-stat-bar-away { background: var(--text-muted); }
+.match-stat-bar.neutral .match-stat-bar-home, .match-stat-bar.neutral .match-stat-bar-away { background: var(--border); }
 
 /* Collapsible market sections - replaces always-expanded .market-group for Bet Builder specifically. */
 .accordion-section { border: 1px solid var(--border); border-radius: 8px; margin-top: 0.75rem; overflow: hidden; }

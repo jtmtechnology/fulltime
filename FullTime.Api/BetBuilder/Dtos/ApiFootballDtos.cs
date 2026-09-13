@@ -329,6 +329,46 @@ public class BetValueDto
     public required string Odd { get; set; }
 }
 
+// /standings?league=&season= - "standings" sits three levels deep (response[0].league.standings),
+// and is itself an array of groups/arrays, not a flat list - single-table competitions have exactly
+// one group. Pure knockout competitions (FA Cup, EFL Cup, Community Shield) come back with this
+// null/empty rather than an error, so callers treat "no groups" as "no table" rather than a failure.
+public class StandingsResponseLeague
+{
+    [JsonPropertyName("league")]
+    public required StandingsLeagueInfo League { get; set; }
+}
+
+public class StandingsLeagueInfo
+{
+    [JsonPropertyName("standings")]
+    public List<List<StandingEntryDto>>? Standings { get; set; }
+}
+
+public class StandingEntryDto
+{
+    [JsonPropertyName("rank")]
+    public int Rank { get; set; }
+
+    [JsonPropertyName("team")]
+    public required TeamInfo Team { get; set; }
+
+    [JsonPropertyName("points")]
+    public int Points { get; set; }
+
+    [JsonPropertyName("goalsDiff")]
+    public int GoalsDiff { get; set; }
+
+    [JsonPropertyName("all")]
+    public required StandingsAllDto All { get; set; }
+}
+
+public class StandingsAllDto
+{
+    [JsonPropertyName("played")]
+    public int Played { get; set; }
+}
+
 // /teams/statistics?league=&season=&team= - confirmed real 2026-09-10 against Manchester United
 // (team 33, league 39): "form" is a bare chronological string, oldest match first, one letter per
 // result ("W"/"D"/"L") - cross-checked against real fixture results/dates to confirm the ordering,

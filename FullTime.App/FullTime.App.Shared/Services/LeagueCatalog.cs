@@ -73,6 +73,12 @@ public static class LeagueCatalog
     // ID — kept so callers that group/chip/select by this key don't need to change.
     public static long GroupKey(long leagueId) => leagueId;
 
+    // Pure knockout competitions have no league table at all - hides the "Table" link for these
+    // rather than linking to a page that could only ever say "no table available".
+    private static readonly HashSet<long> KnockoutOnly = [39079, 41632, 450112]; // FA Cup, EFL Cup, Community Shield
+
+    public static bool HasTable(long leagueId) => !KnockoutOnly.Contains(leagueId);
+
     public static string Name(long leagueId) => Names.GetValueOrDefault(leagueId, $"League {leagueId}");
 
     public static string Country(long leagueId) => Countries.GetValueOrDefault(leagueId, "");

@@ -11,7 +11,13 @@
     <button type="button" class="back-btn" @onclick="GoBack" aria-label="Back">‹</button>
     <LogoImg Src="@LeagueCatalog.LogoUrl(LeagueId)" Alt="@LeagueCatalog.Name(LeagueId)" CssClass="league-header-crest" />
     <div class="league-header-text">
-        <h1>@LeagueCatalog.Name(LeagueId)</h1>
+        <div class="league-header-title-row">
+            <h1>@LeagueCatalog.Name(LeagueId)</h1>
+            @if (LeagueCatalog.HasTable(LeagueId))
+            {
+                <a class="bet-builder-link" href="@($"/matches/league/{LeagueId}/table")">Table</a>
+            }
+        </div>
         @if (!string.IsNullOrEmpty(LeagueCatalog.Country(LeagueId)))
         {
             <span class="muted">@LeagueCatalog.Country(LeagueId)</span>

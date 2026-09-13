@@ -185,6 +185,20 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         return (await res.Content.ReadFromJsonAsync<List<MatchEventDto>>())!;
     }
 
+    public async Task<List<TeamStandingDto>> GetStandingsAsync(long leagueId)
+    {
+        var res = await httpClient.GetAsync($"api/matches/standings/{leagueId}");
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+        return await res.Content.ReadFromJsonAsync<List<TeamStandingDto>>() ?? [];
+    }
+
+    public async Task<MatchStatsResponse> GetMatchStatsAsync(Guid matchId)
+    {
+        var res = await httpClient.GetAsync($"api/matches/{matchId}/stats");
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+        return (await res.Content.ReadFromJsonAsync<MatchStatsResponse>())!;
+    }
+
     public async Task<List<LeaderboardEntryDto>> GetLeaderboardAsync()
     {
         Authorize();

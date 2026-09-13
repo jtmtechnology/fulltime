@@ -29,37 +29,73 @@
             </div>
         </div>
 
-        @if (_loading)
+        <div class="bb-tabs">
+            <button type="button" class="bb-tab @(_activeTab == "Events" ? "active" : "")" @onclick='() => SelectTab("Events")'>Events</button>
+            <button type="button" class="bb-tab @(_activeTab == "Stats" ? "active" : "")" @onclick='() => SelectTab("Stats")'>Stats</button>
+        </div>
+
+        @if (_activeTab == "Events")
         {
-            <div class="status">Loading…</div>
-        }
-        else if (_events.Count == 0)
-        {
-            <div class="muted">No match events available.</div>
+            @if (_loading)
+            {
+                <div class="status">Loading…</div>
+            }
+            else if (_events.Count == 0)
+            {
+                <div class="muted">No match events available.</div>
+            }
+            else
+            {
+                @if (_firstHalf.Count > 0)
+                {
+                    <div class="match-events-half-header">
+                        <span>1st Half</span>
+                        <span>@_halfTimeScore</span>
+                    </div>
+                    @foreach (var e in _firstHalf)
+                    {
+                        <MatchEventRow Event="e" />
+                    }
+                }
+                @if (_secondHalf.Count > 0)
+                {
+                    <div class="match-events-half-header">
+                        <span>2nd Half</span>
+                        <span>@match.HomeScore - @match.AwayScore</span>
+                    </div>
+                    @foreach (var e in _secondHalf)
+                    {
+                        <MatchEventRow Event="e" />
+                    }
+                }
+            }
         }
         else
         {
-            @if (_firstHalf.Count > 0)
+            @if (_statsLoading)
             {
-                <div class="match-events-half-header">
-                    <span>1st Half</span>
-                    <span>@_halfTimeScore</span>
-                </div>
-                @foreach (var e in _firstHalf)
-                {
-                    <MatchEventRow Event="e" />
-                }
+                <div class="status">Loading…</div>
             }
-            @if (_secondHalf.Count > 0)
+            else if (_statRows.Count == 0)
             {
-                <div class="match-events-half-header">
-                    <span>2nd Half</span>
-                    <span>@match.HomeScore - @match.AwayScore</span>
+                <div class="muted">No match stats available yet.</div>
+            }
+            else
+            {
+                <div class="match-stats">
+                    @foreach (var row in _statRows)
+                    {
+                        <div class="match-stat-row">
+                            <span class="match-stat-value">@row.HomeDisplay</span>
+                            <span class="match-stat-label">@row.Label</span>
+                            <span class="match-stat-value">@row.AwayDisplay</span>
+                        </div>
+                        <div class="match-stat-bar @(row.HomeValue + row.AwayValue <= 0 ? "neutral" : "")">
+                            <div class="match-stat-bar-home" style="width: @(HomeBarPercent(row).ToString("0.#"))%"></div>
+                            <div class="match-stat-bar-away" style="width: @((100 - HomeBarPercent(row)).ToString("0.#"))%"></div>
+                        </div>
+                    }
                 </div>
-                @foreach (var e in _secondHalf)
-                {
-                    <MatchEventRow Event="e" />
-                }
             }
         }
     </div>
@@ -73,6 +109,11 @@
     private List<MatchEventDto> _secondHalf = [];
     private string _halfTimeScore = "0 - 0";
 
+    private string _activeTab = "Events";
+    private bool _statsLoading;
+    private Guid? _statsLoadedForMatchId;
+    private List<MatchStatRowDto> _statRows = [];
+
     protected override void OnInitialized()
     {
         Summary.Changed += OnSummaryChanged;
@@ -83,10 +124,49 @@
         if (Summary is { IsOpen: true, Match: { } match } && _loadedForMatchId != match.Id)
         {
             _loadedForMatchId = match.Id;
+            _activeTab = "Events";
             _ = LoadEventsAsync(match.Id);
         }
 
         InvokeAsync(StateHasChanged);
+    }
+
+    // Stats are fetched lazily (only once the Stats tab is actually opened), not alongside Events -
+    // most sheet views never touch this tab, so this avoids a second API-Football-backed call on
+    // every single Match Summary open.
+    private void SelectTab(string tab)
+    {
+        _activeTab = tab;
+        if (tab == "Stats" && Summary is { Match: { } match } && _statsLoadedForMatchId != match.Id)
+        {
+            _statsLoadedForMatchId = match.Id;
+            _ = LoadStatsAsync(match.Id);
+        }
+    }
+
+    private async Task LoadStatsAsync(Guid matchId)
+    {
+        _statsLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var response = await Api.GetMatchStatsAsync(matchId);
+            _statRows = response.Rows;
+        }
+        catch (ApiException)
+        {
+            _statRows = [];
+        }
+
+        _statsLoading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static double HomeBarPercent(MatchStatRowDto row)
+    {
+        var total = row.HomeValue + row.AwayValue;
+        return total <= 0 ? 50 : row.HomeValue / total * 100;
     }
 
     private async Task LoadEventsAsync(Guid matchId)

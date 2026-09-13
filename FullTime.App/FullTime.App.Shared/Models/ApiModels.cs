@@ -81,6 +81,11 @@ public record BetBuilderMarketsResponse(
 
 public record LeaderboardEntryDto(Guid UserId, string Name, string LeagueName, decimal Balance, decimal Profit, string CurrencySymbol);
 
+public record TeamStandingDto(int Position, string TeamName, string? CrestUrl, int Played, int GoalDifference, int Points);
+
+public record MatchStatRowDto(string Label, string HomeDisplay, string AwayDisplay, double HomeValue, double AwayValue);
+public record MatchStatsResponse(bool Available, List<MatchStatRowDto> Rows);
+
 public record CreateLeagueRequest(string Name);
 public record JoinLeagueRequest(string InviteCode);
 public record InviteToLeagueRequest(string Email);
