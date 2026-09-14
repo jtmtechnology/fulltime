@@ -38,6 +38,7 @@ public static class MauiProgram
         builder.Services.AddScoped<MatchLeaguePreferences>();
         builder.Services.AddScoped<MatchUpdatesClient>();
         builder.Services.AddScoped<MatchSummaryState>();
+        builder.Services.AddScoped<StandingsState>();
         builder.Services.AddHttpClient<ApiClient>(client => client.BaseAddress = new Uri(ApiConfig.BaseUrl));
 
         builder.Services.AddMauiBlazorWebView();

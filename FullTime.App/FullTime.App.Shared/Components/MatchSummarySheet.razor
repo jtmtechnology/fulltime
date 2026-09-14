@@ -283,8 +283,11 @@
         _firstHalf = _events.Where(e => BaseMinute(e.Minute) <= 45).ToList();
         _secondHalf = _events.Where(e => BaseMinute(e.Minute) > 45).ToList();
 
-        var homeGoalsAtHalf = _firstHalf.Count(e => e.Type == "Goal" && e.Team == "Home");
-        var awayGoalsAtHalf = _firstHalf.Count(e => e.Type == "Goal" && e.Team == "Away");
+        // Own Goal is a distinct MatchEvent.Type from Goal (see MatchEventRow) but still counts on
+        // the scoreline - Event.Team already carries the team credited with it, not the scorer's
+        // own side, so no extra flip is needed here.
+        var homeGoalsAtHalf = _firstHalf.Count(e => (e.Type == "Goal" || e.Type == "Own Goal") && e.Team == "Home");
+        var awayGoalsAtHalf = _firstHalf.Count(e => (e.Type == "Goal" || e.Type == "Own Goal") && e.Team == "Away");
         _halfTimeScore = $"{homeGoalsAtHalf} - {awayGoalsAtHalf}";
 
         _loading = false;

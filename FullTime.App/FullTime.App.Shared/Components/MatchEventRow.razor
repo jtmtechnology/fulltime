@@ -38,6 +38,10 @@
         "Substitution" when Event.SubstitutedPlayerName is { } off => $"{Event.PlayerName} ({off})",
         "Penalty" => $"{Event.PlayerName} (Penalty)",
         "Missed Penalty" => $"{Event.PlayerName} (Penalty missed)",
+        // The scorer here is on the opposing side to Event.Team (which carries the team credited
+        // with the goal) - without this label it reads exactly like a normal goal for whichever
+        // side Event.Team puts it on, with no indication the named player put it into their own net.
+        "Own Goal" => $"{Event.PlayerName} (Own Goal)",
         _ => Event.PlayerName ?? Event.Type,
     };
 }

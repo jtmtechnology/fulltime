@@ -1,0 +1,105 @@
+@implements IDisposable
+@inject StandingsState Standings
+@inject ApiClient Api
+
+@if (Standings.IsOpen)
+{
+    <div class="standings-sheet">
+        <div class="page-header-row">
+            <button type="button" class="back-btn" @onclick="Close" aria-label="Back">‹</button>
+            <LogoImg Src="@LeagueCatalog.LogoUrl(Standings.LeagueId)" Alt="@LeagueCatalog.Name(Standings.LeagueId)" CssClass="league-header-crest" />
+            <div class="league-header-text">
+                <h1>@LeagueCatalog.Name(Standings.LeagueId)</h1>
+                <span class="muted">Standings</span>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <LoadingSpinner />
+        }
+        else if (!string.IsNullOrEmpty(_status))
+        {
+            <div class="status @(_error ? "error" : "")">@_status</div>
+        }
+        else
+        {
+            <div class="standings-table">
+                <div class="standings-row standings-header">
+                    <span class="standings-pos">#</span>
+                    <span class="standings-team">Team</span>
+                    <span class="standings-stat">P</span>
+                    <span class="standings-stat">GD</span>
+                    <span class="standings-stat">Pts</span>
+                </div>
+                @foreach (var s in _standings)
+                {
+                    <div class="standings-row">
+                        <span class="standings-pos">@s.Position</span>
+                        <span class="standings-team">
+                            <LogoImg Src="@s.CrestUrl" Alt="@s.TeamName" CssClass="standings-crest" />
+                            <span class="standings-team-name">@s.TeamName</span>
+                        </span>
+                        <span class="standings-stat">@s.Played</span>
+                        <span class="standings-stat">@(s.GoalDifference > 0 ? $"+{s.GoalDifference}" : s.GoalDifference.ToString())</span>
+                        <span class="standings-stat standings-points">@s.Points</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private long _loadedForLeagueId = -1;
+    private List<TeamStandingDto> _standings = [];
+    private bool _loading = true;
+    private string _status = "";
+    private bool _error;
+
+    protected override void OnInitialized()
+    {
+        Standings.Changed += OnStandingsChanged;
+    }
+
+    private void OnStandingsChanged()
+    {
+        if (Standings.IsOpen && _loadedForLeagueId != Standings.LeagueId)
+        {
+            _loadedForLeagueId = Standings.LeagueId;
+            _ = LoadAsync(Standings.LeagueId);
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadAsync(long leagueId)
+    {
+        _loading = true;
+        _status = "";
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            _standings = await Api.GetStandingsAsync(leagueId);
+            // A knockout-only competition and a genuine provider miss both come back empty from the
+            // API - either way there's simply no table to show, not an error state.
+            _status = _standings.Count == 0 ? "No table available for this competition" : "";
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _standings = [];
+            _status = $"Error: {ex.Message}";
+            _error = true;
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void Close() => Standings.Close();
+
+    public void Dispose() => Standings.Changed -= OnStandingsChanged;
+}

@@ -12,9 +12,13 @@ public class ApiFootballOptions
     public string ApiHost { get; set; } = "v3.football.api-sports.io";
 
     // How far ahead fixture discovery looks per tracked league — mirrors HighlightlyOptions.
-    // MatchSyncDaysAhead. PRO tier (7,500 req/day, 300 req/min) comfortably supports this at the
-    // daily FixtureDiscoveryIntervalMinutes cadence.
-    public int MatchSyncDaysAhead { get; set; } = 7;
+    // MatchSyncDaysAhead (confirmed live 2026-09-14: this was still 7 here, one day short of
+    // Highlightly's 8, despite the comment already claiming parity - RefreshFixturesAsync's window
+    // is today..today+(this-1), so 7 only reaches 6 days out, silently dropping the 7th day's
+    // fixtures - e.g. real Premier League fixtures a week out were confirmed missing from the DB
+    // even though the live provider already had them). PRO tier (7,500 req/day, 300 req/min)
+    // comfortably supports this at the daily FixtureDiscoveryIntervalMinutes cadence.
+    public int MatchSyncDaysAhead { get; set; } = 8;
     public int FixtureDiscoveryIntervalMinutes { get; set; } = 1440;
 
     // RefreshLiveAsync backs off to this cadence when nothing's live.

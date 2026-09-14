@@ -3,6 +3,7 @@
 @inject ApiClient Api
 @inject NavigationManager Nav
 @inject MatchUpdatesClient MatchUpdates
+@inject StandingsState Standings
 @inject IJSRuntime JS
 
 <PageTitle>FullTime — @LeagueCatalog.Name(LeagueId)</PageTitle>
@@ -15,7 +16,7 @@
             <h1>@LeagueCatalog.Name(LeagueId)</h1>
             @if (LeagueCatalog.HasTable(LeagueId))
             {
-                <a class="bet-builder-link" href="@($"/matches/league/{LeagueId}/table")">Table</a>
+                <button type="button" class="bet-builder-link standings-link" @onclick="() => Standings.Open(LeagueId)">Standings</button>
             }
         </div>
         @if (!string.IsNullOrEmpty(LeagueCatalog.Country(LeagueId)))

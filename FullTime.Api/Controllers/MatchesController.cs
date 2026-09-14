@@ -301,7 +301,16 @@ public class MatchesController(
             return Ok(new List<TeamStandingDto>());
         }
 
-        var standings = await standingsService.GetStandingsAsync(apiFootballLeagueId, ct);
+        // The table itself only moves once a match is Finished (API-Football doesn't project
+        // standings mid-match) - but the coarse 6h cache means someone checking shortly after full
+        // time could still see the pre-match snapshot. Bypassing to a short TTL specifically while
+        // this league has a match InProgress or recently Finished means the very next on-demand
+        // view after the result lands actually shows it, without needing a background poller.
+        var recentCutoff = DateTime.UtcNow.AddHours(-3);
+        var preferFresh = await db.Matches.AnyAsync(m => m.LeagueId == leagueId
+            && (m.Status == MatchStatus.InProgress || (m.Status == MatchStatus.Finished && m.KickoffTime > recentCutoff)), ct);
+
+        var standings = await standingsService.GetStandingsAsync(apiFootballLeagueId, preferFresh, ct);
         return Ok(standings
             .Select(s => new TeamStandingDto(s.Rank, s.Team.Name, s.Team.Logo, s.All.Played, s.GoalsDiff, s.Points))
             .ToList());

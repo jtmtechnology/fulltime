@@ -352,6 +352,9 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 .league-header-text h1 { font-size: 1.3rem; }
 .league-header-text .muted { font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
 .league-header-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; }
+/* space-between above pins this link flush against the row's right edge - a bit of its own
+   padding keeps it from sitting right against the screen edge on narrow devices. */
+.league-header-title-row .standings-link { padding-right: 0.5rem; }
 
 /* ===== League table (standings) ===== */
 .standings-table { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 0.5rem; }
@@ -569,11 +572,11 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 }
 .slip-sheet .sheet-handle { width: 36px; height: 4px; background: var(--border); border-radius: 999px; margin: 0 auto 0.75rem; }
 
-/* ===== Match Summary full-screen overlay ===== */
+/* ===== Full-screen overlays (Match Summary, Standings) ===== */
 /* Covers everything below the sticky top bar (not the top bar itself) rather than the partial
-   bottom sheet BetSlipSheet/ContextSwitcherSheet use - there's a full page's worth of match
-   events to show, not a short list. */
-.match-summary-sheet {
+   bottom sheet BetSlipSheet/ContextSwitcherSheet use - there's a full page's worth of content to
+   show (match events, a league table), not a short list. */
+.match-summary-sheet, .standings-sheet {
     position: fixed; left: 0; right: 0; bottom: 0; top: var(--top-bar-height); z-index: 50;
     background: var(--bg); overflow-y: auto; padding: 1rem;
     padding-bottom: calc(1rem + var(--safe-bottom));

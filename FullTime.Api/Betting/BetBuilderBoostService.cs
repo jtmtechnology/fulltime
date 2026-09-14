@@ -17,10 +17,14 @@ public record BetBuilderBoostStatus(
 // again later - see BetBuilderBoost's own comment.
 public class BetBuilderBoostService(AppDbContext db, IOptions<BettingOptions> options)
 {
-    // Highlightly league IDs for Premier League/Championship/League One/League Two - same values
-    // as FullTime.App.Shared's LeagueCatalog.AlwaysVisible[..4] (that RCL can't be referenced from
-    // the API project, so this is the server-side mirror, same situation as HighlightlyLeagueMap.cs
-    // vs LeagueCatalog.cs).
+    // Highlightly league IDs for Premier League/Championship/League One/League Two, in tier order
+    // - same values as FullTime.App.Shared's LeagueCatalog.AlwaysVisible[..4] (that RCL can't be
+    // referenced from the API project, so this is the server-side mirror, same situation as
+    // HighlightlyLeagueMap.cs vs LeagueCatalog.cs). Order matters: GetOrPickTodaysMatchAsync picks
+    // the highest tier that has any eligible match today, only falling through to the next tier
+    // when the higher one has none, rather than picking uniformly across all four at once (which
+    // let a League Two match get featured just as often as a Premier League one, even on a day
+    // with Premier League fixtures available).
     private static readonly long[] EligibleLeagueIds = [33973, 34824, 35675, 36526];
 
     public async Task<BetBuilderBoostStatus> GetStatusAsync(Guid userId, CancellationToken ct = default)
@@ -87,18 +91,30 @@ public class BetBuilderBoostService(AppDbContext db, IOptions<BettingOptions> op
         // query - "today's matches" means kicking off within today's UTC date, not merely Upcoming.
         var start = today.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var end = start.AddDays(1);
-        var candidateIds = await db.Matches
-            .Where(m => m.Status == MatchStatus.Upcoming && EligibleLeagueIds.Contains(m.LeagueId))
-            .Where(m => m.KickoffTime >= start && m.KickoffTime < end)
-            .Where(m => m.BetBuilderMarkets.Any())
-            .Select(m => m.Id)
-            .ToListAsync(ct);
-        if (candidateIds.Count == 0)
+
+        // Highest eligible tier first - only drops to the next tier down when the current one has
+        // no candidates today, rather than pooling all four tiers into one random draw.
+        var pickedId = Guid.Empty;
+        foreach (var leagueId in EligibleLeagueIds)
+        {
+            var candidateIds = await db.Matches
+                .Where(m => m.Status == MatchStatus.Upcoming && m.LeagueId == leagueId)
+                .Where(m => m.KickoffTime >= start && m.KickoffTime < end)
+                .Where(m => m.BetBuilderMarkets.Any())
+                .Select(m => m.Id)
+                .ToListAsync(ct);
+
+            if (candidateIds.Count > 0)
+            {
+                pickedId = candidateIds[Random.Shared.Next(candidateIds.Count)];
+                break;
+            }
+        }
+
+        if (pickedId == Guid.Empty)
         {
             return null;
         }
-
-        var pickedId = candidateIds[Random.Shared.Next(candidateIds.Count)];
         db.BetBuilderBoosts.Add(new BetBuilderBoost { Id = Guid.NewGuid(), Date = today, MatchId = pickedId });
         await db.SaveChangesAsync(ct);
 

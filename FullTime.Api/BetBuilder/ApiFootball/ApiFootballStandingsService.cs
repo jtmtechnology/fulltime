@@ -3,23 +3,30 @@ using FullTime.Api.BetBuilder.Dtos;
 namespace FullTime.Api.BetBuilder.ApiFootball;
 
 // Powers the league Table page. Backed by API-Football's /standings (see
-// ApiFootballClient.GetStandingsAsync). A table only changes after matches finish, so a coarse
-// cache avoids a fresh call every time someone opens it - same in-memory/static shape as
-// ApiFootballTeamFormService, and for the same reason (resets on deploy, acceptable for a
-// display-only cache; no background polling per the standing no-polling preference - this is purely
-// on-demand, first view of the day pays for the fetch).
+// ApiFootballClient.GetStandingsAsync). A table only changes after matches finish - API-Football
+// doesn't project it mid-match, so there's no such thing as "live" standings while a game is still
+// being played - so a coarse cache avoids a fresh call every time someone opens it, same in-memory/
+// static shape as ApiFootballTeamFormService (resets on deploy, acceptable for a display-only
+// cache; no background polling per the standing no-polling preference - this is purely on-demand,
+// first view of the day pays for the fetch). The one thing worth being prompt about is the moment
+// AFTER a match finishes: without preferFresh, a table checked shortly after full-time could still
+// show the pre-match snapshot for up to 6h. MatchesController passes preferFresh=true whenever this
+// league has a match InProgress or recently Finished, trading the coarse TTL for a short one just
+// for that window, so the next on-demand view picks up the real result promptly.
 public class ApiFootballStandingsService(ApiFootballClient client, ILogger<ApiFootballStandingsService> logger)
 {
     private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(6);
+    private static readonly TimeSpan FreshCacheTtl = TimeSpan.FromMinutes(2);
     private static readonly SemaphoreSlim CacheLock = new(1, 1);
     private static readonly Dictionary<long, (List<StandingEntryDto> Standings, DateTime FetchedAt)> Cache = new();
 
-    public async Task<List<StandingEntryDto>> GetStandingsAsync(long apiFootballLeagueId, CancellationToken ct = default)
+    public async Task<List<StandingEntryDto>> GetStandingsAsync(long apiFootballLeagueId, bool preferFresh, CancellationToken ct = default)
     {
+        var ttl = preferFresh ? FreshCacheTtl : CacheTtl;
         await CacheLock.WaitAsync(ct);
         try
         {
-            if (Cache.TryGetValue(apiFootballLeagueId, out var cached) && DateTime.UtcNow - cached.FetchedAt < CacheTtl)
+            if (Cache.TryGetValue(apiFootballLeagueId, out var cached) && DateTime.UtcNow - cached.FetchedAt < ttl)
             {
                 return cached.Standings;
             }

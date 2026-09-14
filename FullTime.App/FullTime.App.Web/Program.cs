@@ -26,6 +26,7 @@ builder.Services.AddScoped<ActiveContextState>();
 builder.Services.AddScoped<MatchLeaguePreferences>();
 builder.Services.AddScoped<MatchUpdatesClient>();
 builder.Services.AddScoped<MatchSummaryState>();
+builder.Services.AddScoped<StandingsState>();
 
 var apiBaseUrl = builder.Configuration["Api:BaseUrl"]
     ?? throw new InvalidOperationException("Api:BaseUrl configuration is missing.");
