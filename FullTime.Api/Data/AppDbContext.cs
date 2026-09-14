@@ -18,6 +18,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<MatchPlayerStat> MatchPlayerStats => Set<MatchPlayerStat>();
     public DbSet<MatchEvent> MatchEvents => Set<MatchEvent>();
     public DbSet<BetBuilderBoost> BetBuilderBoosts => Set<BetBuilderBoost>();
+    public DbSet<UserAlertPreferences> UserAlertPreferences => Set<UserAlertPreferences>();
+    public DbSet<FavouriteTeam> FavouriteTeams => Set<FavouriteTeam>();
+    public DbSet<FavouriteLeague> FavouriteLeagues => Set<FavouriteLeague>();
+    public DbSet<MatchAlertSubscription> MatchAlertSubscriptions => Set<MatchAlertSubscription>();
+    public DbSet<SentMatchAlert> SentMatchAlerts => Set<SentMatchAlert>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -152,6 +157,61 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<BetBuilderBoost>()
             .HasIndex(b => b.Date)
+            .IsUnique();
+
+        modelBuilder.Entity<UserAlertPreferences>()
+            .HasOne(p => p.User)
+            .WithMany()
+            .HasForeignKey(p => p.UserId);
+
+        modelBuilder.Entity<UserAlertPreferences>()
+            .HasIndex(p => p.UserId)
+            .IsUnique();
+
+        modelBuilder.Entity<FavouriteTeam>()
+            .HasOne(f => f.User)
+            .WithMany()
+            .HasForeignKey(f => f.UserId);
+
+        modelBuilder.Entity<FavouriteTeam>()
+            .HasIndex(f => new { f.UserId, f.TeamId })
+            .IsUnique();
+
+        modelBuilder.Entity<FavouriteLeague>()
+            .HasOne(f => f.User)
+            .WithMany()
+            .HasForeignKey(f => f.UserId);
+
+        modelBuilder.Entity<FavouriteLeague>()
+            .HasIndex(f => new { f.UserId, f.LeagueId })
+            .IsUnique();
+
+        modelBuilder.Entity<MatchAlertSubscription>()
+            .HasOne(s => s.User)
+            .WithMany()
+            .HasForeignKey(s => s.UserId);
+
+        modelBuilder.Entity<MatchAlertSubscription>()
+            .HasOne(s => s.Match)
+            .WithMany()
+            .HasForeignKey(s => s.MatchId);
+
+        modelBuilder.Entity<MatchAlertSubscription>()
+            .HasIndex(s => new { s.UserId, s.MatchId })
+            .IsUnique();
+
+        modelBuilder.Entity<SentMatchAlert>()
+            .HasOne(s => s.User)
+            .WithMany()
+            .HasForeignKey(s => s.UserId);
+
+        modelBuilder.Entity<SentMatchAlert>()
+            .HasOne(s => s.Match)
+            .WithMany()
+            .HasForeignKey(s => s.MatchId);
+
+        modelBuilder.Entity<SentMatchAlert>()
+            .HasIndex(s => new { s.UserId, s.MatchId, s.AlertType, s.Sequence })
             .IsUnique();
     }
 }

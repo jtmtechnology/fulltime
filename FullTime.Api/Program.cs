@@ -107,6 +107,11 @@ if (providers.LiveScoreSource == "ApiFootball")
     builder.Services.AddHostedService<ApiFootballMatchSyncBackgroundService>();
     builder.Services.AddHostedService<ApiFootballFixtureDiscoveryBackgroundService>();
     builder.Services.AddHostedService<ApiFootballSettlementSupportBackgroundService>();
+
+    // Lineups-out alerts only make sense once Match.ExternalId is genuinely an API-Football
+    // fixture ID (true exactly when this provider is the live one - same assumption
+    // ApiFootballSettlementSupportService.ResolveFixtureAsync/MatchesController already rely on).
+    builder.Services.AddHostedService<MatchAlertLineupsCheckBackgroundService>();
 }
 else
 {
@@ -158,6 +163,7 @@ FirebaseApp.Create(new AppOptions
         ?? throw new InvalidOperationException("Push:ServiceAccountPath configuration is missing.")).ToGoogleCredential(),
 });
 builder.Services.AddScoped<PushNotificationService>();
+builder.Services.AddScoped<MatchAlertService>();
 
 var app = builder.Build();
 

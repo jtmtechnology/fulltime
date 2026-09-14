@@ -5,14 +5,23 @@
             <span class="live-dot"></span>
         }
         <span>@Match.KickoffTime.ToLocalTime().ToString("ddd d MMM, HH:mm")</span>
-        @if (Match.Status == "InProgress")
-        {
-            <span class="live-clock">@LiveClockText()</span>
-        }
-        else if (Match.Status == "Finished")
-        {
-            <span class="live-clock finished">FT</span>
-        }
+        <div class="kickoff-row-trailing">
+            @if (Match.Status == "InProgress")
+            {
+                <span class="live-clock">@LiveClockText()</span>
+            }
+            else if (Match.Status == "Finished")
+            {
+                <span class="live-clock finished">FT</span>
+            }
+            @* Always visible regardless of match status, unlike Bet Builder/Match Details below,
+               which come and go - "notify me about this match" is meaningful before, during and
+               after kickoff. *@
+            <button type="button" class="alert-bell-btn" @onclick="ToggleAlertAsync"
+                    aria-label="@(AlertSubs.IsSubscribed(Match.Id) ? "Remove match alert" : "Add match alert")">
+                @(AlertSubs.IsSubscribed(Match.Id) ? "🔔" : "🔕")
+            </button>
+        </div>
     </div>
 
     <div class="match-teams-row">
@@ -58,14 +67,30 @@
     </div>
 </div>
 
+@implements IDisposable
 @code {
     [Inject] private MatchSummaryState Summary { get; set; } = default!;
+    [Inject] private MatchAlertSubscriptions AlertSubs { get; set; } = default!;
 
     [Parameter, EditorRequired] public UpcomingMatchDto Match { get; set; } = default!;
 
     // Set by the parent page (Matches.razor / LeagueMatches.razor) so Match Summary's back button
     // returns to wherever this card was shown, not always the main Matches list.
     [Parameter] public string? ReturnUrl { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        AlertSubs.Changed += OnAlertSubsChanged;
+        // Guarded internally (a no-op past the first call) - every card on a page calls this, but
+        // only the first one actually triggers the one shared GET.
+        await AlertSubs.InitializeAsync();
+    }
+
+    private void OnAlertSubsChanged() => InvokeAsync(StateHasChanged);
+
+    private Task ToggleAlertAsync() => AlertSubs.ToggleAsync(Match.Id);
+
+    public void Dispose() => AlertSubs.Changed -= OnAlertSubsChanged;
 
     // No odds fetched yet for this match (e.g. too far out) - showing three "—" cells and a "—"
     // bookmaker placeholder reads as broken, not "coming soon", so hide the whole section instead.

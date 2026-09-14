@@ -2,6 +2,7 @@ using FullTime.Api.Auth;
 using FullTime.Api.BetBuilder.Dtos;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
+using FullTime.Api.Notifications;
 using FullTime.Api.Realtime;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +21,7 @@ public class ApiFootballMatchSyncService(
     IOptions<ApiFootballOptions> options,
     IHubContext<MatchUpdatesHub> hub,
     IEmailSender emailSender,
+    MatchAlertService matchAlerts,
     ILogger<ApiFootballMatchSyncService> logger)
 {
     // Per-match, once per UTC date - same reasoning as HighlightlyClient's quota-alert dedup: a
@@ -223,6 +225,13 @@ public class ApiFootballMatchSyncService(
     {
         var externalId = dto.Fixture.Id.ToString();
         var match = await db.Matches.FirstOrDefaultAsync(m => m.ExternalId == externalId, ct);
+        // A brand-new row's "previous" status/score are just freshly-initialized defaults, not a
+        // real prior tick - without this, the very first time we see a match that's already
+        // in-progress (e.g. a restart, or fixture discovery losing a race with the live sync - see
+        // this file's own note on that race elsewhere) would read as "just kicked off" even if it's
+        // actually deep into the second half. Alert-firing below is skipped entirely for this tick;
+        // its real transitions get caught correctly from the next tick onwards.
+        var isNewMatch = match is null;
         if (match is null)
         {
             match = new Match
@@ -254,6 +263,13 @@ public class ApiFootballMatchSyncService(
         var newStatus = DeriveStatus(dto.Fixture.Status.Short, match.Status, externalId);
         var isHalfTime = dto.Fixture.Status.Short == "HT";
 
+        // Captured before overwriting below - MatchAlertService.NotifyAsync needs both sides of
+        // each transition (e.g. "was Upcoming, is now InProgress"), not just the new value.
+        var previousStatus = match.Status;
+        var previousHomeScore = match.HomeScore;
+        var previousAwayScore = match.AwayScore;
+        var previousIsHalfTime = match.IsHalfTime;
+
         var changed = match.HomeScore != dto.Goals?.Home || match.AwayScore != dto.Goals?.Away
             || match.Status != newStatus || match.Minute != dto.Fixture.Status.Elapsed
             || match.AddedTimeMinutes != dto.Fixture.Status.Extra || match.IsHalfTime != isHalfTime;
@@ -271,6 +287,67 @@ public class ApiFootballMatchSyncService(
                 "MatchUpdated",
                 new MatchLiveUpdate(match.Id, match.HomeScore, match.AwayScore, newStatus.ToString(), match.Minute, match.AddedTimeMinutes, isHalfTime),
                 ct);
+        }
+
+        if (!isNewMatch)
+        {
+            await FireLiveAlertsAsync(match, previousStatus, previousHomeScore, previousAwayScore, previousIsHalfTime, newStatus, ct);
+        }
+    }
+
+    // Kickoff/half-time/full-time/goal alerts - everything MatchAlertService needs to decide who
+    // gets pushed already lives on `match` (post-overwrite, i.e. the new state) plus the "previous"
+    // values captured just before UpsertMatchAsync overwrote them. Deliberately not gated on
+    // MatchStatus == InProgress the way the red-card diff in ApiFootballSettlementSupportService is -
+    // full-time is exactly the transition INTO Finished, so it must still fire that one tick.
+    private async Task FireLiveAlertsAsync(
+        Match match, MatchStatus previousStatus, int? previousHomeScore, int? previousAwayScore,
+        bool previousIsHalfTime, MatchStatus newStatus, CancellationToken ct)
+    {
+        if (previousStatus == MatchStatus.Upcoming && newStatus == MatchStatus.InProgress)
+        {
+            await matchAlerts.NotifyAsync(
+                match, MatchAlertType.Kickoff, "Kick-off!", $"{match.HomeTeam} v {match.AwayTeam} is underway",
+                sequence: 0, ct: ct);
+        }
+
+        if (!previousIsHalfTime && match.IsHalfTime)
+        {
+            await matchAlerts.NotifyAsync(
+                match, MatchAlertType.HalfTime, "Half-time",
+                $"{match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam} at the break",
+                sequence: 0, ct: ct);
+        }
+
+        if (previousStatus != MatchStatus.Finished && newStatus == MatchStatus.Finished)
+        {
+            await matchAlerts.NotifyAsync(
+                match, MatchAlertType.FullTime, "Full-time",
+                $"{match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
+                sequence: 0, ct: ct);
+        }
+
+        // Sequence needs to be unique per goal, including the rare case of both sides scoring in
+        // the same tick (a missed poll in between) - two separate checks below, not one combined
+        // "did the score change" check, so both still send. A shared "total goals so far" counter
+        // would collide whenever both sides' scores increase by the same amount in one tick (e.g.
+        // 1-1 -> 2-2 between polls: newHome+oldAway == oldHome+newAway), so home and away goals get
+        // disjoint numeric ranges instead - the new home score itself for a home goal, offset by
+        // 1000 for an away goal. No real match reaches 1000 goals, so these ranges never overlap.
+        if ((match.HomeScore ?? 0) > (previousHomeScore ?? 0))
+        {
+            await matchAlerts.NotifyAsync(
+                match, MatchAlertType.Goal, "GOAL!",
+                $"{match.HomeTeam} score - {match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
+                sequence: match.HomeScore ?? 0, ct: ct);
+        }
+
+        if ((match.AwayScore ?? 0) > (previousAwayScore ?? 0))
+        {
+            await matchAlerts.NotifyAsync(
+                match, MatchAlertType.Goal, "GOAL!",
+                $"{match.AwayTeam} score - {match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
+                sequence: 1000 + (match.AwayScore ?? 0), ct: ct);
         }
     }
 

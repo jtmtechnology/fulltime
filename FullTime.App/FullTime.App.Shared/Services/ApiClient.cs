@@ -281,4 +281,63 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         var res = await httpClient.PostAsJsonAsync("api/devices/register", new RegisterDeviceRequest(token, platform, utcOffsetMinutes));
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
     }
+
+    public async Task<AlertPreferencesDto> GetAlertPreferencesAsync()
+    {
+        Authorize();
+        var res = await httpClient.GetAsync("api/alerts/preferences");
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+        return (await res.Content.ReadFromJsonAsync<AlertPreferencesDto>())!;
+    }
+
+    public async Task<AlertPreferencesDto> UpdateAlertPreferencesAsync(AlertPreferencesDto preferences)
+    {
+        Authorize();
+        var res = await httpClient.PutAsJsonAsync("api/alerts/preferences", preferences);
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+        return (await res.Content.ReadFromJsonAsync<AlertPreferencesDto>())!;
+    }
+
+    public async Task<List<AlertTeamDto>> GetAlertTeamsAsync()
+    {
+        Authorize();
+        var res = await httpClient.GetAsync("api/alerts/teams");
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+        return await res.Content.ReadFromJsonAsync<List<AlertTeamDto>>() ?? [];
+    }
+
+    public async Task<AlertSubscriptionsDto> GetAlertSubscriptionsAsync()
+    {
+        Authorize();
+        var res = await httpClient.GetAsync("api/alerts/subscriptions");
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+        return (await res.Content.ReadFromJsonAsync<AlertSubscriptionsDto>())!;
+    }
+
+    public async Task SetFavouriteTeamAsync(long teamId, bool favourite)
+    {
+        Authorize();
+        var res = favourite
+            ? await httpClient.PostAsync($"api/alerts/favourite-teams/{teamId}", null)
+            : await httpClient.DeleteAsync($"api/alerts/favourite-teams/{teamId}");
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+    }
+
+    public async Task SetFavouriteLeagueAsync(long leagueId, bool favourite)
+    {
+        Authorize();
+        var res = favourite
+            ? await httpClient.PostAsync($"api/alerts/favourite-leagues/{leagueId}", null)
+            : await httpClient.DeleteAsync($"api/alerts/favourite-leagues/{leagueId}");
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+    }
+
+    public async Task SetMatchAlertSubscriptionAsync(Guid matchId, bool subscribed)
+    {
+        Authorize();
+        var res = subscribed
+            ? await httpClient.PostAsync($"api/alerts/matches/{matchId}", null)
+            : await httpClient.DeleteAsync($"api/alerts/matches/{matchId}");
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+    }
 }

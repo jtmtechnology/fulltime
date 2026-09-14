@@ -2,6 +2,7 @@ using FullTime.Api.BetBuilder.Dtos;
 using FullTime.Api.BetBuilder.OddsApi;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
+using FullTime.Api.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -16,6 +17,7 @@ public class ApiFootballSettlementSupportService(
     ApiFootballClient client,
     AppDbContext db,
     IOptions<ApiFootballOptions> options,
+    MatchAlertService matchAlerts,
     ILogger<ApiFootballSettlementSupportService> logger)
 {
 
@@ -146,8 +148,20 @@ public class ApiFootballSettlementSupportService(
             return [];
         }
 
+        // Captured before the delete-and-replace below so a genuinely new event (this fetch's whole
+        // reason for existing right now - a red card) can be told apart from one already seen last
+        // fetch. No external per-event ID exists to diff against (API-Football doesn't give one),
+        // so (Team, Minute, Type, PlayerName) stands in for one - in practice stable enough, since
+        // two identical events (same player, same type, same minute) can't really both happen.
+        var previousKeys = await db.MatchEvents
+            .Where(e => e.MatchId == match.Id)
+            .Select(e => new { e.Team, e.Minute, e.Type, e.PlayerName })
+            .ToListAsync(ct);
+        var previousKeySet = previousKeys.Select(k => (k.Team, k.Minute, k.Type, k.PlayerName)).ToHashSet();
+
         await db.MatchEvents.Where(e => e.MatchId == match.Id).ExecuteDeleteAsync(ct);
-        db.MatchEvents.AddRange(events.Select(e =>
+
+        var newRows = events.Select(e =>
         {
             // API-Football's "subst" events put the player coming OFF in "player" and the player
             // coming ON in "assist" - the reverse of every other event type, where "player" is the
@@ -172,10 +186,38 @@ public class ApiFootballSettlementSupportService(
                 AssistPlayerExternalId = e.Type == "subst" ? null : e.Assist?.Id,
                 SubstitutedPlayerName = offName,
             };
-        }));
+        }).ToList();
+
+        db.MatchEvents.AddRange(newRows);
+
+        // Gated to the live path only (match still InProgress right now) - ResolveMatchEventsAsync's
+        // post-Finished backfill calls this same method, and a match whose events are being resolved
+        // for the very first time after full-time would otherwise see every event in the whole match
+        // as "new" and fire a flood of stale red-card alerts for a game that's already over.
+        if (match.Status == MatchStatus.InProgress)
+        {
+            var newRedCards = newRows.Where(r =>
+                r.Type == "Red Card" && !previousKeySet.Contains((r.Team, r.Minute, r.Type, r.PlayerName)));
+
+            foreach (var redCard in newRedCards)
+            {
+                var teamName = redCard.Team == SelectionSide.Home ? match.HomeTeam : match.AwayTeam;
+                await matchAlerts.NotifyAsync(
+                    match, MatchAlertType.RedCard, "Red card!",
+                    $"{redCard.PlayerName} ({teamName}) sent off - {match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
+                    sequence: ParseMinuteForSequence(redCard.Minute), ct: ct);
+            }
+        }
 
         return events;
     }
+
+    // Just needs to be unique-enough per red card within one match for SentMatchAlert's dedup key -
+    // doesn't need to be a real sortable minute the way MatchesController.ParseMinute is. Two red
+    // cards in the exact same base minute would collide and the second would be silently skipped -
+    // an accepted, vanishingly rare edge case (see SentMatchAlert.Sequence).
+    private static int ParseMinuteForSequence(string minute) =>
+        int.TryParse(minute.Split('+')[0], out var baseMinute) ? baseMinute : 0;
 
     // Powers settlement for the four player-prop market types plus TotalCorners. Same 3-day cutoff
     // reasoning as ResolveFirstGoalScorersAsync — PlayerStatsResolvedAt is set even on a fetch that
