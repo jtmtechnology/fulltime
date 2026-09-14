@@ -53,36 +53,30 @@ else
     <div class="page-card">
         <h2>Favourite teams</h2>
         <p class="hint">Every match either of these teams plays gets alerts, in any competition.</p>
-        @if (_teamLeagueIds.Count > 0)
+        @foreach (var leagueId in _teamLeagueIds)
         {
-            <div class="day-picker">
-                @foreach (var leagueId in _teamLeagueIds)
-                {
-                    <button type="button" class="day-pill @(leagueId == _selectedTeamLeagueId ? "selected" : "")"
-                            @onclick="() => _selectedTeamLeagueId = leagueId">
-                        @LeagueCatalog.Name(leagueId)
-                    </button>
-                }
-            </div>
+            <AccordionSection Id="@leagueId.ToString()" Title="@LeagueCatalog.Name(leagueId)" TitleIconUrl="@LeagueCatalog.LogoUrl(leagueId)"
+                               Expanded="_expandedTeamLeagues" OnToggle="ToggleTeamLeagueSection">
+                <div class="league-toggle-list">
+                    @foreach (var team in _teams.Where(t => t.LeagueId == leagueId))
+                    {
+                        <label class="league-toggle">
+                            <input type="checkbox" checked="@AlertSubs.IsFavouriteTeam(team.TeamId)"
+                                   @onchange="() => ToggleFavouriteTeamAsync(team.TeamId)" />
+                            <LogoImg Src="@team.LogoUrl" Alt="@team.TeamName" />
+                            <span>@team.TeamName</span>
+                        </label>
+                    }
+                </div>
+            </AccordionSection>
         }
-        <div class="league-toggle-list">
-            @foreach (var team in _teams.Where(t => t.LeagueId == _selectedTeamLeagueId))
-            {
-                <label class="league-toggle">
-                    <input type="checkbox" checked="@AlertSubs.IsFavouriteTeam(team.TeamId)"
-                           @onchange="() => ToggleFavouriteTeamAsync(team.TeamId)" />
-                    <LogoImg Src="@team.LogoUrl" Alt="@team.TeamName" />
-                    <span>@team.TeamName</span>
-                </label>
-            }
-        </div>
     </div>
 
     <div class="page-card">
         <h2>Favourite leagues</h2>
         <p class="hint">Every match in these competitions gets alerts.</p>
         <div class="league-toggle-list">
-            @foreach (var leagueId in LeagueCatalog.DisplayOrder)
+            @foreach (var leagueId in LeagueCatalog.LeaguesOnly)
             {
                 <label class="league-toggle">
                     <input type="checkbox" checked="@AlertSubs.IsFavouriteLeague(leagueId)"
@@ -94,14 +88,14 @@ else
         </div>
     </div>
 
-    <p class="hint">Individual matches can also be toggled directly from their bell icon on the Matches screen.</p>
+    <p class="hint match-alerts-footer-hint">Individual matches can also be toggled directly from their bell icon on the Matches screen.</p>
 }
 
 @code {
     private AlertPreferencesDto _prefs = new(false, false, false, false, false, false);
     private List<AlertTeamDto> _teams = [];
     private List<long> _teamLeagueIds = [];
-    private long _selectedTeamLeagueId;
+    private readonly HashSet<string> _expandedTeamLeagues = [];
     private string _status = "Loading…";
     private bool _error;
 
@@ -113,14 +107,16 @@ else
         {
             _prefs = await Api.GetAlertPreferencesAsync();
             _teams = await Api.GetAlertTeamsAsync();
-            // Ordered to match LeagueCatalog.DisplayOrder (Premier League first, etc.) rather than
+            // Ordered to match LeagueCatalog.LeaguesOnly (Premier League first, etc.) rather than
             // however GetAlertTeamsAsync happened to return them - picking a league first only reads
             // as a shortcut, not a randomly-ordered new list to scan, if the order is one the user
             // already recognizes from the rest of the app (Matches' competition list, Profile's
-            // league toggles).
+            // league toggles). Cup competitions excluded here too, same reasoning as Favourite
+            // leagues below - a team whose most-recently-seen match happens to be a cup tie just
+            // won't get an accordion section for it, one team-picker edge case not worth a bigger
+            // redesign of GetAlertTeamsAsync for.
             var presentLeagueIds = _teams.Select(t => t.LeagueId).ToHashSet();
-            _teamLeagueIds = LeagueCatalog.DisplayOrder.Where(presentLeagueIds.Contains).ToList();
-            _selectedTeamLeagueId = _teamLeagueIds.FirstOrDefault();
+            _teamLeagueIds = LeagueCatalog.LeaguesOnly.Where(presentLeagueIds.Contains).ToList();
             // Shared with MatchCard's bell icon rather than a separate local copy - this used to be
             // its own ApiClient call + local HashSet, which meant favouriting a team/league here
             // never reached the cache MatchCard actually reads from, so a newly-favourited league's
@@ -136,6 +132,14 @@ else
     }
 
     private void OnAlertSubsChanged() => InvokeAsync(StateHasChanged);
+
+    private void ToggleTeamLeagueSection(string id)
+    {
+        if (!_expandedTeamLeagues.Remove(id))
+        {
+            _expandedTeamLeagues.Add(id);
+        }
+    }
 
     private async Task SetPreferenceAsync(Func<AlertPreferencesDto, AlertPreferencesDto> update)
     {

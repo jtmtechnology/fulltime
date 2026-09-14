@@ -709,6 +709,9 @@ button[type="submit"] {
 .stat-row .label { color: var(--text-muted); }
 
 .hint { color: var(--text-muted); font-size: 0.85rem; margin: -0.25rem 0 0.75rem; }
+/* Sits standalone below the last page-card on Match Alerts, not tight under a heading like every
+   other .hint use - needs its own breathing room instead of the shared negative top margin. */
+.match-alerts-footer-hint { margin-top: 1rem; }
 
 .league-toggle-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
 .league-toggle {

@@ -49,6 +49,16 @@ public static class LeagueCatalog
     public static readonly long[] DisplayOrder =
         [.. AlwaysVisible, .. OptionalLeagues.SelectMany(l => l.LeagueIds).Distinct()];
 
+    // Cup/knockout competitions - FA Cup, EFL Cup, Community Shield are pure knockout (see
+    // KnockoutOnly below); the UEFA club competitions include a group/league phase but are still
+    // cup competitions in the sense that matters for the Match Alerts "Favourite leagues" picker -
+    // there's no genuine week-to-week table to follow the way there is for a domestic league.
+    private static readonly HashSet<long> CupCompetitionIds =
+        [39079, 41632, 450112, 2486, 3337, 722432];
+
+    // DisplayOrder with cup competitions filtered out - just the domestic top-flight leagues.
+    public static readonly long[] LeaguesOnly = [.. DisplayOrder.Where(id => !CupCompetitionIds.Contains(id))];
+
     // Display-only subtitle for the competition list row (Matches.razor) - not used for any
     // matching/sync logic, so a missing entry just renders no subtitle rather than breaking anything.
     private static readonly Dictionary<long, string> Countries = new()
