@@ -46,7 +46,7 @@
         {
             @if (_loading)
             {
-                <div class="status">Loading…</div>
+                <LoadingSpinner />
             }
             else if (_events.Count == 0)
             {
@@ -82,7 +82,7 @@
         {
             @if (_statsLoading)
             {
-                <div class="status">Loading…</div>
+                <LoadingSpinner />
             }
             else if (_statsError is { } statsError)
             {
@@ -114,7 +114,7 @@
         {
             @if (_playersLoading)
             {
-                <div class="status">Loading…</div>
+                <LoadingSpinner />
             }
             else if (_playersError is { } playersError)
             {
@@ -154,7 +154,7 @@
         {
             @if (_lineupsLoading)
             {
-                <div class="status">Loading…</div>
+                <LoadingSpinner />
             }
             else if (_lineupsError is { } lineupsError)
             {
