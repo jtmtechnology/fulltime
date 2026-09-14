@@ -1,6 +1,8 @@
 @page "/match-alerts"
+@implements IDisposable
 @inject ApiClient Api
 @inject NavigationManager Nav
+@inject MatchAlertSubscriptions AlertSubs
 
 <PageTitle>FullTime — Match Alerts</PageTitle>
 
@@ -67,8 +69,8 @@ else
             @foreach (var team in _teams.Where(t => t.LeagueId == _selectedTeamLeagueId))
             {
                 <label class="league-toggle">
-                    <input type="checkbox" checked="@_favouriteTeamIds.Contains(team.TeamId)"
-                           @onchange="e => ToggleFavouriteTeamAsync(team.TeamId, (bool)e.Value!)" />
+                    <input type="checkbox" checked="@AlertSubs.IsFavouriteTeam(team.TeamId)"
+                           @onchange="() => ToggleFavouriteTeamAsync(team.TeamId)" />
                     <LogoImg Src="@team.LogoUrl" Alt="@team.TeamName" />
                     <span>@team.TeamName</span>
                 </label>
@@ -83,8 +85,8 @@ else
             @foreach (var leagueId in LeagueCatalog.DisplayOrder)
             {
                 <label class="league-toggle">
-                    <input type="checkbox" checked="@_favouriteLeagueIds.Contains(leagueId)"
-                           @onchange="e => ToggleFavouriteLeagueAsync(leagueId, (bool)e.Value!)" />
+                    <input type="checkbox" checked="@AlertSubs.IsFavouriteLeague(leagueId)"
+                           @onchange="() => ToggleFavouriteLeagueAsync(leagueId)" />
                     <LogoImg Src="@LeagueCatalog.LogoUrl(leagueId)" Alt="@LeagueCatalog.Name(leagueId)" />
                     <span>@LeagueCatalog.Name(leagueId)</span>
                 </label>
@@ -100,13 +102,13 @@ else
     private List<AlertTeamDto> _teams = [];
     private List<long> _teamLeagueIds = [];
     private long _selectedTeamLeagueId;
-    private HashSet<long> _favouriteTeamIds = [];
-    private HashSet<long> _favouriteLeagueIds = [];
     private string _status = "Loading…";
     private bool _error;
 
     protected override async Task OnInitializedAsync()
     {
+        AlertSubs.Changed += OnAlertSubsChanged;
+
         try
         {
             _prefs = await Api.GetAlertPreferencesAsync();
@@ -119,9 +121,11 @@ else
             var presentLeagueIds = _teams.Select(t => t.LeagueId).ToHashSet();
             _teamLeagueIds = LeagueCatalog.DisplayOrder.Where(presentLeagueIds.Contains).ToList();
             _selectedTeamLeagueId = _teamLeagueIds.FirstOrDefault();
-            var subscriptions = await Api.GetAlertSubscriptionsAsync();
-            _favouriteTeamIds = subscriptions.FavouriteTeamIds.ToHashSet();
-            _favouriteLeagueIds = subscriptions.FavouriteLeagueIds.ToHashSet();
+            // Shared with MatchCard's bell icon rather than a separate local copy - this used to be
+            // its own ApiClient call + local HashSet, which meant favouriting a team/league here
+            // never reached the cache MatchCard actually reads from, so a newly-favourited league's
+            // matches kept showing an unlit bell until the app restarted.
+            await AlertSubs.InitializeAsync();
             _status = "";
         }
         catch (Exception ex)
@@ -130,6 +134,8 @@ else
             _error = true;
         }
     }
+
+    private void OnAlertSubsChanged() => InvokeAsync(StateHasChanged);
 
     private async Task SetPreferenceAsync(Func<AlertPreferencesDto, AlertPreferencesDto> update)
     {
@@ -148,37 +154,33 @@ else
         }
     }
 
-    private async Task ToggleFavouriteTeamAsync(long teamId, bool favourite)
+    private async Task ToggleFavouriteTeamAsync(long teamId)
     {
-        if (favourite) _favouriteTeamIds.Add(teamId); else _favouriteTeamIds.Remove(teamId);
-
         try
         {
-            await Api.SetFavouriteTeamAsync(teamId, favourite);
+            await AlertSubs.ToggleFavouriteTeamAsync(teamId);
         }
         catch (Exception ex)
         {
-            if (favourite) _favouriteTeamIds.Remove(teamId); else _favouriteTeamIds.Add(teamId);
             _status = $"Error: {ex.Message}";
             _error = true;
         }
     }
 
-    private async Task ToggleFavouriteLeagueAsync(long leagueId, bool favourite)
+    private async Task ToggleFavouriteLeagueAsync(long leagueId)
     {
-        if (favourite) _favouriteLeagueIds.Add(leagueId); else _favouriteLeagueIds.Remove(leagueId);
-
         try
         {
-            await Api.SetFavouriteLeagueAsync(leagueId, favourite);
+            await AlertSubs.ToggleFavouriteLeagueAsync(leagueId);
         }
         catch (Exception ex)
         {
-            if (favourite) _favouriteLeagueIds.Remove(leagueId); else _favouriteLeagueIds.Add(leagueId);
             _status = $"Error: {ex.Message}";
             _error = true;
         }
     }
 
     private void GoBack() => Nav.NavigateTo("/profile");
+
+    public void Dispose() => AlertSubs.Changed -= OnAlertSubsChanged;
 }

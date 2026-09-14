@@ -108,4 +108,49 @@ public class MatchAlertSubscriptions(ApiClient api)
             _excludedMatchIds.Add(matchId);
         }
     }
+
+    // The Match Alerts settings page reads/writes favourite teams and leagues through these
+    // (instead of keeping its own separate copy) so MatchCard's bell - reading this same shared
+    // instance - picks up a newly-favourited team/league immediately, not just after an app
+    // restart. This was a real bug: the settings page used to call ApiClient directly and track its
+    // own local set, so favouriting a league there never reached the cache MatchCard actually reads.
+    public bool IsFavouriteTeam(long teamId) => _favouriteTeamIds.Contains(teamId);
+
+    public bool IsFavouriteLeague(long leagueId) => _favouriteLeagueIds.Contains(leagueId);
+
+    public async Task ToggleFavouriteTeamAsync(long teamId)
+    {
+        var favourite = !_favouriteTeamIds.Contains(teamId);
+        if (favourite) _favouriteTeamIds.Add(teamId); else _favouriteTeamIds.Remove(teamId);
+        Changed?.Invoke();
+
+        try
+        {
+            await api.SetFavouriteTeamAsync(teamId, favourite);
+        }
+        catch
+        {
+            if (favourite) _favouriteTeamIds.Remove(teamId); else _favouriteTeamIds.Add(teamId);
+            Changed?.Invoke();
+            throw;
+        }
+    }
+
+    public async Task ToggleFavouriteLeagueAsync(long leagueId)
+    {
+        var favourite = !_favouriteLeagueIds.Contains(leagueId);
+        if (favourite) _favouriteLeagueIds.Add(leagueId); else _favouriteLeagueIds.Remove(leagueId);
+        Changed?.Invoke();
+
+        try
+        {
+            await api.SetFavouriteLeagueAsync(leagueId, favourite);
+        }
+        catch
+        {
+            if (favourite) _favouriteLeagueIds.Remove(leagueId); else _favouriteLeagueIds.Add(leagueId);
+            Changed?.Invoke();
+            throw;
+        }
+    }
 }
