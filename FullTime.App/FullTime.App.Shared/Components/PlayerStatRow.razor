@@ -1,51 +1,32 @@
-@* One row in the Match Summary sheet's Player Stats tab - only players who actually appeared
-   (Games.Minutes > 0, filtered server-side) ever reach this component. *@
-<div class="player-stat-row">
-    <LogoImg Src="@Player.PhotoUrl" Alt="@Player.Name" CssClass="player-stat-photo" />
-    <div class="player-stat-main">
-        <div class="player-stat-name-row">
-            <span class="player-stat-name">@Player.Name</span>
-            @if (Player.Rating is { } rating)
-            {
-                <span class="player-stat-rating @RatingClass(rating)">@rating</span>
-            }
-        </div>
-        <div class="player-stat-line muted">
-            <span>@Player.Minutes'</span>
-            @if (Player.Position is { } pos)
-            {
-                <span>@pos</span>
-            }
-            @if (Player.Substitute)
-            {
-                <span>SUB</span>
-            }
-            @if (Player.Goals > 0)
-            {
-                <span>⚽ @Player.Goals</span>
-            }
-            @if (Player.Assists > 0)
-            {
-                <span>🅰 @Player.Assists</span>
-            }
-            @if (Player.ShotsTotal > 0)
-            {
-                <span>@Player.ShotsOnTarget/@Player.ShotsTotal shots</span>
-            }
-            @if (Player.PassesTotal > 0)
-            {
-                <span>@Player.PassesTotal passes@(Player.PassAccuracyPercent is { } acc ? $" ({acc}%)" : "")</span>
-            }
-            @if (Player.YellowCards > 0)
-            {
-                <span>🟨</span>
-            }
-            @if (Player.RedCards > 0)
-            {
-                <span>🟥</span>
-            }
-        </div>
-    </div>
+@* One row in the Match Summary sheet's Player Stats tab - a compact table (shots/on target/cards/
+   rating only, not the full stat line this used to show) sitting under MatchSummarySheet's own
+   column-header row. Only players who actually appeared (Games.Minutes > 0, filtered server-side)
+   ever reach this component. *@
+<div class="player-stats-row">
+    <span class="player-stats-name">
+        <LogoImg Src="@Player.PhotoUrl" Alt="@Player.Name" CssClass="player-stats-photo" />
+        <span class="player-stats-name-text">@Player.Name</span>
+    </span>
+    <span class="player-stats-stat">@(Player.ShotsTotal > 0 ? Player.ShotsTotal.ToString() : "-")</span>
+    <span class="player-stats-stat">@(Player.ShotsTotal > 0 ? Player.ShotsOnTarget.ToString() : "-")</span>
+    <span class="player-stats-stat player-stats-cards">
+        @if (Player.YellowCards > 0)
+        {
+            <span>🟨</span>
+        }
+        @if (Player.RedCards > 0)
+        {
+            <span>🟥</span>
+        }
+    </span>
+    @if (Player.Rating is { } rating)
+    {
+        <span class="player-stats-stat player-stats-rating @RatingClass(rating)">@rating</span>
+    }
+    else
+    {
+        <span class="player-stats-stat">-</span>
+    }
 </div>
 
 @code {

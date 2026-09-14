@@ -7,7 +7,7 @@
     <div class="match-summary-sheet">
         <div class="page-header-row">
             <button type="button" class="back-btn" @onclick="Close" aria-label="Back">‹</button>
-            <h1>Match Summary</h1>
+            <h1>Match Details</h1>
         </div>
 
         <div class="bb-teams-row">
@@ -30,9 +30,16 @@
         </div>
 
         <div class="bb-tabs">
-            <button type="button" class="bb-tab @(_activeTab == "Events" ? "active" : "")" @onclick='() => SelectTab("Events")'>Events</button>
+            @* A match reached before kickoff via its lineups (see MatchCard's EventsAvailable ||
+               LineupsAvailable gate) has nothing to show on Events yet - no point offering a tab
+               that would only ever say "no match events available". *@
+            @if (match.EventsAvailable)
+            {
+                <button type="button" class="bb-tab @(_activeTab == "Events" ? "active" : "")" @onclick='() => SelectTab("Events")'>Events</button>
+            }
             <button type="button" class="bb-tab @(_activeTab == "Stats" ? "active" : "")" @onclick='() => SelectTab("Stats")'>Stats</button>
-            <button type="button" class="bb-tab @(_activeTab == "Players" ? "active" : "")" @onclick='() => SelectTab("Players")'>Players</button>
+            <button type="button" class="bb-tab @(_activeTab == "Players" ? "active" : "")" @onclick='() => SelectTab("Players")'>Player Stats</button>
+            <button type="button" class="bb-tab @(_activeTab == "Lineups" ? "active" : "")" @onclick='() => SelectTab("Lineups")'>Lineups</button>
         </div>
 
         @if (_activeTab == "Events")
@@ -103,7 +110,7 @@
                 </div>
             }
         }
-        else
+        else if (_activeTab == "Players")
         {
             @if (_playersLoading)
             {
@@ -119,30 +126,69 @@
             }
             else
             {
-                <div class="player-stats">
-                    @if (_homePlayers.Count > 0)
-                    {
+                @if (_homePlayers.Count > 0)
+                {
+                    <div class="player-stats-table">
                         <div class="player-stats-team-header">@match.HomeTeam</div>
+                        @PlayerStatsColumnHeader
                         @foreach (var p in _homePlayers)
                         {
                             <PlayerStatRow Player="p" />
                         }
-                    }
-                    @if (_awayPlayers.Count > 0)
-                    {
+                    </div>
+                }
+                @if (_awayPlayers.Count > 0)
+                {
+                    <div class="player-stats-table">
                         <div class="player-stats-team-header">@match.AwayTeam</div>
+                        @PlayerStatsColumnHeader
                         @foreach (var p in _awayPlayers)
                         {
                             <PlayerStatRow Player="p" />
                         }
-                    }
-                </div>
+                    </div>
+                }
+            }
+        }
+        else
+        {
+            @if (_lineupsLoading)
+            {
+                <div class="status">Loading…</div>
+            }
+            else if (_lineupsError is { } lineupsError)
+            {
+                <div class="status error">Error: @lineupsError</div>
+            }
+            else if (_homeLineup is null && _awayLineup is null)
+            {
+                <div class="muted">Lineups not announced yet.</div>
+            }
+            else
+            {
+                @if (_homeLineup is { } home)
+                {
+                    <LineupTeam TeamName="@match.HomeTeam" Lineup="home" />
+                }
+                @if (_awayLineup is { } away)
+                {
+                    <LineupTeam TeamName="@match.AwayTeam" Lineup="away" />
+                }
             }
         }
     </div>
 }
 
 @code {
+    // Shared between the home and away player tables rather than duplicating the markup twice.
+    private static readonly RenderFragment PlayerStatsColumnHeader = @<div class="player-stats-row player-stats-header">
+        <span>Player</span>
+        <span class="player-stats-stat">Shots</span>
+        <span class="player-stats-stat">SOT</span>
+        <span class="player-stats-stat">Cards</span>
+        <span class="player-stats-stat">Rating</span>
+    </div>;
+
     private bool _loading = true;
     private Guid _loadedForMatchId;
     private List<MatchEventDto> _events = [];
@@ -162,6 +208,12 @@
     private List<PlayerStatRowDto> _homePlayers = [];
     private List<PlayerStatRowDto> _awayPlayers = [];
 
+    private bool _lineupsLoading;
+    private string? _lineupsError;
+    private Guid? _lineupsLoadedForMatchId;
+    private TeamLineupDto? _homeLineup;
+    private TeamLineupDto? _awayLineup;
+
     protected override void OnInitialized()
     {
         Summary.Changed += OnSummaryChanged;
@@ -172,17 +224,29 @@
         if (Summary is { IsOpen: true, Match: { } match } && _loadedForMatchId != match.Id)
         {
             _loadedForMatchId = match.Id;
-            _activeTab = "Events";
-            _ = LoadEventsAsync(match.Id);
+
+            if (match.EventsAvailable)
+            {
+                _activeTab = "Events";
+                _ = LoadEventsAsync(match.Id);
+            }
+            else
+            {
+                // Reached before kickoff via its lineups only (Events tab isn't even shown - see the
+                // tab bar above) - opens straight on Lineups instead of a tab that isn't there.
+                _activeTab = "Lineups";
+                _ = LoadLineupsAsync(match.Id);
+            }
         }
 
         InvokeAsync(StateHasChanged);
     }
 
-    // Stats/Players are both fetched lazily (only once their tab is actually opened), not alongside
-    // Events - most sheet views never touch either, so this avoids extra API-Football-backed calls
-    // on every single Match Summary open. Each guarded on its own !loading flag too, so re-tapping a
-    // tab while its fetch is still in flight doesn't fire a second concurrent one.
+    // Stats/Players/Lineups are all fetched lazily (only once their tab is actually opened), not
+    // alongside Events - most sheet views never touch any of them, so this avoids extra
+    // API-Football-backed calls on every single Match Summary open. Each guarded on its own
+    // !loading flag too, so re-tapping a tab while its fetch is still in flight doesn't fire a
+    // second concurrent one.
     private void SelectTab(string tab)
     {
         _activeTab = tab;
@@ -198,6 +262,36 @@
         else if (tab == "Players" && !_playersLoading && _playersLoadedForMatchId != match.Id)
         {
             _ = LoadPlayerStatsAsync(match.Id);
+        }
+        else if (tab == "Lineups" && !_lineupsLoading && _lineupsLoadedForMatchId != match.Id)
+        {
+            _ = LoadLineupsAsync(match.Id);
+        }
+    }
+
+    private async Task LoadLineupsAsync(Guid matchId)
+    {
+        _lineupsLoading = true;
+        _lineupsError = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var response = await Api.GetLineupsAsync(matchId);
+            _homeLineup = response.Home;
+            _awayLineup = response.Away;
+            _lineupsLoadedForMatchId = matchId;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _homeLineup = null;
+            _awayLineup = null;
+            _lineupsError = ex.Message;
+        }
+        finally
+        {
+            _lineupsLoading = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 

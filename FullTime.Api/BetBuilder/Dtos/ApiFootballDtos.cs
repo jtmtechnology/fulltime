@@ -337,6 +337,57 @@ public class FixtureStatisticEntry
 // /odds?fixture={id}&bookmaker={id} — confirmed live 2026-09-10 against a real upcoming fixture:
 // a single call returns every market Bet365 currently prices for that fixture, one response item
 // (we only ever request one fixture at a time, so .Response has at most one entry).
+// /fixtures/lineups?fixture={id} - one entry per team (at most two), each with a formation string,
+// starting XI, substitutes, and the coach's name. Confirmed at the shape level against API-Football's
+// own docs (same "team"/"player" nesting every other fixtures/* endpoint already uses) - not yet
+// spot-checked against a real fixture the way ResolveMatchEventsAsync's event vocabulary was, since
+// lineups aren't published until close to kickoff. Comes back as an empty array entirely for a
+// fixture whose lineups haven't been announced yet, same "no rows yet" shape as stats/player-stats.
+public class FixtureLineupTeam
+{
+    [JsonPropertyName("team")]
+    public required TeamInfo Team { get; set; }
+
+    [JsonPropertyName("formation")]
+    public string? Formation { get; set; }
+
+    [JsonPropertyName("startXI")]
+    public List<LineupPlayerEntry> StartXI { get; set; } = [];
+
+    [JsonPropertyName("substitutes")]
+    public List<LineupPlayerEntry> Substitutes { get; set; } = [];
+
+    [JsonPropertyName("coach")]
+    public CoachInfo? Coach { get; set; }
+}
+
+public class LineupPlayerEntry
+{
+    [JsonPropertyName("player")]
+    public required LineupPlayerInfo Player { get; set; }
+}
+
+public class LineupPlayerInfo
+{
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
+    [JsonPropertyName("name")]
+    public required string Name { get; set; }
+
+    [JsonPropertyName("number")]
+    public int? Number { get; set; }
+
+    [JsonPropertyName("pos")]
+    public string? Pos { get; set; }
+}
+
+public class CoachInfo
+{
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+}
+
 public class OddsFixtureResponseDto
 {
     [JsonPropertyName("bookmakers")]

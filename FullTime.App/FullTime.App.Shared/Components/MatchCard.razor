@@ -48,9 +48,12 @@
         {
             <a class="bet-builder-link" href="@BetBuilderHref()">Bet Builder</a>
         }
-        else if ((Match.Status == "Finished" || Match.Status == "InProgress") && Match.EventsAvailable)
+        @* Independent of the Bet Builder link above (not else-if) - once lineups are announced,
+           typically ~1h before kickoff, Match Details is worth showing alongside Bet Builder, not
+           only after the match has actually started/finished. *@
+        @if (Match.EventsAvailable || Match.LineupsAvailable)
         {
-            <button type="button" class="bet-builder-link" @onclick="() => Summary.Open(Match)">Match Summary</button>
+            <button type="button" class="bet-builder-link" @onclick="() => Summary.Open(Match)">Match Details</button>
         }
     </div>
 </div>

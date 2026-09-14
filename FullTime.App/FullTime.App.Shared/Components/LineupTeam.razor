@@ -1,0 +1,53 @@
+@* One team's block in the Match Summary sheet's Lineups tab - formation/coach, then Starting XI
+   and Substitutes as simple number+name+position rows (no pitch/formation graphic - this app's
+   other tabs are all plain tabular lists, not visual layouts, so this matches that convention). *@
+<div class="lineup-team">
+    <div class="lineup-team-header">
+        <span class="lineup-team-name">@TeamName</span>
+        @if (Lineup.Formation is { } formation)
+        {
+            <span class="lineup-formation">@formation</span>
+        }
+    </div>
+    @if (Lineup.CoachName is { } coach)
+    {
+        <div class="lineup-coach muted">Coach: @coach</div>
+    }
+
+    @if (Lineup.StartingXI.Count > 0)
+    {
+        <div class="lineup-section-label">Starting XI</div>
+        @foreach (var p in Lineup.StartingXI)
+        {
+            <div class="lineup-player-row">
+                <span class="lineup-player-number">@(p.Number?.ToString() ?? "-")</span>
+                <span class="lineup-player-name">@p.Name</span>
+                @if (p.Position is { } pos)
+                {
+                    <span class="lineup-player-position muted">@pos</span>
+                }
+            </div>
+        }
+    }
+
+    @if (Lineup.Substitutes.Count > 0)
+    {
+        <div class="lineup-section-label">Substitutes</div>
+        @foreach (var p in Lineup.Substitutes)
+        {
+            <div class="lineup-player-row">
+                <span class="lineup-player-number">@(p.Number?.ToString() ?? "-")</span>
+                <span class="lineup-player-name">@p.Name</span>
+                @if (p.Position is { } pos)
+                {
+                    <span class="lineup-player-position muted">@pos</span>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string TeamName { get; set; } = default!;
+    [Parameter, EditorRequired] public TeamLineupDto Lineup { get; set; } = default!;
+}

@@ -488,28 +488,58 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 .match-stat-bar-away { background: var(--stat-away); }
 .match-stat-bar.neutral .match-stat-bar-home, .match-stat-bar.neutral .match-stat-bar-away { background: var(--border); }
 
-/* Match Summary's Players tab - per-player line, grouped under a team header. */
-.player-stats { margin-top: 0.25rem; }
+/* Match Summary's Players tab - a compact table per team (shots/on target/cards/rating only),
+   same grid-table look as .standings-table/.standings-row rather than the old stacked-card rows. */
+.player-stats-table { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 0.5rem; }
+.player-stats-table + .player-stats-table { margin-top: 1rem; }
+.player-stats-row {
+    display: grid; grid-template-columns: 1fr 2.2rem 2.6rem 2.4rem 2.4rem;
+    align-items: center; gap: 0.4rem; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+}
+.player-stats-row:last-child { border-bottom: none; }
+.player-stats-header {
+    background: var(--bg-elevated); color: var(--text-muted); font-size: 0.68rem;
+    text-transform: uppercase; letter-spacing: 0.03em; font-weight: 700;
+}
 .player-stats-team-header {
-    margin: 1rem 0 0.4rem; font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    background: var(--bg-elevated); padding: 0.4rem 0.6rem; font-weight: 700; font-size: 0.8rem;
+    border-bottom: 1px solid var(--border);
+}
+.player-stats-name { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.player-stats-photo { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #f4f7fa; }
+.player-stats-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-stats-stat { text-align: center; font-variant-numeric: tabular-nums; }
+.player-stats-cards { display: flex; align-items: center; justify-content: center; gap: 0.1rem; }
+.player-stats-rating {
+    font-weight: 700; border-radius: 6px; padding: 0.1rem 0.3rem; text-align: center; color: var(--accent-ink);
+}
+.player-stats-rating.rating-high { background: var(--accent); }
+.player-stats-rating.rating-mid { background: var(--text-muted); color: white; }
+.player-stats-rating.rating-low { background: var(--danger); color: white; }
+
+/* Match Summary's Lineups tab. */
+.lineup-team { border: 1px solid var(--border); border-radius: 8px; margin-top: 0.5rem; padding: 0.6rem; }
+.lineup-team + .lineup-team { margin-top: 1rem; }
+.lineup-team-header { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.lineup-team-name { font-weight: 700; font-size: 0.9rem; }
+.lineup-formation { font-size: 0.78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.lineup-coach { font-size: 0.75rem; margin-top: 0.15rem; }
+.lineup-section-label {
+    margin: 0.6rem 0 0.3rem; font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.03em; color: var(--text-muted);
 }
-.player-stats-team-header:first-child { margin-top: 0; }
-.player-stat-row {
-    display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border);
+.lineup-player-row {
+    display: flex; align-items: center; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
 }
-.player-stat-photo { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #f4f7fa; }
-.player-stat-main { flex: 1; min-width: 0; }
-.player-stat-name-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-.player-stat-name { font-size: 0.88rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.player-stat-rating {
-    flex-shrink: 0; font-size: 0.75rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 6px; color: var(--accent-ink);
+.lineup-player-row:last-child { border-bottom: none; }
+.lineup-player-number {
+    width: 1.6rem; flex-shrink: 0; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
 }
-.player-stat-rating.rating-high { background: var(--accent); }
-.player-stat-rating.rating-mid { background: var(--text-muted); }
-.player-stat-rating.rating-low { background: var(--danger); color: white; }
-.player-stat-line { display: flex; flex-wrap: wrap; gap: 0.3rem; font-size: 0.72rem; margin-top: 0.2rem; }
-.player-stat-line span:not(:last-child)::after { content: "\00b7"; margin-left: 0.3rem; color: var(--text-muted); }
+.lineup-player-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lineup-player-position { font-size: 0.72rem; flex-shrink: 0; }
 
 /* Collapsible market sections - replaces always-expanded .market-group for Bet Builder specifically. */
 .accordion-section { border: 1px solid var(--border); border-radius: 8px; margin-top: 0.75rem; overflow: hidden; }
@@ -867,9 +897,9 @@ button[type="submit"] {
     .bbboost-banner, .bbboost-banner::after, .bbboost-banner-pct { animation: none; }
 }
 .bbboost-banner-icon {
-    flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%;
+    flex-shrink: 0; width: 50px; height: 50px; border-radius: 50%;
     background: var(--bg); border: 1.5px solid var(--accent);
-    display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+    display: flex; align-items: center; justify-content: center; font-size: 1.6rem;
 }
 .bbboost-banner-text { flex: 1; min-width: 0; text-align: left; margin-left: 0.6rem; }
 .bbboost-banner-title {
@@ -903,7 +933,7 @@ button[type="submit"] {
 .bb-boost-label {
     background: linear-gradient(135deg, var(--bg-elevated) 40%, rgba(57,255,136,0.12));
     border: 1px solid var(--accent); border-radius: 10px;
-    padding: 0.65rem 0.9rem; margin: 0 0 1rem; font-size: 0.85rem; line-height: 1.4;
+    padding: 0.65rem 0.9rem; margin: 0.6rem 0 1rem; font-size: 0.85rem; line-height: 1.4;
 }
 .bb-boost-label strong { color: var(--accent); }
 

@@ -43,7 +43,8 @@ public record UpcomingMatchDto(
     string? Bookmaker,
     string? BookmakerLogoUrl,
     bool BetBuilderAvailable,
-    bool EventsAvailable);
+    bool EventsAvailable,
+    bool LineupsAvailable);
 
 public record ConfigResponse(int RefreshIntervalSeconds);
 
@@ -91,6 +92,10 @@ public record PlayerStatRowDto(
     string? Rating, int Goals, int Assists, int ShotsOnTarget, int ShotsTotal, int PassesTotal,
     int? PassAccuracyPercent, int YellowCards, int RedCards);
 public record MatchPlayerStatsResponse(bool Available, List<PlayerStatRowDto> Home, List<PlayerStatRowDto> Away);
+
+public record LineupPlayerDto(int? Number, string Name, string? Position);
+public record TeamLineupDto(string? Formation, string? CoachName, List<LineupPlayerDto> StartingXI, List<LineupPlayerDto> Substitutes);
+public record MatchLineupsResponse(bool Available, TeamLineupDto? Home, TeamLineupDto? Away);
 
 public record CreateLeagueRequest(string Name);
 public record JoinLeagueRequest(string InviteCode);

@@ -30,7 +30,8 @@ public record UpcomingMatchDto(
     string? Bookmaker,
     string? BookmakerLogoUrl,
     bool BetBuilderAvailable,
-    bool EventsAvailable);
+    bool EventsAvailable,
+    bool LineupsAvailable);
 
 public record BetBuilderMarketDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore, decimal Price,
@@ -53,6 +54,10 @@ public record PlayerStatRowDto(
     int? PassAccuracyPercent, int YellowCards, int RedCards);
 public record MatchPlayerStatsResponse(bool Available, List<PlayerStatRowDto> Home, List<PlayerStatRowDto> Away);
 
+public record LineupPlayerDto(int? Number, string Name, string? Position);
+public record TeamLineupDto(string? Formation, string? CoachName, List<LineupPlayerDto> StartingXI, List<LineupPlayerDto> Substitutes);
+public record MatchLineupsResponse(bool Available, TeamLineupDto? Home, TeamLineupDto? Away);
+
 [ApiController]
 [Route("api/matches")]
 public class MatchesController(
@@ -65,6 +70,7 @@ public class MatchesController(
     ApiFootballStandingsService standingsService,
     ApiFootballMatchStatsService matchStatsService,
     ApiFootballPlayerStatsService playerStatsService,
+    ApiFootballLineupsService lineupsService,
     IServiceScopeFactory scopeFactory,
     ILogger<MatchesController> logger) : ControllerBase
 {
@@ -110,6 +116,14 @@ public class MatchesController(
             TriggerH2hRefreshInBackground(candidateMatchIds);
         }
 
+        // Lineups aren't persisted anywhere (ApiFootballLineupsService is a pure on-demand cache, see
+        // its own comment), so there's no "do we actually have them" flag to read the way
+        // EventsAvailable reads m.Events.Any(). Real-world lineups are announced roughly an hour
+        // before kickoff, so this is a time heuristic rather than a live check - matches what
+        // MatchCard needs to decide whether the Match Details link is worth showing before kickoff
+        // without an extra API-Football call per match in this list.
+        var lineupsCutoff = DateTime.UtcNow.AddMinutes(60);
+
         var matches = await query
             .OrderBy(m => m.KickoffTime)
             .ThenBy(m => m.HomeTeam)
@@ -133,7 +147,8 @@ public class MatchesController(
                 m.OddsSnapshots.OrderByDescending(o => o.FetchedAt).Select(o => o.Bookmaker).FirstOrDefault(),
                 m.OddsSnapshots.OrderByDescending(o => o.FetchedAt).Select(o => o.BookmakerLogoUrl).FirstOrDefault(),
                 m.BetBuilderMarkets.Any(),
-                m.Events.Any()))
+                m.Events.Any(),
+                m.Status != MatchStatus.Upcoming || m.KickoffTime <= lineupsCutoff))
             .ToListAsync(ct);
 
         return Ok(matches);
@@ -434,6 +449,37 @@ public class MatchesController(
         var awayRows = MapPlayerRows(away);
         return Ok(new MatchPlayerStatsResponse(homeRows.Count > 0 || awayRows.Count > 0, homeRows, awayRows));
     }
+
+    // Match Summary's Lineups tab. Same ExternalId-as-fixture-ID assumption as GetMatchStats/
+    // GetPlayerStats. A fixture whose lineups haven't been announced yet (still some way from
+    // kickoff) just comes back Available=false - not an error state, the client shows a plain
+    // "not announced yet" message for that the same way Stats/Player Stats show "not available yet".
+    [HttpGet("{id:guid}/lineups")]
+    public async Task<ActionResult<MatchLineupsResponse>> GetLineups(Guid id, CancellationToken ct)
+    {
+        var match = await db.Matches.FindAsync([id], ct);
+        if (match is null || !long.TryParse(match.ExternalId, out var fixtureId))
+        {
+            return Ok(new MatchLineupsResponse(false, null, null));
+        }
+
+        var teams = await lineupsService.GetLineupsAsync(fixtureId, ct);
+        var home = teams.FirstOrDefault(t => t.Team.Id == match.HomeTeamId) ?? teams.ElementAtOrDefault(0);
+        var away = teams.FirstOrDefault(t => t.Team.Id == match.AwayTeamId) ?? teams.ElementAtOrDefault(1);
+
+        var homeLineup = MapLineup(home);
+        var awayLineup = MapLineup(away);
+        return Ok(new MatchLineupsResponse(homeLineup is not null || awayLineup is not null, homeLineup, awayLineup));
+    }
+
+    private static TeamLineupDto? MapLineup(FixtureLineupTeam? team) =>
+        team is null
+            ? null
+            : new TeamLineupDto(
+                team.Formation,
+                team.Coach?.Name,
+                team.StartXI.Select(p => new LineupPlayerDto(p.Player.Number, p.Player.Name, p.Player.Pos)).ToList(),
+                team.Substitutes.Select(p => new LineupPlayerDto(p.Player.Number, p.Player.Name, p.Player.Pos)).ToList());
 
     private static List<PlayerStatRowDto> MapPlayerRows(FixturePlayersResponseTeam? team) =>
         team?.Players
