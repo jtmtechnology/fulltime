@@ -20,7 +20,9 @@
             {
                 <button type="button" class="alert-bell-btn @(AlertSubs.IsAlerted(Match) ? "active" : "")" @onclick="ToggleAlertAsync"
                         aria-label="@(AlertSubs.IsAlerted(Match) ? "Remove match alert" : "Add match alert")">
-                    🔔
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2Zm6-6.68V11c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.92 6 11v4.32L4 17.32V18h16v-.68l-2-2Z" />
+                    </svg>
                 </button>
             }
         </div>

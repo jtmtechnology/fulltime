@@ -318,15 +318,16 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 .live-clock { color: var(--accent); font-weight: 700; }
 .live-clock.finished { color: var(--text-muted); }
 .kickoff-row-trailing { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
+/* An inline SVG (currentColor) rather than the 🔔 emoji - the emoji renders in its own fixed
+   gold/yellow regardless of state, which doesn't match this app's actual "active" colour (the
+   green accent used everywhere else - day-pills, checkboxes, selected tabs). This way "on" reads
+   as the same green as everything else, not an unrelated one-off colour. */
 .alert-bell-btn {
-    background: none; border: none; padding: 0; cursor: pointer; font-size: 0.95rem;
-    line-height: 1; font-family: inherit;
-    /* Same glyph in both states (not 🔕, whose built-in mute-slash renders with a red circle on
-       most emoji fonts, which read as an error/warning rather than "off") - grayscale + reduced
-       opacity for "not subscribed" instead, full colour once active. */
-    filter: grayscale(1); opacity: 0.45;
+    background: none; border: none; padding: 0; cursor: pointer;
+    display: flex; align-items: center; color: var(--text-muted);
 }
-.alert-bell-btn.active { filter: none; opacity: 1; }
+.alert-bell-btn svg { width: 18px; height: 18px; display: block; }
+.alert-bell-btn.active { color: var(--accent); }
 @keyframes pulse {
     0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(57,255,136,0.5); }
     50% { opacity: 0.55; box-shadow: 0 0 0 4px rgba(57,255,136,0); }
