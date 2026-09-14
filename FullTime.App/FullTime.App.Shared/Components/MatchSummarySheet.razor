@@ -30,6 +30,7 @@
         </div>
 
         <div class="bb-tabs">
+            <button type="button" class="bb-tab @(_activeTab == "Lineups" ? "active" : "")" @onclick='() => SelectTab("Lineups")'>Lineups</button>
             @* A match reached before kickoff via its lineups (see MatchCard's EventsAvailable ||
                LineupsAvailable gate) has nothing to show on Events yet - no point offering a tab
                that would only ever say "no match events available". *@
@@ -39,7 +40,6 @@
             }
             <button type="button" class="bb-tab @(_activeTab == "Stats" ? "active" : "")" @onclick='() => SelectTab("Stats")'>Stats</button>
             <button type="button" class="bb-tab @(_activeTab == "Players" ? "active" : "")" @onclick='() => SelectTab("Players")'>Player Stats</button>
-            <button type="button" class="bb-tab @(_activeTab == "Lineups" ? "active" : "")" @onclick='() => SelectTab("Lineups")'>Lineups</button>
         </div>
 
         @if (_activeTab == "Events")
