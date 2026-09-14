@@ -320,8 +320,13 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 .kickoff-row-trailing { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
 .alert-bell-btn {
     background: none; border: none; padding: 0; cursor: pointer; font-size: 0.95rem;
-    line-height: 1; font-family: inherit; opacity: 0.85;
+    line-height: 1; font-family: inherit;
+    /* Same glyph in both states (not 🔕, whose built-in mute-slash renders with a red circle on
+       most emoji fonts, which read as an error/warning rather than "off") - grayscale + reduced
+       opacity for "not subscribed" instead, full colour once active. */
+    filter: grayscale(1); opacity: 0.45;
 }
+.alert-bell-btn.active { filter: none; opacity: 1; }
 @keyframes pulse {
     0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(57,255,136,0.5); }
     50% { opacity: 0.55; box-shadow: 0 0 0 4px rgba(57,255,136,0); }

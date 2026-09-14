@@ -17,9 +17,9 @@
             @* Always visible regardless of match status, unlike Bet Builder/Match Details below,
                which come and go - "notify me about this match" is meaningful before, during and
                after kickoff. *@
-            <button type="button" class="alert-bell-btn" @onclick="ToggleAlertAsync"
+            <button type="button" class="alert-bell-btn @(AlertSubs.IsSubscribed(Match.Id) ? "active" : "")" @onclick="ToggleAlertAsync"
                     aria-label="@(AlertSubs.IsSubscribed(Match.Id) ? "Remove match alert" : "Add match alert")">
-                @(AlertSubs.IsSubscribed(Match.Id) ? "🔔" : "🔕")
+                🔔
             </button>
         </div>
     </div>

@@ -51,8 +51,20 @@ else
     <div class="page-card">
         <h2>Favourite teams</h2>
         <p class="hint">Every match either of these teams plays gets alerts, in any competition.</p>
+        @if (_teamLeagueIds.Count > 0)
+        {
+            <div class="day-picker">
+                @foreach (var leagueId in _teamLeagueIds)
+                {
+                    <button type="button" class="day-pill @(leagueId == _selectedTeamLeagueId ? "selected" : "")"
+                            @onclick="() => _selectedTeamLeagueId = leagueId">
+                        @LeagueCatalog.Name(leagueId)
+                    </button>
+                }
+            </div>
+        }
         <div class="league-toggle-list">
-            @foreach (var team in _teams)
+            @foreach (var team in _teams.Where(t => t.LeagueId == _selectedTeamLeagueId))
             {
                 <label class="league-toggle">
                     <input type="checkbox" checked="@_favouriteTeamIds.Contains(team.TeamId)"
@@ -86,6 +98,8 @@ else
 @code {
     private AlertPreferencesDto _prefs = new(false, false, false, false, false, false);
     private List<AlertTeamDto> _teams = [];
+    private List<long> _teamLeagueIds = [];
+    private long _selectedTeamLeagueId;
     private HashSet<long> _favouriteTeamIds = [];
     private HashSet<long> _favouriteLeagueIds = [];
     private string _status = "Loading…";
@@ -97,6 +111,14 @@ else
         {
             _prefs = await Api.GetAlertPreferencesAsync();
             _teams = await Api.GetAlertTeamsAsync();
+            // Ordered to match LeagueCatalog.DisplayOrder (Premier League first, etc.) rather than
+            // however GetAlertTeamsAsync happened to return them - picking a league first only reads
+            // as a shortcut, not a randomly-ordered new list to scan, if the order is one the user
+            // already recognizes from the rest of the app (Matches' competition list, Profile's
+            // league toggles).
+            var presentLeagueIds = _teams.Select(t => t.LeagueId).ToHashSet();
+            _teamLeagueIds = LeagueCatalog.DisplayOrder.Where(presentLeagueIds.Contains).ToList();
+            _selectedTeamLeagueId = _teamLeagueIds.FirstOrDefault();
             var subscriptions = await Api.GetAlertSubscriptionsAsync();
             _favouriteTeamIds = subscriptions.FavouriteTeamIds.ToHashSet();
             _favouriteLeagueIds = subscriptions.FavouriteLeagueIds.ToHashSet();

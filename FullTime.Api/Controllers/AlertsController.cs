@@ -49,13 +49,20 @@ public class AlertsController(AppDbContext db) : ControllerBase
         var cutoff = DateTime.UtcNow.AddDays(-30);
         var recentMatches = db.Matches.Where(m => m.Status != MatchStatus.Postponed && m.KickoffTime >= cutoff);
 
-        var homeTeams = recentMatches.Select(m => new { Id = m.HomeTeamId, Name = m.HomeTeam, Logo = m.HomeTeamLogoUrl, m.LeagueId });
-        var awayTeams = recentMatches.Select(m => new { Id = m.AwayTeamId, Name = m.AwayTeam, Logo = m.AwayTeamLogoUrl, m.LeagueId });
+        var homeTeams = recentMatches.Select(m => new { Id = m.HomeTeamId, Name = m.HomeTeam, Logo = m.HomeTeamLogoUrl, m.LeagueId, m.KickoffTime });
+        var awayTeams = recentMatches.Select(m => new { Id = m.AwayTeamId, Name = m.AwayTeam, Logo = m.AwayTeamLogoUrl, m.LeagueId, m.KickoffTime });
 
         var teams = await homeTeams.Union(awayTeams).ToListAsync(ct);
         var distinctTeams = teams
-            .GroupBy(t => t.Id)
-            .Select(g => g.First())
+            // Grouped by name, not TeamId - the same real club can carry more than one TeamId across
+            // this app's several Highlightly/API-Football provider cutovers (see HANDOVER.md), so an
+            // older match synced under a since-retired ID and a newer one under the current ID both
+            // surfaced here as separate "duplicate" rows under the identical name until this fix.
+            .GroupBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+            // The most recently-seen TeamId is the one new matches will actually carry going
+            // forward (API-Football is the sole live provider now) - picking that one means
+            // favouriting this team matches future fixtures, not a dead historical ID.
+            .Select(g => g.OrderByDescending(t => t.KickoffTime).First())
             .OrderBy(t => t.Name)
             .Select(t => new AlertTeamDto(t.Id, t.Name, t.Logo, t.LeagueId))
             .ToList();
