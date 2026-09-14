@@ -10,7 +10,10 @@ namespace FullTime.Api.Controllers;
 
 public record AlertPreferencesDto(bool LineupsOut, bool Kickoff, bool HalfTime, bool Goal, bool RedCard, bool FullTime);
 public record AlertTeamDto(long TeamId, string TeamName, string? LogoUrl, long LeagueId);
-public record AlertSubscriptionsDto(List<long> FavouriteTeamIds, List<long> FavouriteLeagueIds, List<Guid> SubscribedMatchIds);
+// IncludedMatchIds/ExcludedMatchIds are the two explicit-override states a match can carry (see
+// MatchAlertSubscription.Included) - a match absent from both just follows whatever
+// FavouriteTeamIds/FavouriteLeagueIds would otherwise decide.
+public record AlertSubscriptionsDto(List<long> FavouriteTeamIds, List<long> FavouriteLeagueIds, List<Guid> IncludedMatchIds, List<Guid> ExcludedMatchIds);
 
 [ApiController]
 [Route("api/alerts")]
@@ -77,8 +80,9 @@ public class AlertsController(AppDbContext db) : ControllerBase
     {
         var teamIds = await db.FavouriteTeams.Where(f => f.UserId == CurrentUserId).Select(f => f.TeamId).ToListAsync(ct);
         var leagueIds = await db.FavouriteLeagues.Where(f => f.UserId == CurrentUserId).Select(f => f.LeagueId).ToListAsync(ct);
-        var matchIds = await db.MatchAlertSubscriptions.Where(s => s.UserId == CurrentUserId).Select(s => s.MatchId).ToListAsync(ct);
-        return Ok(new AlertSubscriptionsDto(teamIds, leagueIds, matchIds));
+        var includedMatchIds = await db.MatchAlertSubscriptions.Where(s => s.UserId == CurrentUserId && s.Included).Select(s => s.MatchId).ToListAsync(ct);
+        var excludedMatchIds = await db.MatchAlertSubscriptions.Where(s => s.UserId == CurrentUserId && !s.Included).Select(s => s.MatchId).ToListAsync(ct);
+        return Ok(new AlertSubscriptionsDto(teamIds, leagueIds, includedMatchIds, excludedMatchIds));
     }
 
     [HttpPost("favourite-teams/{teamId:long}")]
@@ -119,29 +123,38 @@ public class AlertsController(AppDbContext db) : ControllerBase
         return Ok();
     }
 
-    // Backs MatchCard's bell icon directly - a match doesn't need to belong to a favourite
-    // team/league at all for someone to toggle this on for just that one game.
+    // Backs MatchCard's bell icon directly - an explicit override in either direction, not a plain
+    // add/remove. POST forces alerts on (a match doesn't need to belong to a favourite team/league
+    // at all for someone to want just that one game); DELETE forces them off, which matters even
+    // when the match DOES involve a favourite - otherwise the only way to silence one specific game
+    // would be unfavouriting its whole team. See MatchAlertSubscription.Included.
     [HttpPost("matches/{matchId:guid}")]
-    public async Task<IActionResult> AddMatchSubscription(Guid matchId, CancellationToken ct)
+    public Task<IActionResult> AddMatchSubscription(Guid matchId, CancellationToken ct) => SetMatchOverrideAsync(matchId, included: true, ct);
+
+    [HttpDelete("matches/{matchId:guid}")]
+    public Task<IActionResult> RemoveMatchSubscription(Guid matchId, CancellationToken ct) => SetMatchOverrideAsync(matchId, included: false, ct);
+
+    private async Task<IActionResult> SetMatchOverrideAsync(Guid matchId, bool included, CancellationToken ct)
     {
         if (!await db.Matches.AnyAsync(m => m.Id == matchId, ct))
         {
             return NotFound();
         }
 
-        if (!await db.MatchAlertSubscriptions.AnyAsync(s => s.UserId == CurrentUserId && s.MatchId == matchId, ct))
+        var existing = await db.MatchAlertSubscriptions.FirstOrDefaultAsync(s => s.UserId == CurrentUserId && s.MatchId == matchId, ct);
+        if (existing is null)
         {
-            db.MatchAlertSubscriptions.Add(new MatchAlertSubscription { Id = Guid.NewGuid(), UserId = CurrentUserId, MatchId = matchId, CreatedAt = DateTime.UtcNow });
-            await db.SaveChangesAsync(ct);
+            db.MatchAlertSubscriptions.Add(new MatchAlertSubscription
+            {
+                Id = Guid.NewGuid(), UserId = CurrentUserId, MatchId = matchId, Included = included, CreatedAt = DateTime.UtcNow,
+            });
+        }
+        else
+        {
+            existing.Included = included;
         }
 
-        return Ok();
-    }
-
-    [HttpDelete("matches/{matchId:guid}")]
-    public async Task<IActionResult> RemoveMatchSubscription(Guid matchId, CancellationToken ct)
-    {
-        await db.MatchAlertSubscriptions.Where(s => s.UserId == CurrentUserId && s.MatchId == matchId).ExecuteDeleteAsync(ct);
+        await db.SaveChangesAsync(ct);
         return Ok();
     }
 

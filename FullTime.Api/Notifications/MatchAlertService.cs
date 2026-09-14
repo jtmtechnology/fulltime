@@ -10,22 +10,25 @@ namespace FullTime.Api.Notifications;
 // transition happened and calls NotifyAsync; this resolves scope + per-user preference + dedup.
 public class MatchAlertService(AppDbContext db, PushNotificationService push, ILogger<MatchAlertService> logger)
 {
-    // Interested = favourited either team, favourited the league, or individually subscribed to
-    // this exact match - a plain union (a user only needs to match one of the three), then narrowed
-    // to whoever actually has this specific alert type turned on, then narrowed again to whoever
-    // hasn't already been sent this exact (match, type) pair (SentMatchAlert's whole reason to
-    // exist - a live-sync tick runs every few seconds, so without this a goal would otherwise fire
-    // on every subsequent tick for the rest of the match).
+    // Interested = favourited either team, favourited the league, or explicitly included this exact
+    // match - UNLESS that same match has an explicit Included=false override, which wins regardless
+    // of any favourite (the only way to silence one specific game without unfavouriting its whole
+    // team - see MatchAlertSubscription's own comment). Then narrowed to whoever actually has this
+    // specific alert type turned on, then narrowed again to whoever hasn't already been sent this
+    // exact (match, type) pair (SentMatchAlert's whole reason to exist - a live-sync tick runs every
+    // few seconds, so without this a goal would otherwise fire on every subsequent tick for the rest
+    // of the match).
     // sequence distinguishes repeat occurrences of the same alert type within one match (Goal,
     // RedCard) - always 0 for the four types that only ever happen once per match. See
     // SentMatchAlert.Sequence for what each call site should pass.
     public async Task NotifyAsync(Match match, MatchAlertType type, string title, string body, int sequence = 0, CancellationToken ct = default)
     {
         var scoped = db.Users
+            .Where(u => !db.MatchAlertSubscriptions.Any(s => s.UserId == u.Id && s.MatchId == match.Id && !s.Included))
             .Where(u =>
                 db.FavouriteTeams.Any(f => f.UserId == u.Id && (f.TeamId == match.HomeTeamId || f.TeamId == match.AwayTeamId))
                 || db.FavouriteLeagues.Any(f => f.UserId == u.Id && f.LeagueId == match.LeagueId)
-                || db.MatchAlertSubscriptions.Any(s => s.UserId == u.Id && s.MatchId == match.Id))
+                || db.MatchAlertSubscriptions.Any(s => s.UserId == u.Id && s.MatchId == match.Id && s.Included))
             .Select(u => u.Id);
 
         // EF Core can't translate a dynamic/reflected property lookup (e.g. EF.Property with a

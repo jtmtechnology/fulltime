@@ -44,7 +44,9 @@ public record UpcomingMatchDto(
     string? BookmakerLogoUrl,
     bool BetBuilderAvailable,
     bool EventsAvailable,
-    bool LineupsAvailable);
+    bool LineupsAvailable,
+    long HomeTeamId,
+    long AwayTeamId);
 
 public record ConfigResponse(int RefreshIntervalSeconds);
 
@@ -99,7 +101,7 @@ public record MatchLineupsResponse(bool Available, TeamLineupDto? Home, TeamLine
 
 public record AlertPreferencesDto(bool LineupsOut, bool Kickoff, bool HalfTime, bool Goal, bool RedCard, bool FullTime);
 public record AlertTeamDto(long TeamId, string TeamName, string? LogoUrl, long LeagueId);
-public record AlertSubscriptionsDto(List<long> FavouriteTeamIds, List<long> FavouriteLeagueIds, List<Guid> SubscribedMatchIds);
+public record AlertSubscriptionsDto(List<long> FavouriteTeamIds, List<long> FavouriteLeagueIds, List<Guid> IncludedMatchIds, List<Guid> ExcludedMatchIds);
 
 public record CreateLeagueRequest(string Name);
 public record JoinLeagueRequest(string InviteCode);

@@ -31,7 +31,11 @@ public record UpcomingMatchDto(
     string? BookmakerLogoUrl,
     bool BetBuilderAvailable,
     bool EventsAvailable,
-    bool LineupsAvailable);
+    bool LineupsAvailable,
+    // Lets the client light up a match's alert bell for a favourited team/league without a
+    // separate lookup per card - see MatchAlertSubscriptions.IsAlerted.
+    long HomeTeamId,
+    long AwayTeamId);
 
 public record BetBuilderMarketDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore, decimal Price,
@@ -148,7 +152,9 @@ public class MatchesController(
                 m.OddsSnapshots.OrderByDescending(o => o.FetchedAt).Select(o => o.BookmakerLogoUrl).FirstOrDefault(),
                 m.BetBuilderMarkets.Any(),
                 m.Events.Any(),
-                m.Status != MatchStatus.Upcoming || m.KickoffTime <= lineupsCutoff))
+                m.Status != MatchStatus.Upcoming || m.KickoffTime <= lineupsCutoff,
+                m.HomeTeamId,
+                m.AwayTeamId))
             .ToListAsync(ct);
 
         return Ok(matches);

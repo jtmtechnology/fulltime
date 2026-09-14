@@ -63,9 +63,10 @@ public class MatchAlertLineupsCheckBackgroundService(
         var candidates = await db.Matches
             .Where(m => m.Status == MatchStatus.Upcoming && m.KickoffTime > now && m.KickoffTime <= windowEnd)
             .Where(m => db.Users.Any(u =>
-                (db.FavouriteTeams.Any(f => f.UserId == u.Id && (f.TeamId == m.HomeTeamId || f.TeamId == m.AwayTeamId))
+                !db.MatchAlertSubscriptions.Any(s => s.UserId == u.Id && s.MatchId == m.Id && !s.Included)
+                && (db.FavouriteTeams.Any(f => f.UserId == u.Id && (f.TeamId == m.HomeTeamId || f.TeamId == m.AwayTeamId))
                     || db.FavouriteLeagues.Any(f => f.UserId == u.Id && f.LeagueId == m.LeagueId)
-                    || db.MatchAlertSubscriptions.Any(s => s.UserId == u.Id && s.MatchId == m.Id))
+                    || db.MatchAlertSubscriptions.Any(s => s.UserId == u.Id && s.MatchId == m.Id && s.Included))
                 && db.UserAlertPreferences.Any(p => p.UserId == u.Id && p.LineupsOut)))
             .Where(m => !db.SentMatchAlerts.Any(s => s.MatchId == m.Id && s.AlertType == MatchAlertType.LineupsOut))
             .ToListAsync(ct);
