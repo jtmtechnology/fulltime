@@ -27,6 +27,7 @@ public static class MauiProgram
         builder.Services.AddScoped<ISlipStore, MauiSlipStore>();
         builder.Services.AddScoped<IActiveContextStore, MauiActiveContextStore>();
         builder.Services.AddScoped<IPushRegistrar, MauiPushRegistrar>();
+        builder.Services.AddSingleton<IBadgeService, MauiBadgeService>();
         builder.Services.AddSingleton<IAdsRemovalService, MauiAdsRemovalService>();
         builder.Services.AddSingleton<IInterstitialAdService, MauiInterstitialAdService>();
         builder.Services.AddScoped<IMatchLeaguePreferenceStore, MauiMatchLeaguePreferenceStore>();

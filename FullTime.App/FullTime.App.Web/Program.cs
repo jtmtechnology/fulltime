@@ -15,6 +15,7 @@ builder.Services.AddScoped<ILocaleProvider, WebLocaleProvider>();
 builder.Services.AddScoped<ISlipStore, WebSlipStore>();
 builder.Services.AddScoped<IActiveContextStore, WebActiveContextStore>();
 builder.Services.AddScoped<IPushRegistrar, WebPushRegistrar>();
+builder.Services.AddSingleton<IBadgeService, WebBadgeService>();
 builder.Services.AddScoped<IAdsRemovalService, WebAdsRemovalService>();
 builder.Services.AddScoped<IInterstitialAdService, WebInterstitialAdService>();
 builder.Services.AddScoped<IMatchLeaguePreferenceStore, WebMatchLeaguePreferenceStore>();

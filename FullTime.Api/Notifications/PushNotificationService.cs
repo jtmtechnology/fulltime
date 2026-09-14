@@ -42,6 +42,13 @@ public class PushNotificationService(AppDbContext db, ILogger<PushNotificationSe
                 {
                     Token = deviceToken.Token,
                     Notification = new Notification { Title = title, Body = body },
+                    // FCM only applies this to iOS deliveries, so it's harmless to send unconditionally
+                    // rather than branching on deviceToken.Platform. Without it, iOS has nothing to put
+                    // a badge count on at all - the OS reads the count straight from this field, no
+                    // client-side tracking involved. Always 1 rather than a real unread count (nothing
+                    // in this app tracks per-user unread state yet) - cleared back to 0 by
+                    // MauiBadgeService whenever the app comes to the foreground.
+                    Apns = new ApnsConfig { Aps = new Aps { Badge = 1 } },
                 }, ct);
 #pragma warning restore CS0618
                 sentCount++;
