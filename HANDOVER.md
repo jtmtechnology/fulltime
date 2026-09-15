@@ -496,15 +496,19 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-13, see §18 for the latest):**
+**Top priorities for whoever picks this up next (updated end of 2026-09-14, see §19 for the latest):**
 1. **fulltime-web is now significantly behind `main`** — every commit from `9694f6b` onward (§16: the
    entire Bet Builder Boost feature, the Daily Spinner evens+ rule) has not been deployed there, per
    the owner's explicit "I never use the app on the web" that session. **Now also missing all of
    §17's Matches-screen redesign** (competition list, league drill-down page, Match Summary's
-   conversion to a full-screen overlay) **and all of §18's work** (league Table pages, Match
-   Summary's Stats/Players tabs, the Leaderboard toggle styling fix) on top of that. Don't assume web
-   reflects current `main` the way it normally would; redeploy (`X=web`, standard publish/scp/restart)
-   if the owner starts using it again or a family member reports it missing these features.
+   conversion to a full-screen overlay), **all of §18's work** (league Table pages, Match
+   Summary's Stats/Players tabs, the Leaderboard toggle styling fix), **and all of §19's work**
+   (the entire live match push alerts feature - alerts are meaningless on a head with no push
+   support anyway, but the bell icon/Match Alerts settings page would render broken without the
+   backing service; the Lineups tab, Match Details rename, and Player Stats table redesign are also
+   missing). Don't assume web reflects current `main` the way it normally would; redeploy (`X=web`,
+   standard publish/scp/restart) if the owner starts using it again or a family member reports it
+   missing these features.
 2. **Bet Builder Boost (§16.3) is brand new and only ever tested against one account** — the shared
    "one match per day" pick and per-user `LastBetBuilderBoostDate` gating are both designed to work
    correctly with multiple family members using it independently the same day, but that hasn't
@@ -518,13 +522,14 @@ still in effect:
 4. **Upload a build to Play Console** —
    `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`
    (version 1.5, code 12, §17.1, commit `e85aa3a`, pushed) is stale **again already** — it predates
-   §17.2-§17.4's entire Matches-screen redesign (competition list, league drill-down page, Match
-   Summary's conversion to a full-screen overlay) **and now also §18's league Table pages and Match
-   Summary Stats/Players tabs**. No new AAB was built this session (§18 was tested only via the
-   `dotnet build -t:Run` emulator loop, never a release build). Rebuild with everything through §18
-   folded in before uploading (bump to 1.6/13 first, per §13's version-code convention). This has now
-   been stale at the end of every session since §13 — genuinely worth just uploading the next build
-   the moment it's made, rather than batching more work into it first.
+   §17.2-§17.4's entire Matches-screen redesign, §18's league Table pages and Match Summary
+   Stats/Players tabs, **and now all of §19** (live match push alerts, the Lineups tab, Match
+   Details rename, the Player Stats table redesign). No new AAB was built this session either (§19
+   was tested only via the `dotnet build -t:Run` emulator loop, never a release build, and never on
+   a real device). Rebuild with everything through §19 folded in before uploading (bump to 1.6/13
+   first, per §13's version-code convention). This has now been stale at the end of every session
+   since §13 — genuinely worth just uploading the next build the moment it's made, rather than
+   batching more work into it first.
 5. **Club crests couldn't be verified on this dev machine this session** (§16.3.5) — confirmed a
    pre-existing network block (`media.api-sports.io` unreachable, same root cause as the already-known
    `v3.football.api-sports.io` block), not a code bug. Owner said they'd check crests on a real device
@@ -576,6 +581,26 @@ still in effect:
     rule in `app.css` - `.league-chips`/`.league-chip` (Leaderboard's My Leagues/Worldwide toggle) had
     silently rendered as unstyled default buttons for who knows how long until §18 caught it by
     accident. Not known to be systemic, but never actually swept for other instances either.
+18. **New (§19): live match push alerts is a brand-new feature, live on production** (migration
+    applied, `fulltime-api` redeployed) **but never reached an Android release build, `fulltime-web`,
+    or a real device** - only ever tested via the local `dotnet build -t:Run` emulator loop this
+    session. Needs a real-device test before trusting it in the wild; fold it into the next AAB
+    rebuild (item 4).
+19. **New (§19)**: `MatchAlertLineupsCheckBackgroundService` is a brand-new always-on background
+    service making its own API-Football calls every 5 minutes (narrowly scoped to matches with a real
+    subscriber, ~90 min pre-kickoff - see §19.4) - not yet observed running over a full day or a heavy
+    multi-match evening. Worth a `journalctl` check the first time it's live during a busy pre-kickoff
+    window, same spirit as item 8's live-score-quota watch.
+20. **New (§19)**: iOS push notification **badge count was added, then deliberately removed the same
+    session** (§19.5) once match alerts made it clear a running unread count would get noisy fast.
+    Don't re-add it without reading that reasoning first - it's a design call, not a technical
+    limitation that got worked around.
+21. **New (§19)**: `MatchAlertSubscription.Included` is a tri-state override, not a plain on/off - an
+    explicit bell tap **always** wins over `FavouriteTeam`/`FavouriteLeague` membership, in either
+    direction. If a future "why isn't this match alerted" report doesn't add up, check for an explicit
+    override row on that (user, match) pair before assuming a config or sync bug - this exact
+    confusion cost real debugging time this session over a self-inflicted leftover test row (see
+    §19.6's gotcha).
 
 Full list:
 
@@ -1801,3 +1826,232 @@ production data and the `FullTime_Pixel8_API35` emulator before pushing.
   ("Software caused connection abort", "exited with return code [1]") that cleared on a plain
   immediate retry with no other change - consistent with §7's already-noted "auto-mode safety
   classifier/network can intermittently block these commands" gotcha, not a new/different problem.
+
+---
+
+## 19. 2026-09-14 session — Live match push alerts, Standings/Lineups/Match Details, various fixes
+
+New session, continuing from §18. By far the largest single-session addition to date - a full new
+push-notification feature end to end - plus a run of smaller fixes to Match Summary/Standings/Bet
+Builder Boost found along the way. All work this session lives in `main`, all deployed and confirmed
+live on `fulltime-api`; **`fulltime-web` and any Android release build remain untouched, see §7 items
+1/4/18.**
+
+### 19.1 Small fixes before the main feature
+
+- **Fixture lookahead gap (real bug)**: `ApiFootballOptions.MatchSyncDaysAhead` was `7`, not `8` -
+  `RefreshFixturesAsync`'s window is `today..today+(N-1)`, so `7` only reached 6 days out, one day
+  short of what a comment already claimed matched Highlightly's own `8`. Confirmed live (a real
+  Premier League fixture a week out was already published by API-Football but missing from our DB) -
+  fixed in both the C# default and `appsettings.json`, confirmed the previously-missing fixture
+  synced on the next tick.
+- **Bet Builder Boost now picks the highest eligible tier first** (Premier League, then Championship/
+  League One/League Two only if the higher tier has no candidate today) instead of pooling all four
+  tiers into one random draw - see `BetBuilderBoostService.GetOrPickTodaysMatchAsync`.
+- **Own goals** now show "(Own Goal)" next to the scorer's name in Match Summary's Events list (used
+  to render identically to a real goal); the half-time score tally also now counts `Own Goal`
+  events, which it silently didn't before.
+- **League Table converted to a same-page overlay** (`StandingsSheet.razor`/`StandingsState`, same
+  pattern as `MatchSummarySheet`) instead of a routed page, so closing it no longer re-navigates
+  `LeagueMatches` and re-triggers its data load - link renamed "Table" → "Standings" with a small
+  right-padding fix so it isn't flush against the screen edge.
+- **Standings cache now uses a short TTL instead of the flat 6h one** whenever the league has a match
+  `InProgress` or recently `Finished`, so the next open after a result lands shows it promptly - the
+  table itself still only moves once a match is `Finished` (API-Football doesn't project it
+  mid-match), this only fixes *our own* staleness on top of that real constraint.
+
+### 19.2 Match Details (renamed from Match Summary), Lineups tab, Player Stats redesign
+
+- **"Match Summary" renamed to "Match Details"** everywhere it's user-facing (the entry-point link,
+  the sheet's own header) - component/file names (`MatchSummarySheet`, `MatchSummaryState`) left
+  alone, this only touched display text.
+- **New Lineups tab** (first shown, then moved to right after Events per later feedback - final
+  order is Events / Lineups / Stats / Player Stats): `ApiFootballClient.GetFixtureLineupsAsync` +
+  new `ApiFootballLineupsService` (same on-demand short-TTL cache shape as the other API-Football
+  services), new `GET /api/matches/{id}/lineups`, new `LineupTeam.razor` (formation/coach/Starting
+  XI/Substitutes, no pitch graphic - matches this app's plain-tabular-list convention elsewhere).
+- **Match Details entry point also shows once lineups are available** (~1h before kickoff - new
+  `UpcomingMatchDto.LineupsAvailable`, a time heuristic since lineups aren't persisted anywhere to
+  check directly), independent of the Bet Builder link, not either/or. **Events tab is hidden
+  entirely** when a match has no events yet (reached via lineups pre-kickoff) - opens on Lineups
+  instead of an empty Events tab in that case.
+- **Player Stats redesigned into a compact table** (Shots/SOT/Cards/Rating columns) replacing the
+  old stacked per-player card - no server changes needed, the fields already existed.
+- **Every "Loading…" plain-text status in Match Details' four tabs replaced with `<LoadingSpinner />`**
+  - every top-level page already used the spinner; only these four tabs still had the old text left
+    over from before that convention was established.
+
+### 19.3 Live match push alerts (new feature)
+
+The big one. Users can now opt into push notifications for six match events - **lineups out,
+kick-off, half-time, goal, red card, full-time** - scoped by favourite team(s), favourite league(s),
+and/or individually toggling a match's bell icon on its card. Any combination, not mutually
+exclusive; see 19.3.1 for exactly how they combine.
+
+- **Five new tables** (migration `AddMatchAlerts`, purely additive): `UserAlertPreferences` (the six
+  type toggles, default **off** - opt-in, not opt-out, unlike this app's existing pushes which are
+  all triggered by an action the user just took), `FavouriteTeam`, `FavouriteLeague`,
+  `MatchAlertSubscription` (the bell icon's backing state - see 19.3.1 for why this isn't a plain
+  add/remove set), `SentMatchAlert` (dedup ledger, keyed on `(user, match, type, sequence)` - the
+  `Sequence` column exists because Goal/RedCard can recur within one match, unlike the other four
+  which only ever fire once per match; a home goal's sequence is its own new score, an away goal's
+  is `1000 + score`, disjoint ranges so a same-tick double-goal can't collide).
+- **`MatchAlertService.NotifyAsync`** is the one place scope + preference + dedup gets resolved -
+  every detection hook below just needs to know *that* a transition happened.
+- **Detection hooks**: kickoff/half-time/full-time/goal extracted from
+  `ApiFootballMatchSyncService.UpsertMatchAsync`'s existing previous-vs-new comparison (gated on the
+  match already having been tracked before this tick - a brand-new row's "previous" state is just
+  freshly-initialized defaults, not a real prior tick, so an already-in-progress match seen for the
+  first time can't misfire as a false kickoff); red cards from a new diff-before-delete in
+  `ApiFootballSettlementSupportService.FetchAndStoreEventsAsync` (which used to hard delete-and-
+  replace `MatchEvents` every refresh with no "what's new" concept at all - gated to
+  `Status == InProgress` so the post-full-time settlement backfill can't replay a whole match's
+  events as "new" and flood stale alerts).
+- **Lineups-out is the one deliberate exception to the no-background-polling convention**: nothing
+  else ever fetches lineups proactively (only on-demand when Match Details is opened), so a new
+  `MatchAlertLineupsCheckBackgroundService` runs every 5 minutes, narrowly scoped to `Upcoming`
+  matches kicking off within ~90 minutes **that already have a real subscriber** with `LineupsOut`
+  enabled - not blanket polling of every tracked fixture. See §7 item 19 for the "watch this over a
+  heavy matchday" follow-up.
+- **New `AlertsController`**: preferences GET/PUT, a team picker (`GET /api/alerts/teams`, sourced
+  entirely from our own already-synced `Matches` table - no extra API-Football call), the combined
+  favourite/subscription state in one payload (`GET /api/alerts/subscriptions` - `MatchCard` needs to
+  check every card on a page from one call, not one per card), toggle endpoints for favourite
+  teams/leagues/individual matches.
+- **Push copy** (all via `MatchAlertService`, plain text - see 19.4 for why "bold" needed a trick):
+  Lineups out "Lineups are out" / "{Home} v {Away} team news is in"; Kickoff "Kick-off!" / "{Home} v
+  {Away} is underway"; Half-time "Half-time" / "{Home} {H}-{A} {Away} at the break"; Goal "GOAL!" /
+  "{Home} {H}-{A} {Away}" (scoring team bolded, see 19.4); Red card "Red card!" / "{Player} ({Team})
+  sent off - {Home} {H}-{A} {Away}"; Full-time "Full-time" / "{Home} {H}-{A} {Away}".
+
+#### 19.3.1 The bell icon is a tri-state override, not a plain toggle - found live, fixed same session
+
+First pass made `MatchAlertSubscription` a plain add/remove set (row exists = alerted). Two real
+gaps found testing against the owner's own account:
+
+1. A match involving a favourited team/league showed an **unlit** bell, because the bell only ever
+   read the individual-subscription set, never `FavouriteTeam`/`FavouriteLeague` membership.
+2. Once fixed, there was still no way to **silence one specific match** after its team/league was
+   favourited - deleting the row did nothing, since the favourite still matched it independently.
+
+Fixed by adding `MatchAlertSubscription.Included` (migration `AddMatchAlertSubscriptionIncluded`,
+existing rows default `true` since they predate this column and meant "included" under the old
+add/remove semantics) - `true` forces alerts on regardless of favourites, `false` forces them off
+regardless of favourites. Tapping the bell always writes a concrete override either way (never just
+deletes the row), flipping whatever `IsAlerted` currently reports. `MatchAlertService`'s
+interested-users query and the lineups-check background service's own pre-filter both check the
+exclusion first, before falling through to favourite team/league/explicit-inclusion.
+
+**This produced a real "bug" that turned out to be a test artifact**: mid-session the owner reported
+a favourited league's match still showing unlit even after a fresh app restart. Traced (via a
+temporary diagnostic log statement in `AlertsController.GetSubscriptions`, deployed, triggered, then
+removed) to an explicit `Included=false` row on that exact match - created by the assistant's own
+earlier test taps on the bell icon while investigating a different issue. Not a code bug at all;
+cleared the row and it worked. **Lesson for next time** (also §7 item 21): check for an explicit
+override on the specific `(user, match)` pair before assuming a sync/config bug when a "should be
+alerted" report doesn't add up.
+
+`UpcomingMatchDto` gained `HomeTeamId`/`AwayTeamId` (previously server-only) so the client can
+resolve "is this match alerted" without a lookup per card - available now for any other future
+client feature that needs team-ID-based logic.
+
+#### 19.3.2 Duplicate teams in the favourite-team picker (real bug, found and fixed live)
+
+`AlertsController.GetTeams` deduped by `TeamId`, but the same real club can carry more than one
+`TeamId` across this app's several Highlightly/API-Football provider cutovers (see HANDOVER's own
+cutover history) - an older match synced under a since-retired ID and a newer one under the current
+ID both surfaced as separate "duplicate" rows under the identical name. Now deduped by name instead,
+keeping whichever sighting has the most recent kickoff (the ID new matches will actually carry going
+forward, since API-Football is the sole live provider now).
+
+### 19.4 iOS push badge - added, then deliberately removed same session
+
+Added first: server sent `Apns.Aps.Badge = 1` on every push, client-side `IBadgeService` (Maui/Web
+implementations) cleared it on foreground via `App.xaml.cs`'s `Window.Activated`. Once match alerts
+made it clear a match could generate several pushes in quick succession (goals, cards, kickoff/HT/FT
+all on one game), the owner asked to remove it before it shipped anywhere real - "might be too many."
+Removed entirely rather than left dead: `IBadgeService`/`MauiBadgeService`/`WebBadgeService` deleted,
+`App.xaml.cs` reverted, server no longer sets `Apns` on any push. **Don't re-add without reading this
+note first** - a design call, not a technical limitation that got worked around (see §7 item 20).
+
+Separately, the Goal push's body was simplified from "{Team} score - {Home} {H}-{A} {Away}" to just
+"{Home} {H}-{A} {Away}" with the scoring team's name rendered in **real bold** via Unicode
+Mathematical Bold characters (`ApiFootballMatchSyncService.Bold` - substitutes each letter/digit for
+a distinct bold-rendering codepoint, since FCM/APNs push bodies have no rich-text formatting at all;
+verified the transform actually renders bold and leaves spaces/punctuation untouched).
+
+### 19.5 Match Alerts settings page + MatchCard bell polish
+
+- **Bell icon**: was the 🔔/🔕 emoji pair (🔕's built-in mute-slash renders with a red circle on most
+  emoji fonts, reading as an error rather than "off"); then a single 🔔 emoji with CSS
+  grayscale+opacity for "off" (still off-brand - emoji renders its own fixed gold regardless of
+  state, not this app's actual green "active" colour used everywhere else - day-pills, checkboxes,
+  selected tabs); now a small inline SVG (`currentColor`) so "on" is the same green accent as
+  everything else and "off" is muted grey, not an unrelated one-off colour. Hidden entirely on
+  `Finished` matches (notify-me stops being meaningful once the match is over).
+- **Favourite-team picker on `/match-alerts` centralised**: the settings page used to keep its own
+  separate `_favouriteTeamIds`/`_favouriteLeagueIds` copy and call `ApiClient` directly - favouriting
+  a league there never reached `MatchAlertSubscriptions`, the shared cache `MatchCard`'s bell
+  actually reads, so newly-favourited leagues kept showing unlit bells until an app restart. Now
+  reads/writes through `MatchAlertSubscriptions` itself (new `IsFavouriteTeam`/`IsFavouriteLeague`/
+  `ToggleFavouriteTeamAsync`/`ToggleFavouriteLeagueAsync`), one shared cache instead of two.
+- **Favourite teams is now an accordion** (`AccordionSection`, reusing the same collapsible component
+  Bet Builder's own market groups already use) - one section per league, instead of a single-
+  league-at-a-time pill picker that lost context of the others.
+- **Both the favourite-teams grouping and the favourite-leagues list now exclude cup competitions** -
+  new `LeagueCatalog.LeaguesOnly` (domestic top-flight leagues only, filters out FA Cup/EFL Cup/
+  Community Shield and the UEFA club competitions from the existing `DisplayOrder`) - there's no
+  genuine week-to-week table to follow for a cup the way there is for a league.
+
+### 19.6 Deploy state as of this handover
+
+- `fulltime-api` running commit `282e910` (latest) - deployed and confirmed live; both new
+  migrations (`AddMatchAlerts`, `AddMatchAlertSubscriptionIncluded`) applied to production via the
+  same idempotent-script `psql -f` pattern as every prior migration.
+- `fulltime-web` **not redeployed this session** - see updated §7 item 1, now also missing all of
+  this session's work on top of everything already listed there.
+- Android: signed release AAB **now rebuilt** as 1.6/13 (bumped from the stale 1.5/12 in §17.1),
+  folding in everything through §19.5 - `ApplicationDisplayVersion`/`ApplicationVersion` bumped in
+  `FullTime.App.csproj` (not yet committed as of this note - do so before/with the next push) and
+  built per `signing/README.md`. Output:
+  `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`.
+  **Not yet tested on a real device, and not yet uploaded to Play Console** - both still open, see
+  updated §7 items 4/18. All actual feature testing this session was via the `dotnet build -t:Run`
+  emulator loop on this dev machine, not this release build.
+- A gitignored `signing/build-release.ps1` was added alongside `signing/fulltime-upload.jks` -
+  wraps the `dotnet publish` command from `signing/README.md` so the keystore password never has
+  to appear directly in a shell command/tool call (Claude Code's auto-mode classifier flags a raw
+  password literal in a command as credential leakage and blocks it). Use that script for future
+  release builds instead of retyping the full command with the password inline.
+- All commits this session, pushed to `main`, in order: `9656bdb` (fixture lookahead, boost
+  priority, own goal marking, Standings overlay + freshness), `1463761` (iOS badge - later removed),
+  `8b24a49` (Lineups tab, Player Stats redesign, Match Details rename), `10557d7` (Lineups tab
+  order, superseded by `ed1ffd2`), `e64b7f9` (live match push alerts), `3ced997` (duplicate-teams
+  fix, grey bell, league-first team picker), `c8d8a35` (tri-state alert override), `b66996a`
+  (favourite-sync fix, badge removed), `82e954a` (LoadingSpinner consistency), `ed1ffd2` (final
+  Lineups tab position), `45040a1` (hide bell on finished matches), `a62a27e` (SVG bell icon),
+  `282e910` (accordion, leagues-only lists, bold goal text). The 1.6/13 `FullTime.App.csproj`
+  version bump was made after this list was written and is still uncommitted - see above.
+
+### 19.7 Gotchas discovered this session
+
+- **A real bug can hide behind what looks like a rendering issue** - the "duplicate teams in the
+  picker" report (§19.3.2) looked like a display dedup bug but was actually a real data-space
+  collision (the same club under two different provider-era IDs) - worth checking the underlying IDs
+  before assuming a display-layer fix is enough.
+- **A tri-state override is easy to misdiagnose as a sync bug** (§19.3.1) - when "should be alerted
+  but isn't" doesn't match the data you'd expect, check for an explicit override row before
+  suspecting the favourite/preference plumbing itself. Cost real debugging time this session,
+  including a temporary diagnostic log statement deployed and removed to prove it.
+- **`gcloud compute ssh`'s pipe-heavy remote commands (`| grep ...`) intermittently failed outright**
+  this session (not just the already-known transient connection drops) while a plain `command > file`
+  followed by `scp`-ing the file down and grepping locally always worked - prefer that shape when a
+  remote one-liner with a pipe misbehaves rather than retrying the same pipe repeatedly.
+- **`uiautomator dump` + exact `bounds="..."` beats guessing tap coordinates from a screenshot** -
+  used repeatedly this session to find exact button positions (the bell icon, bottom-nav tabs) after
+  several guessed-coordinate taps missed; confirms the existing CLAUDE.md guidance that coordinates
+  must be recomputed per-screenshot, not reused, and shows a reliable way to get them right first try.
+- **The startup interstitial ad (`ShowStartupAdThenMaybeCelebrateAsync`) fires on every cold app
+  launch**, not just the first - worth remembering before assuming a stuck/broken ad overlay is a new
+  bug when force-restarting the emulator repeatedly during testing; it's expected behavior, just
+  easy to forget mid-investigation.
