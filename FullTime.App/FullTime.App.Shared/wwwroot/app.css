@@ -668,6 +668,7 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 .primary-btn {
     background: var(--accent); color: var(--accent-ink); border: none;
     padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer;
+    display: inline-block; text-decoration: none;
 }
 .primary-btn[disabled], .cancel-btn[disabled] { opacity: 0.5; }
 
