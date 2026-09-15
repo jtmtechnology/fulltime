@@ -496,19 +496,12 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-14, see §19 for the latest):**
-1. **fulltime-web is now significantly behind `main`** — every commit from `9694f6b` onward (§16: the
-   entire Bet Builder Boost feature, the Daily Spinner evens+ rule) has not been deployed there, per
-   the owner's explicit "I never use the app on the web" that session. **Now also missing all of
-   §17's Matches-screen redesign** (competition list, league drill-down page, Match Summary's
-   conversion to a full-screen overlay), **all of §18's work** (league Table pages, Match
-   Summary's Stats/Players tabs, the Leaderboard toggle styling fix), **and all of §19's work**
-   (the entire live match push alerts feature - alerts are meaningless on a head with no push
-   support anyway, but the bell icon/Match Alerts settings page would render broken without the
-   backing service; the Lineups tab, Match Details rename, and Player Stats table redesign are also
-   missing). Don't assume web reflects current `main` the way it normally would; redeploy (`X=web`,
-   standard publish/scp/restart) if the owner starts using it again or a family member reports it
-   missing these features.
+**Top priorities for whoever picks this up next (updated end of 2026-09-15, see §20 for the latest):**
+1. **`fulltime-web` is deliberately out of scope — do not flag it as stale or suggest redeploying it.**
+   The owner explicitly said "ignore fulltime-web, don't use the web app" (2026-09-15, §20) — this
+   supersedes every earlier note in this file about `fulltime-web` being behind `main`. It's had no
+   deploys since well before §16 and none are planned; Android/iOS are the only heads that matter in
+   practice. Only revisit this if the owner explicitly asks for a web redeploy.
 2. **Bet Builder Boost (§16.3) is brand new and only ever tested against one account** — the shared
    "one match per day" pick and per-user `LastBetBuilderBoostDate` gating are both designed to work
    correctly with multiple family members using it independently the same day, but that hasn't
@@ -519,14 +512,10 @@ still in effect:
    did NOT fix the stale notification icon, ruling out the local-cache theory) - if the new build's
    notification icon comes through correct, that confirms TestFlight/APNs caches icon artwork
    per-build rather than reading the live bundle.
-4. **Upload a build to Play Console** —
-   `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`
-   (version 1.5, code 12, §17.1, commit `e85aa3a`, pushed) is stale **again already** — it predates
-   §17.2-§17.4's entire Matches-screen redesign, §18's league Table pages and Match Summary
-   Stats/Players tabs, **and now all of §19** (live match push alerts, the Lineups tab, Match
-   Details rename, the Player Stats table redesign). No new AAB was built this session either (§19
-   was tested only via the `dotnet build -t:Run` emulator loop, never a release build, and never on
-   a real device). Rebuild with everything through §19 folded in before uploading (bump to 1.6/13
+4. **Upload a build to Play Console** — no AAB was built at all this session (§20). The last one made
+   (§19.6, version 1.6/13) predates every §20 change: the Settings rename + gear icon, the green
+   live-match badge, the new Yellow Card alert type, the unbolded/reworded goal push, and the iOS
+   push-sound fix. Rebuild with everything through §20 folded in before uploading (bump to 1.7/14
    first, per §13's version-code convention). This has now been stale at the end of every session
    since §13 — genuinely worth just uploading the next build the moment it's made, rather than
    batching more work into it first.
@@ -538,21 +527,20 @@ still in effect:
    both `"ApiFootball"`, deployed and verified) — Highlightly and the-odds-api are fully dormant
    rollback paths, not in active use. Don't assume `HANDOVER.md` sections written before §10 still
    describe current behavior where they talk about Highlightly being primary.
-7. **Build Phase 4 proper** (quota-alert *call-budget* parity — daily-count tracking + threshold
-   email, porting `29f05f2`'s Highlightly pattern to `ApiFootballClient`) — still genuinely open.
-   Don't confuse this with the narrower stale-InProgress-match alert added in §12.4, which is a
-   different thing (a stuck-match detector, not a call-volume tracker).
-8. **Watch `journalctl -u fulltime-api`** for real 429s now that live-score polling runs at **5s**
-   (§17.5, lowered from 10s — the account is now on 75,000 calls/day, up from Pro's 7,500, so this
-   should be very safe, but hasn't been watched over a genuinely heavy multi-league matchday yet at
-   the new cadence). Also still watching for the "Failed to re-fetch N match(es) dropped from
-   live=all" warning added in §15's resilience fix (`5b72c41`) - it has never actually fired yet, so
-   its log-and-continue path is code-reviewed but not battle-tested against a real API failure
-   mid-tick.
+7. **DONE (§20): Phase 4 quota-alert *call-budget* parity built** — `ApiFootballClient` now has its
+   own daily call counter + 80%-threshold/exhaustion emails, ported from `HighlightlyClient`'s
+   pattern, reusing the existing `ApiFootball:AlertEmail` setting (already wired for the
+   stale-InProgress watchdog). Don't confuse this with that narrower stale-InProgress-match alert
+   from §12.4, which is still a separate thing (a stuck-match detector, not a call-volume tracker).
+8. **Watch `journalctl -u fulltime-api`** for real 429s — live-score polling is still **5s** (§17.5)
+   and `LiveEventsRefreshIntervalSeconds` just dropped **45s → 10s** (§20, a ~9x increase in that one
+   call type specifically), neither has been watched over a genuinely heavy multi-league matchday yet
+   at the new cadences. The new quota-alert emails (item 7 above) are the safety net if this turns out
+   too aggressive. Also still watching for the "Failed to re-fetch N match(es) dropped from live=all"
+   warning added in §15's resilience fix (`5b72c41`) - it has never actually fired yet.
 9. **API-Football account upgraded to 75,000 calls/day** (§17.5, was Pro/7,500) — the old
-   §6.13/§11.4 "needs an upgrade before pushing cadences lower" blocker is resolved. Phase 4 (a real
-   call-budget/quota-alert tracker for `ApiFootballClient`, item 7 below) is still worth building
-   despite the new headroom, just less urgently.
+   §6.13/§11.4 "needs an upgrade before pushing cadences lower" blocker is resolved, and is what
+   made §20's 10s events-refresh cadence and item 7's quota tracker worth doing now.
 10. **Low priority**: R8/obfuscation for the Android build (§13.2) — Play Console flagged it, but the
     deadline is Feb 2027 and enabling it risks silently breaking push/ads/billing/UMP without careful
     proguard keep rules. Deferred on purpose, not forgotten.
@@ -581,11 +569,14 @@ still in effect:
     rule in `app.css` - `.league-chips`/`.league-chip` (Leaderboard's My Leagues/Worldwide toggle) had
     silently rendered as unstyled default buttons for who knows how long until §18 caught it by
     accident. Not known to be systemic, but never actually swept for other instances either.
-18. **New (§19): live match push alerts is a brand-new feature, live on production** (migration
-    applied, `fulltime-api` redeployed) **but never reached an Android release build, `fulltime-web`,
-    or a real device** - only ever tested via the local `dotnet build -t:Run` emulator loop this
-    session. Needs a real-device test before trusting it in the wild; fold it into the next AAB
-    rebuild (item 4).
+18. **Live match push alerts: raw delivery confirmed on a real device, full in-app flow still isn't.**
+    §20 sent a real test push straight through `PushNotificationService`/FCM to Dad's actual iPhone
+    (bypassing the app's own detection logic) and confirmed it arrived **with sound** - proves the
+    push-delivery pipeline and the new `Apns.Aps.Sound` fix both work end to end on real hardware.
+    What's *not* yet confirmed on a real device: the app's own alert-type detection/dedup logic firing
+    off a genuine live match transition, and the feature has still never reached an Android release
+    build or `fulltime-web` (though `fulltime-web` is now out of scope per item 1). Fold into the next
+    AAB rebuild (item 4).
 19. **New (§19)**: `MatchAlertLineupsCheckBackgroundService` is a brand-new always-on background
     service making its own API-Football calls every 5 minutes (narrowly scoped to matches with a real
     subscriber, ~90 min pre-kickoff - see §19.4) - not yet observed running over a full day or a heavy
@@ -601,6 +592,28 @@ still in effect:
     override row on that (user, match) pair before assuming a config or sync bug - this exact
     confusion cost real debugging time this session over a self-inflicted leftover test row (see
     §19.6's gotcha).
+22. **`fulltime-web` is permanently out of scope** (item 1, §20) - the owner said "ignore fulltime-web,
+    don't use the web app". Don't resurrect the old "web is behind main" framing from earlier sessions.
+23. **New (§20): a genuinely tricky Cloudflare + PNG bug, worth remembering for any future website
+    image work.** Two of the six new marketing screenshots (`FullTime.Website`) loaded fine from the
+    origin VM directly (localhost *and* the VM's public IP, bypassing Cloudflare entirely) but
+    stalled/timed out for real visitors through `https://fulltime.jtmtechnology.co.uk`. Renaming the
+    files (fresh cache key) did **not** fix it, ruling out stale-cache theories. Re-encoding the exact
+    same images as 24bpp RGB instead of 32bpp ARGB (i.e. dropping the alpha channel) fixed it
+    immediately - strongly suggests Cloudflare's own image handling (likely Polish) chokes on
+    semi-transparent PNG content from this origin, though the exact mechanism is unconfirmed (no
+    Cloudflare dashboard/API access from this session). If a future website image silently fails to
+    load despite the origin being fine, try stripping the alpha channel before assuming it's a server
+    or deploy problem.
+24. **New (§20): every push notification in this app was silent on iOS until this session** -
+    `PushNotificationService.SendToUsersAsync` never set an APNs sound at all (confirmed via a full
+    repo grep). Fixed by adding `Apns = new ApnsConfig { Aps = new Aps { Sound = "default" } }` to
+    every push, not just match alerts, since it's the one shared send path. Confirmed fixed via a real
+    test push to a real iPhone.
+25. **Match Alerts feature list is now seven types, not six** - Yellow Card was added in §20, following
+    the exact `RedCard` pattern (same diff-before-delete detection, same minute-based `Sequence`
+    dedup scheme). If anything still refers to "the six alert types" (a few older comments do), that's
+    now stale - see `MatchAlertType`/`UserAlertPreferences` for the current list.
 
 Full list:
 
@@ -2055,3 +2068,161 @@ verified the transform actually renders bold and leaves spaces/punctuation untou
   launch**, not just the first - worth remembering before assuming a stuck/broken ad overlay is a new
   bug when force-restarting the emulator repeatedly during testing; it's expected behavior, just
   easy to forget mid-investigation.
+
+---
+
+## 20. 2026-09-15 session — Match Alerts fixes, Settings rename, quota alerting, website screenshots refresh
+
+New session, continuing from §19. Picked up the two uncommitted loose ends from last session first
+(the 1.6/13 version bump and §19's own handover write-up), then four owner-requested push-alert fixes,
+a rename + icon/colour polish, a live-refresh cadence change with a new quota-alert safety net, and a
+full marketing-site refresh with real app screenshots - including a genuinely tricky Cloudflare bug
+found and fixed along the way. All work is committed to `main` and deployed; Android has no new build.
+
+### 20.1 Match Alerts: unbolded goal text, half-time trim, iOS sound, new Yellow Card type
+
+- **Goal push reworded** - was `"GOAL!"` / `"{Bold(Team)} {H}-{A} {Away}"` using Unicode Mathematical
+  Bold characters (the owner didn't like the look). Now `"GOAL ({Team})"` as the title with a plain
+  (unbolded) score as the body. The now-unused `Bold()` helper in `ApiFootballMatchSyncService.cs` was
+  deleted entirely.
+- **Half-time body no longer appends "at the break"** - just `"{Home} {H}-{A} {Away}"` now.
+- **Real bug fixed: every push notification in this app was silent on iOS**, not just match alerts -
+  confirmed via a full repo grep that `PushNotificationService.SendToUsersAsync` never set an APNs
+  sound at all. Fixed by adding `Apns = new ApnsConfig { Aps = new Aps { Sound = "default" } }` to the
+  one shared `Message` object every push goes through. Confirmed fixed via a real test push sent
+  straight through this code path (bypassing the app's own alert-detection logic, using the repo's
+  gitignored Firebase service-account key locally) to the owner's real iPhone - **arrived with sound**.
+- **New Yellow Card alert type**, threaded through the full stack following the exact `RedCard`
+  pattern end to end: `MatchAlertType.YellowCard` (appended, not inserted, so no stored-value
+  renumbering), `UserAlertPreferences.YellowCard` + new migration `AddYellowCardAlert` (applied to
+  production via the usual idempotent `psql -f` script), a `MatchAlertService` preference-switch case,
+  detection in `ApiFootballSettlementSupportService.FetchAndStoreEventsAsync` (same
+  diff-before-delete/minute-based `Sequence` dedup scheme as red cards - confirmed a second yellow
+  still only fires the existing `RedCard` path since `MapEventType` already maps it there, not a
+  double-fire), the `AlertsController`/shared-DTO plumbing, and a new "Yellow card" toggle on
+  `/match-alerts` between Goal and Red card.
+- Match Alerts is now **seven** alert types, not six (see §7 item 25).
+
+### 20.2 Settings rename, gear icon, green live-match badge
+
+- **"Profile" renamed to "Settings"** everywhere user-facing: the bottom-nav label
+  (`BottomTabBar.razor`), the page's `<PageTitle>`/`<h1>` (`Profile.razor`). Route (`/profile`) and
+  file/class name (`Profile.razor`) deliberately left alone - internal, not user-facing.
+- **Nav icon swapped from a person silhouette to a gear** (Tabler Icons' `settings` path, same outline
+  style as every other bottom-nav icon already in the app - confirmed by matching the existing
+  `ball-football` icon's path shape to identify the icon set in use).
+- **Per-league live-match-count badge on the Matches page changed from red to green**
+  (`.league-list-live` in `app.css`) - was using the shared `--danger` red, inconsistent with the match
+  card's own live dot/clock which are already the app's green `--accent`. Gave it its own
+  `--accent`/`--accent-ink` pairing (matching every other `background: var(--accent)` usage in the
+  file) rather than repointing `--danger` itself, since that variable is still genuinely used for error
+  states elsewhere (form validation, the Bet Builder loss indicator, etc.).
+
+### 20.3 Live-events refresh 45s → 10s, new API-Football quota alerting (Phase 4, done)
+
+- **`ApiFootballOptions.LiveEventsRefreshIntervalSeconds` lowered 45s → 10s** (both the C# default and
+  `appsettings.json`), for fresher Match Details live display. Sized against a worst-case estimate
+  (an 18-fixture heavy night at ~2h live each ≈ 18×(7200/10) ≈ 12,960 calls just for this call type)
+  that comfortably fits inside the account's 75,000/day budget (§17.5) alongside everything else -
+  see §7 item 8 for the "watch a real heavy matchday" follow-up this still needs.
+- **Phase 4 quota-alert parity built** (§7 item 7, was open since §6.13/§11.4): ported
+  `HighlightlyClient`'s call-counting/quota-alert-email pattern
+  (`RecordCallForQuotaTracking`/`MaybeAlertExhausted`) to `ApiFootballClient` - a daily call counter,
+  an 80%-threshold warning email, and an immediate 429/403 exhaustion email, both deduped to once per
+  UTC date. New `ApiFootballOptions.DailyCallBudget` (75000) / `AlertThresholdPercent` (80). Reuses the
+  **existing** `ApiFootballOptions.AlertEmail` (already wired for the stale-InProgress-match watchdog,
+  §12.4) rather than adding a second alert-email setting for the same destination - confirmed the
+  `ApiFootball__AlertEmail` env var was already set on the VM from that earlier work, so no VM config
+  change was needed for this to go live.
+
+### 20.4 Website: real app screenshots + new-feature copy
+
+The marketing site (`FullTime.Website`) hadn't been touched since well before most of the features
+described in HANDOVER's recent sessions existed - no screenshots anywhere, and the feature list was
+missing everything shipped since roughly §16.
+
+- **Captured six real screenshots** from the `FullTime_Pixel8_API35` emulator, logged into the
+  owner's own real account, **at the owner's explicit instruction to use real data as-is** (names,
+  balances, bet amounts): the Matches feed (with the Bet Builder Boost banner and the new green live
+  badge), Bet Builder markets, Match Details' Events tab (a real finished Leeds 4-1 Newcastle game),
+  the Championship league standings table, the new Match Alerts settings page (all seven toggles), and
+  the Worldwide Top 50 leaderboard. Cropped (removed the OS status bar/gesture bar via a small
+  System.Drawing PowerShell script, the same technique CLAUDE.md already documents for the Android
+  notification icon) and resized to 540px width.
+- **One privacy call made without being asked**: the "My Leagues" leaderboard screenshot was swapped
+  for "Worldwide Top 50" instead, because the My Leagues view exposed a **live invite code** for the
+  owner's private family league - a real credential that would let a stranger join, not just personal
+  info like names/amounts. Flagged this to the owner rather than publishing it silently.
+- **New "See it in action" screenshots section** added to `index.html` (new `.screenshots`/
+  `.screenshot-grid`/`.screenshot-card` rules in `styles.css`, following the same flex-wrap centering
+  pattern as the existing `.feature-grid`), plus three new feature cards (Bet Builder Boost, League
+  tables, Match alerts) and an expanded "Live scores" card mentioning the new match centre
+  (lineups/stats/player ratings). Also fixed a stale "add leagues from your Profile" reference to say
+  "Settings" (missed by §20.2's rename until caught here).
+- Cache-busting bumped `styles.css?v=5` → `?v=6` on all three site pages (`index.html`, `invite.html`,
+  `privacy.html`).
+
+### 20.5 A genuinely tricky bug: Cloudflare stalling on two specific PNGs
+
+Two of the six new screenshots (Standings, Leaderboard) loaded fine everywhere *except* for real
+visitors hitting the live Cloudflare-proxied domain - full diagnosis, in order:
+
+1. Confirmed the origin was never the problem two different ways: fetching the file over the VM's own
+   `localhost` (instant, complete) and fetching it from the VM's **public IP directly with a `Host`
+   header**, bypassing Cloudflare entirely (also instant, complete, every time).
+2. **First fix attempt - renaming the files for a fresh Cloudflare cache key - did not work.** The
+   brand-new filenames (guaranteed `cf-cache-status: MISS`, never seen before) stalled identically,
+   which ruled out a stale/corrupted cache entry as the cause.
+3. **Root cause found by elimination, not by inspection**: re-encoding the exact same image content as
+   24bpp RGB (no alpha channel) instead of the original 32bpp ARGB fixed it immediately - both files
+   now transfer fully in under a second through Cloudflare on a cold cache. The other four screenshots
+   happened to be effectively opaque already, which is presumably why they were never affected.
+   Strong suspicion is Cloudflare's own image-optimization feature (Polish) mishandling
+   semi-transparent PNG content from this origin, but this is **unconfirmed** - there's no Cloudflare
+   dashboard/API access from this session to verify the exact mechanism.
+4. VM load was also checked and ruled out along the way (`uptime`: load average 0.03, essentially
+   idle) before the Cloudflare-specific diagnosis was reached.
+
+See §7 item 23 - worth remembering for any future website image that mysteriously fails to load
+despite the origin clearly being healthy.
+
+### 20.6 Deploy state as of this handover
+
+- `fulltime-api` running commit `5a59355` (latest) - redeployed twice this session (once for the
+  Match Alerts fixes + Yellow Card migration, once for the 10s refresh + quota alerting) - confirmed
+  live via `/api/config`. Migration `AddYellowCardAlert` applied to production.
+- `fulltime-website` running commit `a56d50b` (latest, the alpha-channel fix) - redeployed three times
+  this session (initial screenshots + copy, an intermediate rename attempt that didn't fix the
+  Cloudflare issue, then the real fix) - all six screenshots confirmed loading fully and fast
+  (under 250ms each) through the live Cloudflare-proxied domain as of this handover.
+- `fulltime-web` - **not redeployed, and per §7 item 1 this is now permanently out of scope**, not an
+  open item to track going forward.
+- Android - **no new build this session**; still the stale 1.6/13 AAB from §19.6, now also missing
+  everything in §20. See updated §7 item 4.
+- All commits this session, pushed to `main`, in order: `05b395f` (Match Alerts: yellow card, goal
+  text, half-time trim, iOS sound), `f63d17b` (1.6/13 version bump + §19 handover write-up, both
+  left uncommitted last session), `bced39f` (Settings rename, gear icon, green live badge), `5a59355`
+  (10s live-events refresh, API-Football quota alerting), `e3956f1` (website screenshots + new feature
+  copy), `524a0cd` (screenshot rename attempt - superseded by the next commit), `a56d50b` (the real
+  Cloudflare/alpha-channel fix).
+- No DB schema changes beyond the single additive `AddYellowCardAlert` migration.
+
+### 20.7 Gotchas discovered this session
+
+- **A slow/stalling asset through a CDN doesn't mean the origin is slow** - always test the origin
+  directly (localhost, then public IP bypassing the CDN with a `Host` header) before assuming a VM
+  resource problem. This session's first instinct (VM under load from burst testing) was wrong; the
+  VM was confirmed idle both times.
+- **A CDN cache-key rename is a good test for "is this a stale cache" but proves nothing else** - it
+  ruled out one theory here and cost real time before the actual cause (PNG alpha channel) was found
+  by systematically changing one variable (the image encoding) rather than the delivery mechanism.
+- **Every push notification in this codebase was silently missing an APNs sound setting** - worth
+  checking any other notification-sending code (this app has only the one shared `PushNotificationService`
+  path, so nothing else to check here, but worth remembering as a category of bug for future providers).
+- **`Server: cloudflare` and `cf-cache-status` response headers are the fastest way to tell whether a
+  slow load is origin-side or CDN-side** - `HIT` with a still-slow/incomplete transfer means the
+  origin is provably not involved.
+- Device push tokens and league invite codes are both real credentials, not just personal data - when
+  an owner says "use real data as-is" for screenshots, that covers names/amounts but not live
+  credentials that would let someone else take an action (join a private league, in this case). Worth
+  a second look at any screenshot before publishing, even under an explicit "use real data" approval.
