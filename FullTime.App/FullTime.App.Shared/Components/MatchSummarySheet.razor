@@ -133,7 +133,7 @@
                         @PlayerStatsColumnHeader
                         @foreach (var p in _homePlayers)
                         {
-                            <PlayerStatRow Player="p" />
+                            <PlayerStatRow Player="p" IsHighest="_highestRatedPlayerIds.Contains(p.PlayerId)" IsLowest="_lowestRatedPlayerIds.Contains(p.PlayerId)" />
                         }
                     </div>
                 }
@@ -144,7 +144,7 @@
                         @PlayerStatsColumnHeader
                         @foreach (var p in _awayPlayers)
                         {
-                            <PlayerStatRow Player="p" />
+                            <PlayerStatRow Player="p" IsHighest="_highestRatedPlayerIds.Contains(p.PlayerId)" IsLowest="_lowestRatedPlayerIds.Contains(p.PlayerId)" />
                         }
                     </div>
                 }
@@ -207,6 +207,13 @@
     private Guid? _playersLoadedForMatchId;
     private List<PlayerStatRowDto> _homePlayers = [];
     private List<PlayerStatRowDto> _awayPlayers = [];
+
+    // Match-wide (not per-team) - highlights the single standout and single worst performer of the
+    // whole game, like a Man of the Match badge, rather than a fixed rating threshold that marks
+    // half a beaten team red regardless of how the other side did. Ties (2+ players sharing the
+    // exact top/bottom rating) all get highlighted, not just the first found.
+    private HashSet<long> _highestRatedPlayerIds = [];
+    private HashSet<long> _lowestRatedPlayerIds = [];
 
     private bool _lineupsLoading;
     private string? _lineupsError;
@@ -306,12 +313,15 @@
             var response = await Api.GetPlayerStatsAsync(matchId);
             _homePlayers = response.Home;
             _awayPlayers = response.Away;
+            (_highestRatedPlayerIds, _lowestRatedPlayerIds) = RatingExtremes(_homePlayers, _awayPlayers);
             _playersLoadedForMatchId = matchId;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _homePlayers = [];
             _awayPlayers = [];
+            _highestRatedPlayerIds = [];
+            _lowestRatedPlayerIds = [];
             _playersError = ex.Message;
         }
         finally
@@ -349,6 +359,35 @@
             _statsLoading = false;
             await InvokeAsync(StateHasChanged);
         }
+    }
+
+    // No highlight at all when every rated player shares the same value (e.g. only one player has
+    // a rating yet, mid-match) - "highest" and "lowest" would otherwise both resolve to the same
+    // player, marking them green and red at once.
+    private static (HashSet<long> Highest, HashSet<long> Lowest) RatingExtremes(
+        List<PlayerStatRowDto> home, List<PlayerStatRowDto> away)
+    {
+        var rated = home.Concat(away)
+            .Select(p => (p.PlayerId, Rating: double.TryParse(p.Rating, out var r) ? (double?)r : null))
+            .Where(p => p.Rating is not null)
+            .Select(p => (p.PlayerId, Rating: p.Rating!.Value))
+            .ToList();
+
+        if (rated.Count == 0)
+        {
+            return ([], []);
+        }
+
+        var max = rated.Max(p => p.Rating);
+        var min = rated.Min(p => p.Rating);
+        if (max == min)
+        {
+            return ([], []);
+        }
+
+        return (
+            rated.Where(p => p.Rating == max).Select(p => p.PlayerId).ToHashSet(),
+            rated.Where(p => p.Rating == min).Select(p => p.PlayerId).ToHashSet());
     }
 
     private static double HomeBarPercent(MatchStatRowDto row)

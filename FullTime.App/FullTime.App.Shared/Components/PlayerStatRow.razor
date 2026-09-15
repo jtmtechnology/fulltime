@@ -21,7 +21,7 @@
     </span>
     @if (Player.Rating is { } rating)
     {
-        <span class="player-stats-stat player-stats-rating @RatingClass(rating)">@rating</span>
+        <span class="player-stats-stat player-stats-rating @RatingClass">@rating</span>
     }
     else
     {
@@ -32,11 +32,11 @@
 @code {
     [Parameter, EditorRequired] public PlayerStatRowDto Player { get; set; } = default!;
 
-    // Loosely mirrors typical match-rating colour conventions (>=7.5 good, <6 poor) - a
-    // non-numeric/missing rating (a player who came on too late to be rated yet) falls back to the
-    // neutral shade rather than guessing.
-    private static string RatingClass(string rating) =>
-        double.TryParse(rating, out var r)
-            ? r switch { >= 7.5 => "rating-high", < 6 => "rating-low", _ => "rating-mid" }
-            : "rating-mid";
+    // Whether this player holds the single highest/lowest rating across the whole match (both
+    // teams) - computed once by MatchSummarySheet from every rated player, not a fixed threshold,
+    // so this row has no way to judge that on its own. Ties all get the same highlight.
+    [Parameter] public bool IsHighest { get; set; }
+    [Parameter] public bool IsLowest { get; set; }
+
+    private string RatingClass => IsHighest ? "rating-high" : IsLowest ? "rating-low" : "rating-mid";
 }
