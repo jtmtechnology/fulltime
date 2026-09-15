@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullTime.Api.Controllers;
 
-public record AlertPreferencesDto(bool LineupsOut, bool Kickoff, bool HalfTime, bool Goal, bool RedCard, bool FullTime);
+public record AlertPreferencesDto(bool LineupsOut, bool Kickoff, bool HalfTime, bool Goal, bool RedCard, bool FullTime, bool YellowCard);
 public record AlertTeamDto(long TeamId, string TeamName, string? LogoUrl, long LeagueId);
 // IncludedMatchIds/ExcludedMatchIds are the two explicit-override states a match can carry (see
 // MatchAlertSubscription.Included) - a match absent from both just follows whatever
@@ -37,6 +37,7 @@ public class AlertsController(AppDbContext db) : ControllerBase
         prefs.Goal = request.Goal;
         prefs.RedCard = request.RedCard;
         prefs.FullTime = request.FullTime;
+        prefs.YellowCard = request.YellowCard;
         await db.SaveChangesAsync(ct);
         return Ok(ToDto(prefs));
     }
@@ -172,7 +173,7 @@ public class AlertsController(AppDbContext db) : ControllerBase
     }
 
     private static AlertPreferencesDto ToDto(UserAlertPreferences p) =>
-        new(p.LineupsOut, p.Kickoff, p.HalfTime, p.Goal, p.RedCard, p.FullTime);
+        new(p.LineupsOut, p.Kickoff, p.HalfTime, p.Goal, p.RedCard, p.FullTime, p.YellowCard);
 
     private Guid CurrentUserId =>
         Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);

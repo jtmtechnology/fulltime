@@ -99,7 +99,7 @@ public record LineupPlayerDto(int? Number, string Name, string? Position);
 public record TeamLineupDto(string? Formation, string? CoachName, List<LineupPlayerDto> StartingXI, List<LineupPlayerDto> Substitutes);
 public record MatchLineupsResponse(bool Available, TeamLineupDto? Home, TeamLineupDto? Away);
 
-public record AlertPreferencesDto(bool LineupsOut, bool Kickoff, bool HalfTime, bool Goal, bool RedCard, bool FullTime);
+public record AlertPreferencesDto(bool LineupsOut, bool Kickoff, bool HalfTime, bool Goal, bool RedCard, bool FullTime, bool YellowCard);
 public record AlertTeamDto(long TeamId, string TeamName, string? LogoUrl, long LeagueId);
 public record AlertSubscriptionsDto(List<long> FavouriteTeamIds, List<long> FavouriteLeagueIds, List<Guid> IncludedMatchIds, List<Guid> ExcludedMatchIds);
 

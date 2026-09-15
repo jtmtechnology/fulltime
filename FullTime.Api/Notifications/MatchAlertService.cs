@@ -44,6 +44,7 @@ public class MatchAlertService(AppDbContext db, PushNotificationService push, IL
             MatchAlertType.Goal => scoped.Where(id => db.UserAlertPreferences.Any(p => p.UserId == id && p.Goal)),
             MatchAlertType.RedCard => scoped.Where(id => db.UserAlertPreferences.Any(p => p.UserId == id && p.RedCard)),
             MatchAlertType.FullTime => scoped.Where(id => db.UserAlertPreferences.Any(p => p.UserId == id && p.FullTime)),
+            MatchAlertType.YellowCard => scoped.Where(id => db.UserAlertPreferences.Any(p => p.UserId == id && p.YellowCard)),
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
         };
 

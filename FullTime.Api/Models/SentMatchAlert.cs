@@ -17,13 +17,14 @@ public class SentMatchAlert
     public MatchAlertType AlertType { get; set; }
 
     // Kickoff/HalfTime/FullTime/LineupsOut only ever happen once per match, so 0 is enough to dedup
-    // them. Goal and RedCard can happen repeatedly in the same match, so the (user, match, type)
-    // triple alone isn't a fine enough key - it would let the very first goal's dedup row silently
-    // block every later goal in the same match too. Goal uses the running total goal count at the
-    // moment it's detected (HomeScore+AwayScore, always increasing, so always a fresh value per
-    // goal); RedCard uses the event's own minute (two red cards in the exact same minute would
-    // collide and the second would be silently skipped - an accepted, vanishingly rare edge case
-    // rather than tracking a separate per-event ID API-Football doesn't provide anyway).
+    // them. Goal, RedCard and YellowCard can happen repeatedly in the same match, so the
+    // (user, match, type) triple alone isn't a fine enough key - it would let the very first goal's
+    // dedup row silently block every later goal in the same match too. Goal uses the running total
+    // goal count at the moment it's detected (HomeScore+AwayScore, always increasing, so always a
+    // fresh value per goal); RedCard/YellowCard use the event's own minute (two cards of the same
+    // type in the exact same minute would collide and the second would be silently skipped - an
+    // accepted, vanishingly rare edge case rather than tracking a separate per-event ID API-Football
+    // doesn't provide anyway).
     public int Sequence { get; set; }
 
     public DateTime SentAt { get; set; }

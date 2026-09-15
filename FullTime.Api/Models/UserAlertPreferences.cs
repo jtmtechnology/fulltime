@@ -1,7 +1,7 @@
 namespace FullTime.Api.Models;
 
 // One row per user, created lazily the first time AlertsController.GetPreferences is called for
-// them (most users will never touch this feature) - which of the six alert types they want to
+// them (most users will never touch this feature) - which of the alert types they want to
 // receive at all, independent of *which* matches (see FavouriteTeam/FavouriteLeague/
 // MatchAlertSubscription for that side). All default false: this is a brand-new push channel
 // nobody asked for yet, unlike the app's existing pushes which are all triggered by an action the
@@ -18,4 +18,5 @@ public class UserAlertPreferences
     public bool Goal { get; set; }
     public bool RedCard { get; set; }
     public bool FullTime { get; set; }
+    public bool YellowCard { get; set; }
 }

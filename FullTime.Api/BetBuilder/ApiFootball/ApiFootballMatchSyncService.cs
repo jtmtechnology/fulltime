@@ -315,7 +315,7 @@ public class ApiFootballMatchSyncService(
         {
             await matchAlerts.NotifyAsync(
                 match, MatchAlertType.HalfTime, "Half-time",
-                $"{match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam} at the break",
+                $"{match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
                 sequence: 0, ct: ct);
         }
 
@@ -337,43 +337,18 @@ public class ApiFootballMatchSyncService(
         if ((match.HomeScore ?? 0) > (previousHomeScore ?? 0))
         {
             await matchAlerts.NotifyAsync(
-                match, MatchAlertType.Goal, "GOAL!",
-                $"{Bold(match.HomeTeam)} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
+                match, MatchAlertType.Goal, $"GOAL ({match.HomeTeam})",
+                $"{match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
                 sequence: match.HomeScore ?? 0, ct: ct);
         }
 
         if ((match.AwayScore ?? 0) > (previousAwayScore ?? 0))
         {
             await matchAlerts.NotifyAsync(
-                match, MatchAlertType.Goal, "GOAL!",
-                $"{match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {Bold(match.AwayTeam)}",
+                match, MatchAlertType.Goal, $"GOAL ({match.AwayTeam})",
+                $"{match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
                 sequence: 1000 + (match.AwayScore ?? 0), ct: ct);
         }
-    }
-
-    // Push notifications have no rich-text formatting (FCM/APNs both render the body as plain
-    // text), so "bold" here means substituting each letter/digit for its Unicode Mathematical
-    // Bold codepoint - a different character that just happens to render bold in any Unicode-aware
-    // renderer, not a formatting instruction. Codepoints above U+FFFF need a surrogate pair in a
-    // .NET string, hence ConvertFromUtf32 rather than a plain char cast. Anything without a bold
-    // variant (spaces, apostrophes, hyphens - real club names like "Nott'm Forest" have both)
-    // passes through unchanged.
-    private static string Bold(string text)
-    {
-        var sb = new System.Text.StringBuilder();
-        foreach (var c in text)
-        {
-            int? codepoint = c switch
-            {
-                >= 'A' and <= 'Z' => 0x1D400 + (c - 'A'),
-                >= 'a' and <= 'z' => 0x1D41A + (c - 'a'),
-                >= '0' and <= '9' => 0x1D7CE + (c - '0'),
-                _ => null,
-            };
-            sb.Append(codepoint is { } cp ? char.ConvertFromUtf32(cp) : c.ToString());
-        }
-
-        return sb.ToString();
     }
 
     // API-Football's short status codes. Confirmed live: NS, 1H, HT, 2H, FT. The rest (ET, P, PEN,

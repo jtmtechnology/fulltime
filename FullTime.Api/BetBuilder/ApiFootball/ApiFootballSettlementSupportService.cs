@@ -207,6 +207,20 @@ public class ApiFootballSettlementSupportService(
                     $"{redCard.PlayerName} ({teamName}) sent off - {match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
                     sequence: ParseMinuteForSequence(redCard.Minute), ct: ct);
             }
+
+            // A second yellow already maps to "Red Card" in MapEventType above, so it only ever
+            // fires the RedCard alert, never double-fires here too.
+            var newYellowCards = newRows.Where(r =>
+                r.Type == "Yellow Card" && !previousKeySet.Contains((r.Team, r.Minute, r.Type, r.PlayerName)));
+
+            foreach (var yellowCard in newYellowCards)
+            {
+                var teamName = yellowCard.Team == SelectionSide.Home ? match.HomeTeam : match.AwayTeam;
+                await matchAlerts.NotifyAsync(
+                    match, MatchAlertType.YellowCard, "Yellow card",
+                    $"{yellowCard.PlayerName} ({teamName}) booked - {match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
+                    sequence: ParseMinuteForSequence(yellowCard.Minute), ct: ct);
+            }
         }
 
         return events;

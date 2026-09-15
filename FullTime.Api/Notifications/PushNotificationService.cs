@@ -42,6 +42,10 @@ public class PushNotificationService(AppDbContext db, ILogger<PushNotificationSe
                 {
                     Token = deviceToken.Token,
                     Notification = new Notification { Title = title, Body = body },
+                    // Without an explicit Aps.Sound, APNs delivers the alert silently — FCM's
+                    // Notification block alone doesn't imply a sound the way Android's default
+                    // notification channel does.
+                    Apns = new ApnsConfig { Aps = new Aps { Sound = "default" } },
                 }, ct);
 #pragma warning restore CS0618
                 sentCount++;

@@ -40,6 +40,10 @@ else
                 <span>Goal</span>
             </label>
             <label class="league-toggle">
+                <input type="checkbox" checked="@_prefs.YellowCard" @onchange="e => SetPreferenceAsync(p => p with { YellowCard = (bool)e.Value! })" />
+                <span>Yellow card</span>
+            </label>
+            <label class="league-toggle">
                 <input type="checkbox" checked="@_prefs.RedCard" @onchange="e => SetPreferenceAsync(p => p with { RedCard = (bool)e.Value! })" />
                 <span>Red card</span>
             </label>
@@ -92,7 +96,7 @@ else
 }
 
 @code {
-    private AlertPreferencesDto _prefs = new(false, false, false, false, false, false);
+    private AlertPreferencesDto _prefs = new(false, false, false, false, false, false, false);
     private List<AlertTeamDto> _teams = [];
     private List<long> _teamLeagueIds = [];
     private readonly HashSet<string> _expandedTeamLeagues = [];

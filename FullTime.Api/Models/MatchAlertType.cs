@@ -11,5 +11,6 @@ public enum MatchAlertType
     HalfTime,
     Goal,
     RedCard,
-    FullTime
+    FullTime,
+    YellowCard
 }
