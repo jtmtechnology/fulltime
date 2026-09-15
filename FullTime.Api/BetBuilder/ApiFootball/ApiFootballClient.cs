@@ -1,19 +1,34 @@
 using System.Net;
+using FullTime.Api.Auth;
 using FullTime.Api.BetBuilder.Dtos;
+using Microsoft.Extensions.Options;
 
 namespace FullTime.Api.BetBuilder.ApiFootball;
 
 // Wraps the direct api-sports.io dashboard API (x-apisports-key header, not RapidAPI — see
 // ApiFootballOptions). Carries over HighlightlyClient's quota-cooldown/throttle wrapper since
 // production (unlike the manual-trigger-only FullTime.Api.Sandbox this was validated in) needs the
-// same protection against one throttle response turning into repeated hammering.
-public class ApiFootballClient(HttpClient httpClient, ILogger<ApiFootballClient> logger)
+// same protection against one throttle response turning into repeated hammering. Also carries over
+// its call-counting/quota-alert-email pattern (RecordCallForQuotaTracking/MaybeAlertExhausted) -
+// API-Football's account being higher-budget (75,000/day vs Highlightly's 25,000/day) doesn't make
+// this provider immune to silent exhaustion, and it went unwatched (no alerting at all) until now.
+public class ApiFootballClient(
+    HttpClient httpClient, IOptions<ApiFootballOptions> options, IEmailSender emailSender, ILogger<ApiFootballClient> logger)
 {
     private static readonly TimeSpan MinRequestInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan QuotaCooldown = TimeSpan.FromMinutes(15);
     private readonly SemaphoreSlim _throttleGate = new(1, 1);
     private DateTime _lastRequestUtc = DateTime.MinValue;
     private static DateTime _quotaExhaustedUntilUtc = DateTime.MinValue;
+
+    // Self-tracked call counter for quota alerting - same reasoning as HighlightlyClient's own
+    // counter (see there for why this is a proxy, not a billing-accurate meter): static/shared
+    // across every ApiFootballClient instance, resets on the first call of a new UTC date or on
+    // process restart.
+    private static int _dailyCallCount;
+    private static DateOnly _countDate = DateOnly.MinValue;
+    private static DateOnly? _thresholdAlertSentDate;
+    private static DateOnly? _exhaustionAlertSentDate;
 
     // /fixtures?live=all — confirmed via a real call 2026-09-06: returns every live match worldwide
     // in a single request, unlike Highlightly's one-call-per-league model. Filter down to tracked
@@ -110,6 +125,7 @@ public class ApiFootballClient(HttpClient httpClient, ILogger<ApiFootballClient>
         }
 
         await WaitForThrottleSlotAsync(ct);
+        RecordCallForQuotaTracking();
         using var response = await httpClient.GetAsync(requestUri, ct);
         var isThrottled = response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.Forbidden;
         if (!isThrottled)
@@ -125,8 +141,80 @@ public class ApiFootballClient(HttpClient httpClient, ILogger<ApiFootballClient>
         logger.LogWarning(
             "Throttled ({StatusCode}) on {RequestUri} - treating as quota exhaustion, cooling down all API-Football calls until {Until:O}",
             response.StatusCode, requestUri, _quotaExhaustedUntilUtc);
+        MaybeAlertExhausted();
         response.EnsureSuccessStatusCode();
         return default;
+    }
+
+    // Called right before every real outbound request (not calls skipped by the cooldown gate
+    // above, which never reach the provider) - see HighlightlyClient.RecordCallForQuotaTracking for
+    // the full reasoning, ported unchanged.
+    private void RecordCallForQuotaTracking()
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (today != _countDate)
+        {
+            _countDate = today;
+            _dailyCallCount = 0;
+        }
+
+        var count = Interlocked.Increment(ref _dailyCallCount);
+        var opts = options.Value;
+        var threshold = opts.DailyCallBudget * opts.AlertThresholdPercent / 100;
+
+        if (count < threshold || _thresholdAlertSentDate == today)
+        {
+            return;
+        }
+
+        _thresholdAlertSentDate = today;
+        SendAlertEmail(
+            "FullTime: API-Football quota approaching daily limit",
+            $"API-Football has made {count} calls today (UTC {today:yyyy-MM-dd}), crossing the " +
+            $"{opts.AlertThresholdPercent}% warning threshold of its {opts.DailyCallBudget}/day budget. " +
+            "No outage yet, but live scores/odds may stop updating if the account actually hits its cap.");
+    }
+
+    // Fires the moment we get an actual 429/403 from the provider - ported unchanged from
+    // HighlightlyClient.MaybeAlertExhausted.
+    private void MaybeAlertExhausted()
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (_exhaustionAlertSentDate == today)
+        {
+            return;
+        }
+
+        _exhaustionAlertSentDate = today;
+        SendAlertEmail(
+            "FullTime: API-Football quota exhausted",
+            $"API-Football just returned a 429/403 (UTC {DateTime.UtcNow:yyyy-MM-dd HH:mm}) and calls are " +
+            $"now cooling down until {_quotaExhaustedUntilUtc:yyyy-MM-dd HH:mm} UTC. Live scores and odds " +
+            "have stopped updating for every tracked league until this clears.");
+    }
+
+    // Fire-and-forget by design: a failed alert email must never break the sync loop that
+    // triggered it. IEmailSender is a singleton (see Program.cs), so it's safe to use from this
+    // background context with no request-scoped dependencies involved.
+    private void SendAlertEmail(string subject, string body)
+    {
+        var toEmail = options.Value.AlertEmail;
+        if (string.IsNullOrWhiteSpace(toEmail))
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await emailSender.SendAsync(toEmail, subject, body);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to send API-Football quota alert email to {ToEmail}", toEmail);
+            }
+        });
     }
 
     private async Task WaitForThrottleSlotAsync(CancellationToken ct)

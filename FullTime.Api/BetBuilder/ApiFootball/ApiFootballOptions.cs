@@ -38,12 +38,19 @@ public class ApiFootballOptions
 
     // How often RefreshLiveMatchEventsAsync re-fetches events for InProgress matches, for Match
     // Summary's live display. Unlike live-score sync (one fixtures?live=all call regardless of
-    // match count), this is genuinely one call PER live match PER tick - deliberately set slower
-    // than Highlightly's ~30s equivalent to keep worst-case cost (several concurrent live matches
-    // on a busy Saturday) further from Pro's 7,500/day ceiling. Settlement itself doesn't depend on
-    // this cadence - only the live display does - so a slower value here is a pure quota/freshness
-    // tradeoff, safe to raise once the account is upgraded.
-    public int LiveEventsRefreshIntervalSeconds { get; set; } = 45;
+    // match count), this is genuinely one call PER live match PER tick, so it's the dominant cost
+    // in the quota math below. Lowered 45s -> 10s once the account moved to 75,000/day (worst-case
+    // estimate: an 18-fixture heavy night at ~2h live each is ~18*(7200/10) = 12,960 calls just for
+    // this, comfortably inside budget alongside live-score sync + everything else - see
+    // DailyCallBudget/AlertThresholdPercent below for the safety net if that estimate is wrong).
+    public int LiveEventsRefreshIntervalSeconds { get; set; } = 10;
+
+    // The account's actual daily cap (75,000/day, upgraded from Pro's 7,500 - see HANDOVER.md).
+    public int DailyCallBudget { get; set; } = 75000;
+
+    // RecordCallForQuotaTracking fires the proactive warning email once the day's call count
+    // crosses this percentage of DailyCallBudget - same 80% headroom Highlightly's alerting uses.
+    public int AlertThresholdPercent { get; set; } = 80;
 
     // Bet365's api-sports.io bookmaker ID (confirmed live 2026-09-10: {"id":8,"name":"Bet365"}) -
     // same choice HighlightlyOptions.BookmakerName ("bet365") already made, for the richest
@@ -75,6 +82,9 @@ public class ApiFootballOptions
     public int StaleInProgressMinutes { get; set; } = 210;
 
     // Blank by default (checked-in secret-like placeholder, same convention as
-    // Highlightly:AlertEmail) - set via ApiFootball__AlertEmail on the VM.
+    // Highlightly:AlertEmail) - set via ApiFootball__AlertEmail on the VM. Shared by two distinct
+    // alert sources: ApiFootballMatchSyncService's stale-InProgress-match detector (§12.4-style,
+    // a stuck-match watchdog) and ApiFootballClient's call-count/quota alerting below (a call-volume
+    // tracker) - different concerns, same destination address, no reason for two separate settings.
     public string AlertEmail { get; set; } = "";
 }
