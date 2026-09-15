@@ -78,14 +78,14 @@ else
         </div>
     }
 
-    <div class="bb-toggle-row">
-        <span>Dynamic odds</span>
-        <button type="button" class="@("bb-toggle" + (_dynamicOdds ? " on" : ""))"
-            aria-label="Dynamic odds" aria-pressed="@_dynamicOdds" @onclick="() => _dynamicOdds = !_dynamicOdds"></button>
-    </div>
-
     @if (_activeTab == "Popular")
     {
+        <div class="bb-toggle-row">
+            <span>Dynamic odds</span>
+            <button type="button" class="@("bb-toggle" + (_dynamicOdds ? " on" : ""))"
+                aria-label="Dynamic odds" aria-pressed="@_dynamicOdds" @onclick="() => _dynamicOdds = !_dynamicOdds"></button>
+        </div>
+
         @if (_matchResult is { } matchResult)
         {
             <AccordionSection Id="matchresult" Title="Match result" Expanded="_expanded" OnToggle="ToggleSection">
@@ -302,7 +302,7 @@ else
                                                     if (row.PricesByLine.TryGetValue(line, out var price))
                                                     {
                                                         var pick = new SlipPick(group.MarketType, line, "Over", price, PlayerName: row.PlayerName);
-                                                        <td class="@PlayerTableCellClass(pick)" @onclick="() => TogglePick(pick)">@OddsCell.FormatOdds(DisplayOdds(pick))</td>
+                                                        <td class="@(IsSelected(pick) ? "picked" : "")" @onclick="() => TogglePick(pick)">@OddsCell.FormatOdds(price)</td>
                                                     }
                                                     else
                                                     {
@@ -325,7 +325,7 @@ else
                                             <LogoImg Src="@teamGroup.LogoUrl" CssClass="player-team-logo" Alt="@teamGroup.Team" />
                                             <span>@opt.Label</span>
                                         </span>
-                                        <span class="@PriceClass(opt.Pick)">@OddsCell.FormatOdds(DisplayOdds(opt.Pick))</span>
+                                        <span class="odds-list-price">@OddsCell.FormatOdds(opt.Pick.Odds)</span>
                                     </div>
                                 }
                             </div>
@@ -402,9 +402,9 @@ else
 
     private readonly HashSet<string> _expanded = [];
 
-    // Applies on both tabs - every priced cell on Popular and Player Bets routes its displayed
-    // price through DisplayOdds. Off by default so every cell still shows its own real price
-    // unless the owner opts in.
+    // Popular-tab-only - the toggle itself is hidden on Player Bets (see the "Popular" tab check
+    // around the toggle's markup) and DynamicPreviewClass below only applies while Popular is
+    // active, so a player-prop price never changes even if this is left on from a previous visit.
     private bool _dynamicOdds;
 
     [Parameter] public Guid MatchId { get; set; }
@@ -812,10 +812,10 @@ else
             .OrderBy(l => l.Line);
 
     // Marks an unselected cell/price as showing DisplayOdds' "what if" preview rather than its own
-    // real price, while Dynamic Odds is on - applies on both tabs, since every price on both is
-    // routed through DisplayOdds.
+    // real price, while Dynamic Odds is on - Popular-tab-only (see DisplayOdds), so gated on the
+    // active tab too in case this is left on from a previous visit to Popular.
     private string DynamicPreviewClass(SlipPick pick) =>
-        _dynamicOdds && !IsSelected(pick) ? " dynamic-preview" : "";
+        _dynamicOdds && _activeTab == "Popular" && !IsSelected(pick) ? " dynamic-preview" : "";
 
     private string TableCellClass(SlipPick pick) =>
         "odds-table-cell" + (IsSelected(pick) ? " selected" : "") + DynamicPreviewClass(pick);
@@ -823,8 +823,6 @@ else
     private string ListRowClass(SlipPick pick) => IsSelected(pick) ? "odds-list-row selected" : "odds-list-row";
 
     private string PriceClass(SlipPick pick) => "odds-list-price" + DynamicPreviewClass(pick);
-
-    private string PlayerTableCellClass(SlipPick pick) => (IsSelected(pick) ? "picked" : "") + DynamicPreviewClass(pick);
 
     private void TogglePick(SlipPick pick)
     {
