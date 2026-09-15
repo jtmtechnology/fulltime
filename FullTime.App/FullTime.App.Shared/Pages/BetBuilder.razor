@@ -78,8 +78,35 @@ else
         </div>
     }
 
+    <div class="bb-toggle-row">
+        <span>Dynamic odds</span>
+        <button type="button" class="@("bb-toggle" + (_dynamicOdds ? " on" : ""))"
+            aria-label="Dynamic odds" aria-pressed="@_dynamicOdds" @onclick="() => _dynamicOdds = !_dynamicOdds"></button>
+    </div>
+
     @if (_activeTab == "Popular")
     {
+        @if (_matchResult is { } matchResult)
+        {
+            <AccordionSection Id="matchresult" Title="Match result" Expanded="_expanded" OnToggle="ToggleSection">
+                <div class="odds-list">
+                    @foreach (var opt in MatchResultOptions(matchResult))
+                    {
+                        <div class="@ListRowClass(opt.Pick)" @onclick="() => TogglePick(opt.Pick)">
+                            <span class="player-name-cell">
+                                @if (opt.LogoUrl is not null)
+                                {
+                                    <LogoImg Src="@opt.LogoUrl" CssClass="player-team-logo" Alt="@opt.Label" />
+                                }
+                                <span>@opt.Label</span>
+                            </span>
+                            <span class="@PriceClass(opt.Pick)">@OddsCell.FormatOdds(DisplayOdds(opt.Pick))</span>
+                        </div>
+                    }
+                </div>
+            </AccordionSection>
+        }
+
         @if (_totalCorners.Count > 0)
         {
             <AccordionSection Id="corners" Title="Total corners" Expanded="_expanded" OnToggle="ToggleSection">
@@ -93,8 +120,8 @@ else
                         var underPick = new SlipPick("TotalCorners", line.Line, "Under", line.UnderPrice);
                         <div class="odds-table-row">
                             <span class="odds-table-label">@line.Line.ToString("0.##")</span>
-                            <span class="@TableCellClass(overPick)" @onclick="() => TogglePick(overPick)">@OddsCell.FormatOdds(overPick.Odds)</span>
-                            <span class="@TableCellClass(underPick)" @onclick="() => TogglePick(underPick)">@OddsCell.FormatOdds(underPick.Odds)</span>
+                            <span class="@TableCellClass(overPick)" @onclick="() => TogglePick(overPick)">@OddsCell.FormatOdds(DisplayOdds(overPick))</span>
+                            <span class="@TableCellClass(underPick)" @onclick="() => TogglePick(underPick)">@OddsCell.FormatOdds(DisplayOdds(underPick))</span>
                         </div>
                     }
                 </div>
@@ -121,8 +148,8 @@ else
                                         var underPick = new SlipPick(group.MarketType, line.Line, "Under", line.UnderPrice, Team: teamGroup.TeamKey);
                                         <div class="odds-table-row">
                                             <span class="odds-table-label">@line.Line.ToString("0.##")</span>
-                                            <span class="@TableCellClass(overPick)" @onclick="() => TogglePick(overPick)">@OddsCell.FormatOdds(overPick.Odds)</span>
-                                            <span class="@TableCellClass(underPick)" @onclick="() => TogglePick(underPick)">@OddsCell.FormatOdds(underPick.Odds)</span>
+                                            <span class="@TableCellClass(overPick)" @onclick="() => TogglePick(overPick)">@OddsCell.FormatOdds(DisplayOdds(overPick))</span>
+                                            <span class="@TableCellClass(underPick)" @onclick="() => TogglePick(underPick)">@OddsCell.FormatOdds(DisplayOdds(underPick))</span>
                                         </div>
                                     }
                                 </div>
@@ -146,8 +173,8 @@ else
                         var underPick = new SlipPick("OverUnder", line.Line, "Under", line.UnderPrice);
                         <div class="odds-table-row">
                             <span class="odds-table-label">@line.Line.ToString("0.##")</span>
-                            <span class="@TableCellClass(overPick)" @onclick="() => TogglePick(overPick)">@OddsCell.FormatOdds(line.OverPrice)</span>
-                            <span class="@TableCellClass(underPick)" @onclick="() => TogglePick(underPick)">@OddsCell.FormatOdds(line.UnderPrice)</span>
+                            <span class="@TableCellClass(overPick)" @onclick="() => TogglePick(overPick)">@OddsCell.FormatOdds(DisplayOdds(overPick))</span>
+                            <span class="@TableCellClass(underPick)" @onclick="() => TogglePick(underPick)">@OddsCell.FormatOdds(DisplayOdds(underPick))</span>
                         </div>
                     }
                 </div>
@@ -162,7 +189,7 @@ else
                     {
                         <div class="@ListRowClass(opt.Pick)" @onclick="() => TogglePick(opt.Pick)">
                             <span>@opt.Label</span>
-                            <span class="odds-list-price">@OddsCell.FormatOdds(opt.Pick.Odds)</span>
+                            <span class="@PriceClass(opt.Pick)">@OddsCell.FormatOdds(DisplayOdds(opt.Pick))</span>
                         </div>
                     }
                 </div>
@@ -183,7 +210,7 @@ else
                                 }
                                 <span>@opt.Label</span>
                             </span>
-                            <span class="odds-list-price">@OddsCell.FormatOdds(opt.Pick.Odds)</span>
+                            <span class="@PriceClass(opt.Pick)">@OddsCell.FormatOdds(DisplayOdds(opt.Pick))</span>
                         </div>
                     }
                 </div>
@@ -221,7 +248,7 @@ else
                 @if (CurrentCorrectScorePick is { } pick)
                 {
                     <span class="@("correct-score-price " + (_correctScoreSelected ? "selected" : ""))" @onclick="ToggleCorrectScoreSelected">
-                        @_correctScoreHome - @_correctScoreAway (@OddsCell.FormatOdds(pick.Odds))
+                        @_correctScoreHome - @_correctScoreAway (<span class="@("correct-score-odds" + (_dynamicOdds && !_correctScoreSelected ? " dynamic-preview" : ""))">@OddsCell.FormatOdds(DisplayOdds(pick))</span>)
                     </span>
                 }
                 else
@@ -231,7 +258,7 @@ else
             </AccordionSection>
         }
 
-        @if (_overUnderLines.Count == 0 && _btts is null && _firstScorer is null && _correctScoreLookup.Count == 0
+        @if (_matchResult is null && _overUnderLines.Count == 0 && _btts is null && _firstScorer is null && _correctScoreLookup.Count == 0
             && _totalCorners.Count == 0 && TeamLineGroups.All(g => g.Teams.All(t => t.Lines.Count == 0)))
         {
             <div class="muted">No standard markets are priced for this match right now.</div>
@@ -275,7 +302,7 @@ else
                                                     if (row.PricesByLine.TryGetValue(line, out var price))
                                                     {
                                                         var pick = new SlipPick(group.MarketType, line, "Over", price, PlayerName: row.PlayerName);
-                                                        <td class="@(IsSelected(pick) ? "picked" : "")" @onclick="() => TogglePick(pick)">@OddsCell.FormatOdds(price)</td>
+                                                        <td class="@PlayerTableCellClass(pick)" @onclick="() => TogglePick(pick)">@OddsCell.FormatOdds(DisplayOdds(pick))</td>
                                                     }
                                                     else
                                                     {
@@ -298,7 +325,7 @@ else
                                             <LogoImg Src="@teamGroup.LogoUrl" CssClass="player-team-logo" Alt="@teamGroup.Team" />
                                             <span>@opt.Label</span>
                                         </span>
-                                        <span class="odds-list-price">@OddsCell.FormatOdds(opt.Pick.Odds)</span>
+                                        <span class="@PriceClass(opt.Pick)">@OddsCell.FormatOdds(DisplayOdds(opt.Pick))</span>
                                     </div>
                                 }
                             </div>
@@ -331,6 +358,7 @@ else
 
 @code {
     private record OverUnderLine(decimal Line, decimal OverPrice, decimal UnderPrice);
+    private record MatchResultOption(decimal HomePrice, decimal DrawPrice, decimal AwayPrice);
     private record BttsOption(decimal YesPrice, decimal NoPrice);
     private record FirstScorerOption(decimal HomePrice, decimal NonePrice, decimal AwayPrice);
     private record PickOption(string Label, SlipPick Pick, string? LogoUrl = null);
@@ -374,6 +402,11 @@ else
 
     private readonly HashSet<string> _expanded = [];
 
+    // Applies on both tabs - every priced cell on Popular and Player Bets routes its displayed
+    // price through DisplayOdds. Off by default so every cell still shows its own real price
+    // unless the owner opts in.
+    private bool _dynamicOdds;
+
     [Parameter] public Guid MatchId { get; set; }
     [SupplyParameterFromQuery(Name = "home")] public string? Home { get; set; }
     [SupplyParameterFromQuery(Name = "away")] public string? Away { get; set; }
@@ -416,6 +449,7 @@ else
     private readonly List<OverUnderLine> _awayCorners = [];
     private readonly List<OverUnderLine> _homeCards = [];
     private readonly List<OverUnderLine> _awayCards = [];
+    private MatchResultOption? _matchResult;
     private BttsOption? _btts;
     private FirstScorerOption? _firstScorer;
 
@@ -493,6 +527,19 @@ else
 
     private decimal CombinedOdds => EffectiveSelectedPicks.Aggregate(1m, (acc, p) => acc * p.Odds);
 
+    // What the combined bet becomes if this exact pick were the selection for its market type,
+    // on top of whatever's already picked elsewhere - a pick within the same market type replaces
+    // (not adds to) the existing one, matching TogglePick's own one-pick-per-market-type rule, so
+    // that market type's current contribution is excluded before multiplying this pick back in.
+    // Naive multiplication, same as CombinedOdds itself - not a real bookmaker same-game-multi
+    // price (API-Football's odds feed has no combo-pricing endpoint), just a preview of the same
+    // arithmetic the "Add to slip" button already commits to.
+    private decimal ProspectiveCombinedOdds(SlipPick pick) =>
+        EffectiveSelectedPicks.Where(p => p.MarketType != pick.MarketType)
+            .Aggregate(1m, (acc, p) => acc * p.Odds) * pick.Odds;
+
+    private decimal DisplayOdds(SlipPick pick) => _dynamicOdds ? ProspectiveCombinedOdds(pick) : pick.Odds;
+
     // Different markets in the same leg all describe the same 90 minutes, so a combination is only
     // ever placeable if some final score could satisfy every pick at once — e.g. "Coventry to score
     // first" + "Arsenal 1-0 Coventry" can never both be true, since Coventry didn't score at all in
@@ -533,6 +580,12 @@ else
     // score the pick was priced for, just that it doesn't rule the pick out.
     private static bool IsCompatible(SlipPick pick, int home, int away) => pick.MarketType switch
     {
+        "MatchResult" => pick.Side switch
+        {
+            "Home" => home > away,
+            "Away" => away > home,
+            _ => home == away, // Draw
+        },
         "OverUnder" when pick.Line is { } line => pick.Side == "Over" ? home + away > line : home + away < line,
         "BothTeamsToScore" => pick.Side == "Yes" ? home > 0 && away > 0 : home == 0 || away == 0,
         "FirstTeamToScore" => pick.Side switch
@@ -555,6 +608,13 @@ else
             _bookmakerLogoUrl = response.BookmakerLogoUrl;
             _homeForm = response.HomeForm;
             _awayForm = response.AwayForm;
+
+            var mrHome = _markets.FirstOrDefault(m => m.MarketType == "MatchResult" && m.Side == "Home");
+            var mrDraw = _markets.FirstOrDefault(m => m.MarketType == "MatchResult" && m.Side == "Draw");
+            var mrAway = _markets.FirstOrDefault(m => m.MarketType == "MatchResult" && m.Side == "Away");
+            _matchResult = mrHome is null || mrDraw is null || mrAway is null
+                ? null
+                : new MatchResultOption(mrHome.Price, mrDraw.Price, mrAway.Price);
 
             _overUnderLines.AddRange(_markets
                 .Where(m => m.MarketType == "OverUnder" && m.Line is not null)
@@ -652,7 +712,7 @@ else
 
             // If this match only has player props priced (no Popular markets at all), land on the
             // tab that actually has something to show instead of an empty "Popular" screen.
-            if (_overUnderLines.Count == 0 && _btts is null && _firstScorer is null
+            if (_matchResult is null && _overUnderLines.Count == 0 && _btts is null && _firstScorer is null
                 && _correctScoreLookup.Count == 0 && _totalCorners.Count == 0
                 && TeamLineGroups.All(g => g.Teams.All(t => t.Lines.Count == 0)) && _playerPropGroups.Count > 0)
             {
@@ -714,6 +774,13 @@ else
         new("No", new SlipPick("BothTeamsToScore", null, "No", btts.NoPrice)),
     ];
 
+    private List<PickOption> MatchResultOptions(MatchResultOption option) =>
+    [
+        new(HomeTeam, new SlipPick("MatchResult", null, "Home", option.HomePrice), HomeLogo),
+        new("Draw", new SlipPick("MatchResult", null, "Draw", option.DrawPrice)),
+        new(AwayTeam, new SlipPick("MatchResult", null, "Away", option.AwayPrice), AwayLogo),
+    ];
+
     private List<PickOption> FirstScorerOptions(FirstScorerOption option) =>
     [
         new(HomeTeam, new SlipPick("FirstTeamToScore", null, "Home", option.HomePrice), HomeLogo),
@@ -744,9 +811,20 @@ else
             .Select(g => new OverUnderLine(g.Key, g.First(m => m.Side == "Over").Price, g.First(m => m.Side == "Under").Price))
             .OrderBy(l => l.Line);
 
-    private string TableCellClass(SlipPick pick) => IsSelected(pick) ? "odds-table-cell selected" : "odds-table-cell";
+    // Marks an unselected cell/price as showing DisplayOdds' "what if" preview rather than its own
+    // real price, while Dynamic Odds is on - applies on both tabs, since every price on both is
+    // routed through DisplayOdds.
+    private string DynamicPreviewClass(SlipPick pick) =>
+        _dynamicOdds && !IsSelected(pick) ? " dynamic-preview" : "";
+
+    private string TableCellClass(SlipPick pick) =>
+        "odds-table-cell" + (IsSelected(pick) ? " selected" : "") + DynamicPreviewClass(pick);
 
     private string ListRowClass(SlipPick pick) => IsSelected(pick) ? "odds-list-row selected" : "odds-list-row";
+
+    private string PriceClass(SlipPick pick) => "odds-list-price" + DynamicPreviewClass(pick);
+
+    private string PlayerTableCellClass(SlipPick pick) => (IsSelected(pick) ? "picked" : "") + DynamicPreviewClass(pick);
 
     private void TogglePick(SlipPick pick)
     {

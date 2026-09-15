@@ -438,8 +438,9 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 }
 .correct-score-price.selected { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
-/* Bet Builder header: team crests either side of the kickoff time, tabs, and the (cosmetic-only -
-   see BetBuilder.razor) Dynamic Odds toggle. */
+/* Bet Builder header: team crests either side of the kickoff time, tabs, and the Dynamic Odds
+   toggle (see BetBuilder.razor's DisplayOdds/ProspectiveCombinedOdds - swaps each unselected
+   Popular-tab cell's own price for a preview of the combined total if that pick were added too). */
 .bb-teams-row { display: flex; align-items: flex-start; justify-content: space-between; margin: 0.75rem 0; }
 .bb-team { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; width: 30%; }
 .bb-team .crest { width: 2.6rem; height: 2.6rem; object-fit: contain; }
@@ -470,6 +471,11 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 }
 .bb-toggle.on { background: var(--accent); border-color: var(--accent); }
 .bb-toggle.on::after { transform: translateX(1.1rem); background: var(--accent-ink); }
+
+/* Dynamic Odds preview - marks an unselected cell/price showing a "what if" combined total
+   rather than its own real price, so the two don't look identical while the toggle is on. */
+.odds-table-cell.dynamic-preview { color: var(--accent); }
+.odds-list-price.dynamic-preview, .correct-score-odds.dynamic-preview { color: var(--accent); }
 
 /* Match Summary (MatchEvents.razor) - goal/card/substitution timeline. */
 .match-events-score { font-size: 1rem; font-weight: 800; }
@@ -576,6 +582,7 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 .player-table td:first-child { text-align: left; font-weight: 600; font-size: 0.85rem; cursor: default; padding-left: 0; }
 .player-table td.picked { background: var(--accent); color: var(--accent-ink); border-radius: 6px; }
 .player-table td.locked { color: var(--text-muted); font-weight: 400; cursor: default; }
+.player-table td.dynamic-preview { color: var(--accent); }
 
 .player-name-cell { display: inline-flex; align-items: center; gap: 0.4rem; }
 .player-team-logo { width: 1.1rem; height: 1.1rem; object-fit: contain; flex-shrink: 0; }
