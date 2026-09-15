@@ -290,7 +290,7 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 .league-list-name { font-weight: 700; font-size: 0.95rem; }
 .league-list-country { font-size: 0.72rem; color: var(--text-muted); letter-spacing: 0.03em; text-transform: uppercase; }
 .league-list-live {
-    flex-shrink: 0; background: var(--danger); color: white; font-size: 0.72rem; font-weight: 700;
+    flex-shrink: 0; background: var(--accent); color: var(--accent-ink); font-size: 0.72rem; font-weight: 700;
     border-radius: 999px; min-width: 1.3rem; height: 1.3rem; display: flex; align-items: center; justify-content: center;
     padding: 0 0.4rem;
 }
