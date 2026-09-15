@@ -496,7 +496,7 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-15, see §20 for the latest):**
+**Top priorities for whoever picks this up next (updated end of 2026-09-15, see §21 for the latest):**
 1. **`fulltime-web` is deliberately out of scope — do not flag it as stale or suggest redeploying it.**
    The owner explicitly said "ignore fulltime-web, don't use the web app" (2026-09-15, §20) — this
    supersedes every earlier note in this file about `fulltime-web` being behind `main`. It's had no
@@ -512,13 +512,12 @@ still in effect:
    did NOT fix the stale notification icon, ruling out the local-cache theory) - if the new build's
    notification icon comes through correct, that confirms TestFlight/APNs caches icon artwork
    per-build rather than reading the live bundle.
-4. **Upload a build to Play Console** — no AAB was built at all this session (§20). The last one made
-   (§19.6, version 1.6/13) predates every §20 change: the Settings rename + gear icon, the green
-   live-match badge, the new Yellow Card alert type, the unbolded/reworded goal push, and the iOS
-   push-sound fix. Rebuild with everything through §20 folded in before uploading (bump to 1.7/14
-   first, per §13's version-code convention). This has now been stale at the end of every session
-   since §13 — genuinely worth just uploading the next build the moment it's made, rather than
-   batching more work into it first.
+4. **DONE (§21): a fresh signed AAB is built and waiting — version 1.7/14, folds in everything
+   through §21 (Bet Builder Match result/Dynamic Odds, relative player ratings, Match alerts
+   button, plus every §20 change).** Output:
+   `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`.
+   **Upload to Play Console is still the owner's action** — this has now been stale at the end of
+   every session since §13; genuinely worth uploading this one before it goes stale too.
 5. **Club crests couldn't be verified on this dev machine this session** (§16.3.5) — confirmed a
    pre-existing network block (`media.api-sports.io` unreachable, same root cause as the already-known
    `v3.football.api-sports.io` block), not a code bug. Owner said they'd check crests on a real device
@@ -614,6 +613,19 @@ still in effect:
     the exact `RedCard` pattern (same diff-before-delete detection, same minute-based `Sequence`
     dedup scheme). If anything still refers to "the six alert types" (a few older comments do), that's
     now stale - see `MatchAlertType`/`UserAlertPreferences` for the current list.
+26. **New (§21): Bet Builder's Dynamic Odds toggle is naive multiplication, not real correlated
+    pricing** - API-Football's odds feed has no same-game-multi/combo endpoint, so there's no real
+    bookmaker number to preview. If a future request wants this "more accurate," that's a real
+    statistical-modelling project (e.g. a Poisson scoreline model), not a formula tweak.
+27. **New (§21): a pick within the same market type never "compounds" with itself while Dynamic Odds
+    is on** - only one pick per market type is allowed at all (`_selected` keyed by `MarketType`
+    alone), so comparing sibling rows in the same market (e.g. other Goal scorer options while one
+    is already selected) correctly shows no change - this was reported as a bug, investigated live,
+    and confirmed working as designed (§21.2). Don't re-investigate this same report as broken.
+28. **New (§21): Player Stats ratings highlight only the single best/worst performer of the whole
+    match (both teams), not a fixed threshold** - a badly-beaten team won't have most of its players
+    shown red any more, only its single worst. If a future report says "nobody's rating changed
+    colour," check whether every rating in that match happens to be a genuine tie first (§21.3).
 
 Full list:
 
@@ -2226,3 +2238,134 @@ despite the origin clearly being healthy.
   an owner says "use real data as-is" for screenshots, that covers names/amounts but not live
   credentials that would let someone else take an action (join a private league, in this case). Worth
   a second look at any screenshot before publishing, even under an explicit "use real data" approval.
+
+---
+
+## 21. 2026-09-15 session 2 — Bet Builder Match result + Dynamic Odds, relative player ratings, Match alerts button, fresh Android build
+
+All `FullTime.App.Shared` (Android/iOS/Web all pick this up) unless noted. Verified live against the
+`FullTime_Pixel8_API35` emulator throughout, not just built - see §21.6 for the workflow gotchas hit
+doing that.
+
+### 21.1 Bet Builder: Match result added, Dynamic Odds toggle wired up (commit `f84870e`)
+
+- **Match result (1X2) was already fetched and settled but never rendered on Bet Builder** -
+  `GetBetBuilderMarketsAsync` has always returned `MarketType.MatchResult` rows (parsed from
+  API-Football's "Match Winner" bet, `ApiFootballOddsService.ParseMatchResult`) and
+  `SettlementService`/`BetService` already handle it end-to-end, but `BetBuilder.razor` simply never
+  had markup for it. Added as the first `AccordionSection` on the Popular tab (`Id="matchresult"`,
+  starts collapsed like every other section - was briefly pre-opened by default, then reverted per
+  owner feedback). Placing a Match result pick reuses the exact same `SlipPick`/`TogglePick` flow as
+  every other market - server-side placement was already correct (`BetService.FindMarketAsync`
+  returns null for `MatchResult` and defers to `GetMatchResultOddsAsync`, which re-reads the live
+  price from `OddsSnapshots` at placement time regardless of what the client displayed), so this was
+  a client-only change. Also added a `"MatchResult"` case to `BetBuilder.razor`'s `IsCompatible`
+  contradiction check (Home/Draw/Away vs a conflicting Correct Score pick) - previously silently
+  skipped for this market type.
+- **Dynamic Odds had a pill-switch UI already scaffolded in `app.css` since 2026-09-06/§3
+  (`.bb-toggle-row`/`.bb-toggle`/`.bb-toggle.on`), explicitly commented "cosmetic-only" - genuinely
+  never had any logic behind it until now.** Wired it up as a real preview, not a fake bookmaker
+  price: while on, every *unselected* cell/price shows what the combined bet becomes if that pick
+  were added too (`DisplayOdds`/`ProspectiveCombinedOdds` in `BetBuilder.razor` - naive
+  multiplication, the same arithmetic "Add to slip" already commits to, excluding whatever's
+  currently picked for that pick's own market type since a same-market pick replaces rather than
+  adds). Turns the cell/price green (`.dynamic-preview`, `var(--accent)`) so it reads as a preview
+  rather than the market's real price. Off by default.
+- **Briefly extended to the Player Bets tab too, then deliberately reverted back to Popular-only
+  same session, per owner request** - the toggle's markup, `DynamicPreviewClass`, and every
+  `DisplayOdds` call now all live inside the `_activeTab == "Popular"` branch again; switching to
+  Player Bets always shows real prices regardless of the toggle's state, and the toggle itself is
+  hidden there. If a future request wants it on Player Bets again, the plumbing (`DisplayOdds`,
+  `ProspectiveCombinedOdds`) is generic and already proven working there (§21.2) - it's just not
+  wired into that tab's markup any more.
+- **This is deliberately not real correlated/same-game-multi pricing** - API-Football's odds feed has
+  no combo-pricing endpoint, only single-outcome prices per market, so there's no real bookmaker
+  number to preview against. Flagged this distinction to the owner before building anything.
+- **`OddsCell.FormatOdds` (shared, used everywhere fractional odds are shown - not just Bet Builder)
+  now simplifies before falling back to the exact reduction**: tries denominators 1-20 (simplest
+  first) and accepts the first one within 4% of the real price - e.g. a real 7.81 decimal now shows
+  `"8/1"` instead of `"781/100"`. Purely a display change; `PlaceBetAsync`/`CombinedOdds` always use
+  the real decimal `Price`/`Odds`, never the formatted string, so this can't affect what a bet
+  actually settles at.
+
+### 21.2 "Player odds not dynamically changing" - investigated live, turned out correct not buggy
+
+- Owner reported Player Bets tab odds didn't seem to change with Dynamic Odds on. Verified directly
+  on the emulator (screenshots, not just code reading): with a player pick selected and Dynamic Odds
+  on, Popular tab's Match result correctly showed the combined total (real 5/6 → dynamic 7/1, matching
+  5/6's decimal × the selected player's own price). **The actual cause: comparing sibling picks
+  *within the same market type* (e.g. other Goal scorer rows while one Goal scorer pick is already
+  selected) never changes, by design** - only one pick per market type is allowed at all
+  (`_selected` is keyed by `MarketType` alone), so a different player in that same market *replaces*
+  the current one rather than combining with it; the "what if I picked this instead" total for a
+  same-market sibling is mathematically identical to its own real price when nothing else is
+  selected. Not a bug - no code change made. Worth remembering before re-investigating this report.
+
+### 21.3 Player Stats ratings: relative to the match, not a fixed threshold (commit `2cff483`)
+
+- Old logic (`PlayerStatRow.RatingClass`) coloured any rating `< 6` red, `>= 7.5` green, regardless of
+  how the rest of the match went. Confirmed live on a real finished match (Leeds 4-1 Newcastle) that
+  this marked **9 of Newcastle's 15 outfield players red** even though every individual rating was
+  accurate - too heavy-handed for a team that lost but didn't have every player individually
+  disgraced.
+- **Now highlights only the single highest-rated and single lowest-rated player across the whole
+  match (both teams combined)** - like a Man of the Match / worst-on-pitch badge rather than a
+  threshold. Ties (2+ players sharing the exact extreme value) all get the highlight, not just the
+  first found. Computed once in `MatchSummarySheet.RatingExtremes` when Player Stats loads (parses
+  every rated player's `Rating` string, skips unrated players, returns empty sets rather than
+  double-highlighting the same player if every rating happens to be identical) and passed down as
+  `IsHighest`/`IsLowest` params - `PlayerStatRow` itself no longer knows or cares about any threshold.
+
+### 21.4 Settings: "Manage match alerts" turned into a button (commit `22cb666`)
+
+- Was a plain text link (`.bet-builder-link`, shared with `MatchCard`'s "Bet Builder"/"Match Details"
+  links and `LeagueMatches`' "Standings" link - left untouched, not a good class to overload for this).
+  Switched to the existing `.primary-btn` style already used for "Remove ads" on the same page
+  (`Profile.razor`) instead of adding a new class - added `display: inline-block; text-decoration:
+  none;` to `.primary-btn` so it also works cleanly on an `<a>`, harmless for its existing `<button>`
+  usages.
+
+### 21.5 Fresh Android release build - version 1.7/14 (commit `70f218a`)
+
+- Bumped `ApplicationDisplayVersion`/`ApplicationVersion` 1.6/13 → 1.7/14 per §13's convention, then
+  built the signed AAB per `signing/README.md`. Output:
+  `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`.
+  Folds in everything from this session (§21.1-21.4) plus every §20 change (Settings rename, gear
+  icon, green live badge, Yellow Card alert, iOS push-sound fix, etc.) - the first genuinely fresh
+  build since §19.6. **Upload to Play Console is still the owner's action** - see §7 item 4.
+- Hit the known `APT2258: The data is invalid` corrupted-`.flata`-resource build error from
+  `CLAUDE.md`'s documented gotcha once, mid-session, on an unrelated Debug fast-deploy run (not the
+  Release build itself) - `dotnet build-server shutdown` plus a force `Remove-Item -Recurse -Force`
+  on the Android `obj`/`bin` folders fixed it immediately, exactly as documented. Confirms that
+  recovery path still works and is worth reaching for first rather than re-diagnosing from scratch.
+
+### 21.6 Verified live on the emulator throughout, not just built - workflow notes
+
+- Every change this session was actually opened and interacted with on `FullTime_Pixel8_API35`
+  (`adb exec-out screencap` + `adb shell input tap`/`swipe`/`keyevent`) rather than trusting a clean
+  build alone - this is what caught that §21.2's report wasn't actually a bug, and gave real evidence
+  (before/after odds numbers) rather than a guess.
+- **Coordinate scaling actually matters in practice, not just as a documented rule**: the emulator's
+  real resolution is 1080×2400 (`adb shell wm size`), but screenshots read back through the Read tool
+  render at 900×2000 in this environment - a tap coordinate eyeballed off the *rendered* image has to
+  be multiplied by 1.2 (`1080/900`) before passing to `adb shell input tap`, or it lands up to ~150px
+  short on the real device and silently taps the wrong element (hit this directly - an unscaled tap
+  on the bottom nav bar and on an accordion header both did nothing until scaled correctly). `CLAUDE.md`
+  already documented this; this session is a concrete confirmation it's not optional.
+- **`uiautomator dump` is useless for this app** - it's a Blazor MAUI WebView, so the entire UI is one
+  opaque WebView node in the accessibility tree, not individual inspectable elements. Don't reach for
+  it again for this codebase; screenshot + tap/scale is the only real option.
+- Re-confirmed `CLAUDE.md`'s "use PowerShell, not Bash, for adb commands with `/sdcard/...` paths" -
+  `adb shell uiautomator dump /sdcard/window_dump.xml` followed by `adb pull` failed from Bash (path
+  mangled) and worked immediately from PowerShell with the identical command.
+
+### 21.7 Deploy state as of this handover
+
+- `FullTime.App.Shared` changes (§21.1-21.4) are committed and pushed to `main` (`f84870e`, `2cff483`,
+  `22cb666`) but only verified on the local emulator so far - not yet reached a real device, since
+  they don't touch `fulltime-api`/`fulltime-website` there's nothing to deploy to the VM either.
+- Android AAB v1.7/14 (§21.5, commit `70f218a`) is built locally and NOT yet uploaded to Play Console.
+- No VM, database, or production changes this session at all - purely local dev (emulator + git).
+- `ODDS_API_PLAYER_PROPS_INVESTIGATION.md` (dormant since API-Football took over, see line ~698 above)
+  was flagged to the owner again as an untracked scratch file with an offer to delete it - no answer
+  given, still sitting untracked. Low priority, safe to just delete next time someone's in there.
