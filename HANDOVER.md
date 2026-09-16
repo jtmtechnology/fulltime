@@ -496,7 +496,7 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-15, see §21 for the latest):**
+**Top priorities for whoever picks this up next (updated end of 2026-09-16, see §22 for the latest):**
 1. **`fulltime-web` is deliberately out of scope — do not flag it as stale or suggest redeploying it.**
    The owner explicitly said "ignore fulltime-web, don't use the web app" (2026-09-15, §20) — this
    supersedes every earlier note in this file about `fulltime-web` being behind `main`. It's had no
@@ -626,6 +626,20 @@ still in effect:
     match (both teams), not a fixed threshold** - a badly-beaten team won't have most of its players
     shown red any more, only its single worst. If a future report says "nobody's rating changed
     colour," check whether every rating in that match happens to be a genuine tie first (§21.3).
+29. **New (§22): a penalty-shootout match's `Match.Result` may still be wrong for any fixture that
+    already finished (and settled) before today's fix deployed.** `DeriveMatchResultsAsync` only
+    ever derives `Result` once per match (gated on `Result == null`), so it can't self-correct
+    retroactively - a match that settled as a wrong `Draw` before the fix stays that way. Never
+    actually checked whether the Peterborough match that prompted this investigation had already
+    settled bets wrong (the owner said "just deploy" rather than check first) - worth checking, and
+    if so, manually backfilling that row's `HomePenalties`/`AwayPenalties` from the real fixture data
+    and clearing `Result` to `NULL` so the settlement sweep re-derives it correctly.
+30. **New (§22): the Match Summary display side of the penalty-shootout fix (FT/AET label, penalty
+    score, 1st/2nd Half + 1st/2nd ET event splitting) was never verified live on the emulator** -
+    unlike §21's practice of screenshotting every change, this session reasoned it through code plus
+    a clean build only, for all of `MatchCard.razor`/`MatchSummarySheet.razor`. Worth an actual live
+    check (or a synthetic penalty-shootout/extra-time test match) next time it's touched, and note
+    it's `FullTime.App.Shared`-only - it ships on the next Android/iOS build, not via any VM deploy.
 
 Full list:
 
@@ -2369,3 +2383,100 @@ doing that.
 - `ODDS_API_PLAYER_PROPS_INVESTIGATION.md` (dormant since API-Football took over, see line ~698 above)
   was flagged to the owner again as an untracked scratch file with an offer to delete it - no answer
   given, still sitting untracked. Low priority, safe to just delete next time someone's in there.
+
+---
+
+## 22. 2026-09-16 session — Penalty-shootout scoring/settlement/display fix, card alert wording
+
+### 22.1 Investigation: a Peterborough match that went to penalties displayed/settled wrong
+
+- Prompted by the owner reporting "the Peterborough game went to a penalty shoot out which we didn't
+  display very well" - investigated by reading code, not by touching production data first (the
+  owner declined an initial read-only DB check with "just deploy").
+- **Root cause, three layers deep:**
+  1. `FixtureDto` (`FullTime.Api/BetBuilder/Dtos/ApiFootballDtos.cs`) never mapped API-Football's
+     `score.penalty`/`score.extratime` fields at all - only the top-level `goals` object, which for a
+     shootout match is the pre-shootout (normal/extra-time) score, e.g. a 1-1 draw. The actual winner
+     was never captured anywhere.
+  2. `ApiFootballMatchSyncService.DeriveStatus` already mapped `"PEN"` to plain `MatchStatus.Finished`
+     - indistinguishable from any other finished match, no shootout flag existed.
+  3. **This wasn't just cosmetic - it was a real settlement bug.**
+     `SettlementService.DeriveMatchResultsAsync` derived `Match.Result` (which the new Bet Builder
+     Match Result market, §21.1, settles against) purely from `HomeScore == AwayScore` comparison -
+     so any penalty-shootout match settled as a `Draw`, which can never actually be the correct
+     result of a competition that uses penalties specifically to avoid one.
+- The owner separately flagged two real risks in the fix before it was built: this specific match
+  **did not go to extra time** (some competitions go straight from 90 minutes to penalties), so the
+  fix can't assume ET always precedes a shootout; and added/stoppage time in normal play (e.g. a
+  goal at a raw minute 94) must not be misread as extra time just because the number is above 90.
+
+### 22.2 Fix implemented
+
+- **`Match.cs`**: new `HomePenalties`/`AwayPenalties` (nullable int, the shootout score) and
+  `WentToExtraTime` (bool, derived independently from whether `score.extratime` was populated - not
+  assumed to always accompany a shootout).
+- **`ApiFootballDtos.cs`**: new `ScoreInfo` (`Extratime`, `Penalty`, both `GoalsInfo`-shaped) mapped
+  onto `FixtureDto.Score`.
+- **`ApiFootballMatchSyncService.cs`**: populates the three new fields each sync tick; included in
+  the existing "did anything change" check that drives the live SignalR push; the full-time push
+  notification text now appends `" (H-A pens)"` when a shootout happened.
+- **`HighlightlyMatchSyncService.cs`** (dormant rollback path, still compiled in): updated only to
+  compile against the widened `MatchLiveUpdate` record - always reports "no shootout"
+  (`HomePenalties`/`AwayPenalties` null, `WentToExtraTime` false), since Highlightly has no
+  equivalent field mapped and it's not worth building out for a path that isn't live.
+- **`SettlementService.DeriveMatchResultsAsync`**: when `HomePenalties`/`AwayPenalties` are both
+  present, derives `Result` from them (penalties can never end level) instead of the pre-shootout
+  score.
+- **End-to-end plumbing** so the client actually sees this: `MatchesController.UpcomingMatchDto` +
+  its client mirror in `FullTime.App.Shared/Models/ApiModels.cs`, and `MatchUpdatesHub`/
+  `MatchUpdatesClient`'s `MatchLiveUpdate` record (both the API and client copies), all extended with
+  the same three fields; `Matches.razor`/`LeagueMatches.razor`'s live-push `with` patches updated to
+  carry them through to an already-open match card.
+- **New shared client helper `FullTime.App.Shared/Services/MatchDisplay.cs`** (`FinishedLabel` →
+  "FT"/"AET", `PenaltyScoreText` → e.g. `"4-3 pens"` or null) - used by both `MatchCard.razor` and
+  `MatchSummarySheet.razor` so the two don't drift on this the way past duplication issues have
+  (§7 item 11).
+- **`MatchSummarySheet.razor`**: header now shows the FT/AET label and penalty score. The Events tab
+  timeline is now four buckets instead of two - 1st Half, 2nd Half, 1st ET (91-105'), 2nd ET (106-120')
+  - each with its own running-score header computed by counting actual goal events up to that point
+    (not read off the stored final score, same reasoning the existing half-time score already used).
+  **Deliberately gated on `Match.WentToExtraTime`, not just "minute > 90"** - normal second-half added
+  time is expected to arrive as `elapsed=90/extra=N` (BaseMinute-parses back to 90), but that per-event
+  split has only ever been confirmed live for the fixture clock, not for an actual stoppage-time goal;
+  gating on the per-match flag means a mis-formatted high raw minute can't get miscategorized as extra
+  time when the match never actually went there.
+  Also added a static **"Penalties" summary row** (score only, no event list) - confirmed API-Football's
+  events endpoint has no per-kick shootout data at all (only vocabulary ever seen there is
+  Goal/Card/Substitution/VAR, see `ApiFootballSettlementSupportService.MapEventType`'s comment), so
+  there's nothing to list even if a fourth event bucket existed for it. Renders even when `_events` is
+  otherwise empty, since the shootout result matters regardless of other events.
+- **`MatchCard.razor`**: finished matches now show the FT/AET label plus a `"(4-3 pens)"` suffix when
+  applicable, via the same shared helper.
+- **New EF Core migration `20260916072703_AddPenaltyShootoutToMatch`** (additive:
+  `Matches.HomePenalties`/`AwayPenalties`/`WentToExtraTime`) - applied to production via the
+  established idempotent `dotnet ef migrations script --idempotent` + `psql -f` pattern, no errors.
+
+### 22.3 Card alert push wording simplified
+
+- Separate, unrelated owner request: yellow/red card alert push text dropped the trailing
+  "booked"/"sent off" wording. `ApiFootballSettlementSupportService.cs`'s two `NotifyAsync` calls for
+  `RedCard`/`YellowCard` now read `"PlayerName (Team) - Home X-Y Away"` instead of
+  `"PlayerName (Team) sent off - ..."` / `"... booked - ..."`.
+
+### 22.4 Deploy state as of this handover
+
+- **`fulltime-api` deployed twice this session, both confirmed healthy** (`/api/config` + a clean
+  `journalctl` tail with no errors each time): once for the penalty-shootout fix + migration
+  (§22.1-22.2), once for the card-alert wording change (§22.3). Both are live in production right now.
+- **The Match Summary/MatchCard display changes (§22.2's `MatchDisplay.cs`,
+  `MatchSummarySheet.razor`, `MatchCard.razor` edits) are `FullTime.App.Shared`-only** - nothing to
+  deploy to the VM for these. They reach real usage only via a fresh Android/iOS build or a
+  `fulltime-web` redeploy (out of scope, §7 item 1) - **not yet in the pending v1.7/14 AAB**, which
+  predates this session.
+- Two commits pushed to `main`: `53ca5c0` (penalty-shootout capture/settlement/display, all of
+  §22.1-22.2) and `ff12c95` (§22.3's card-alert wording). `ODDS_API_PLAYER_PROPS_INVESTIGATION.md` and
+  `emulator.log` remain deliberately untracked (unrelated scratch files, flagged in a prior session).
+- **Not done this session, see §7 items 29-30**: no check of whether the triggering Peterborough
+  match had already settled a bet as a wrong `Draw` before the fix landed (no backfill performed
+  either way, since the owner said to deploy without checking first); no live/emulator verification
+  of the new Match Summary display behaviour.
