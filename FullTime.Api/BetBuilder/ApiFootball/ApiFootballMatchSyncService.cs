@@ -272,7 +272,8 @@ public class ApiFootballMatchSyncService(
 
         var changed = match.HomeScore != dto.Goals?.Home || match.AwayScore != dto.Goals?.Away
             || match.Status != newStatus || match.Minute != dto.Fixture.Status.Elapsed
-            || match.AddedTimeMinutes != dto.Fixture.Status.Extra || match.IsHalfTime != isHalfTime;
+            || match.AddedTimeMinutes != dto.Fixture.Status.Extra || match.IsHalfTime != isHalfTime
+            || match.HomePenalties != dto.Score?.Penalty?.Home || match.AwayPenalties != dto.Score?.Penalty?.Away;
 
         match.HomeScore = dto.Goals?.Home;
         match.AwayScore = dto.Goals?.Away;
@@ -280,12 +281,17 @@ public class ApiFootballMatchSyncService(
         match.Minute = dto.Fixture.Status.Elapsed;
         match.AddedTimeMinutes = dto.Fixture.Status.Extra;
         match.IsHalfTime = isHalfTime;
+        match.HomePenalties = dto.Score?.Penalty?.Home;
+        match.AwayPenalties = dto.Score?.Penalty?.Away;
+        match.WentToExtraTime = dto.Score?.Extratime?.Home is not null;
 
         if (changed)
         {
             await hub.Clients.All.SendAsync(
                 "MatchUpdated",
-                new MatchLiveUpdate(match.Id, match.HomeScore, match.AwayScore, newStatus.ToString(), match.Minute, match.AddedTimeMinutes, isHalfTime),
+                new MatchLiveUpdate(
+                    match.Id, match.HomeScore, match.AwayScore, newStatus.ToString(), match.Minute,
+                    match.AddedTimeMinutes, isHalfTime, match.HomePenalties, match.AwayPenalties, match.WentToExtraTime),
                 ct);
         }
 
@@ -321,9 +327,12 @@ public class ApiFootballMatchSyncService(
 
         if (previousStatus != MatchStatus.Finished && newStatus == MatchStatus.Finished)
         {
+            var penaltiesSuffix = match.HomePenalties is { } homePens && match.AwayPenalties is { } awayPens
+                ? $" ({homePens}-{awayPens} pens)"
+                : "";
             await matchAlerts.NotifyAsync(
                 match, MatchAlertType.FullTime, "Full-time",
-                $"{match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
+                $"{match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}{penaltiesSuffix}",
                 sequence: 0, ct: ct);
         }
 

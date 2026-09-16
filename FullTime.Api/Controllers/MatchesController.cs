@@ -35,7 +35,11 @@ public record UpcomingMatchDto(
     // Lets the client light up a match's alert bell for a favourited team/league without a
     // separate lookup per card - see MatchAlertSubscriptions.IsAlerted.
     long HomeTeamId,
-    long AwayTeamId);
+    long AwayTeamId,
+    // Null unless the match actually went to a shootout - see Match.HomePenalties/AwayPenalties.
+    int? HomePenalties,
+    int? AwayPenalties,
+    bool WentToExtraTime);
 
 public record BetBuilderMarketDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore, decimal Price,
@@ -154,7 +158,10 @@ public class MatchesController(
                 m.Events.Any(),
                 m.Status != MatchStatus.Upcoming || m.KickoffTime <= lineupsCutoff,
                 m.HomeTeamId,
-                m.AwayTeamId))
+                m.AwayTeamId,
+                m.HomePenalties,
+                m.AwayPenalties,
+                m.WentToExtraTime))
             .ToListAsync(ct);
 
         return Ok(matches);

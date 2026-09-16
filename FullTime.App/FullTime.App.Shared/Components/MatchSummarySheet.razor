@@ -22,6 +22,10 @@
                 {
                     <span class="match-events-status @(match.Status == "InProgress" ? "live" : "muted")">@statusText</span>
                 }
+                @if (MatchDisplay.PenaltyScoreText(match) is { } pens)
+                {
+                    <span class="muted">(@pens)</span>
+                }
             </div>
             <div class="bb-team">
                 <LogoImg Src="@match.AwayLogoUrl" CssClass="crest" Alt="@match.AwayTeam" />
@@ -69,13 +73,47 @@
                 {
                     <div class="match-events-half-header">
                         <span>2nd Half</span>
-                        <span>@match.HomeScore - @match.AwayScore</span>
+                        <span>@_fullTimeScore</span>
                     </div>
                     @foreach (var e in _secondHalf)
                     {
                         <MatchEventRow Event="e" />
                     }
                 }
+                @if (_firstExtraTime.Count > 0)
+                {
+                    <div class="match-events-half-header">
+                        <span>1st ET</span>
+                        <span>@_extraTimeHalfScore</span>
+                    </div>
+                    @foreach (var e in _firstExtraTime)
+                    {
+                        <MatchEventRow Event="e" />
+                    }
+                }
+                @if (_secondExtraTime.Count > 0)
+                {
+                    <div class="match-events-half-header">
+                        <span>2nd ET</span>
+                        <span>@match.HomeScore - @match.AwayScore</span>
+                    </div>
+                    @foreach (var e in _secondExtraTime)
+                    {
+                        <MatchEventRow Event="e" />
+                    }
+                }
+            }
+            @* API-Football has no per-kick shootout event data (confirmed live against a real
+               fixture - see ApiFootballSettlementSupportService.MapEventType's vocabulary comment),
+               only the final penalty score - so this is a static summary line, not another list of
+               MatchEventRows. Shown even when _events is otherwise empty, since a shootout result
+               matters regardless of whether any other events happened to resolve. *@
+            @if (!_loading && MatchDisplay.PenaltyScoreText(match) is { } penaltiesScore)
+            {
+                <div class="match-events-half-header">
+                    <span>Penalties</span>
+                    <span>@penaltiesScore</span>
+                </div>
             }
         }
         else if (_activeTab == "Stats")
@@ -194,7 +232,11 @@
     private List<MatchEventDto> _events = [];
     private List<MatchEventDto> _firstHalf = [];
     private List<MatchEventDto> _secondHalf = [];
+    private List<MatchEventDto> _firstExtraTime = [];
+    private List<MatchEventDto> _secondExtraTime = [];
     private string _halfTimeScore = "0 - 0";
+    private string _fullTimeScore = "0 - 0";
+    private string _extraTimeHalfScore = "0 - 0";
 
     private string _activeTab = "Events";
     private bool _statsLoading;
@@ -412,9 +454,23 @@
 
         // Stoppage-time minutes ("45+2") still belong to the half they extend, not the next one -
         // only a bare "46"+ base minute (no way to distinguish 2nd-half additions from 1st-half
-        // ones without the raw base, hence splitting on Base rather than the full string).
+        // ones without the raw base, hence splitting on Base rather than the full string). Extra
+        // time (API-Football numbers it 91-120, not a fresh "1+") gets its own bucket rather than
+        // being lumped into "2nd Half" - a goal at minute 105 is not a 2nd-half goal.
+        //
+        // Gated on Match.WentToExtraTime, not just "minute > 90" alone - normal second-half added
+        // time is supposed to come through as elapsed=90/extra=N (formatting to "90+4", which
+        // BaseMinute correctly reads as 90), but that per-event split has only been confirmed live
+        // for the *fixture* clock, not for an actual stoppage-time goal event - if API-Football ever
+        // reports one as a bare elapsed=94 instead, WentToExtraTime (a real per-match fact, not a
+        // per-event minute format) stops it from being wrongly filed under Extra Time.
+        // Extra time is itself played as two 15-minute periods (91-105, 106-120), same as the two
+        // regular halves - split the same way rather than lumping all of it into one block.
+        var wentToExtraTime = Summary.Match?.WentToExtraTime ?? false;
         _firstHalf = _events.Where(e => BaseMinute(e.Minute) <= 45).ToList();
-        _secondHalf = _events.Where(e => BaseMinute(e.Minute) > 45).ToList();
+        _secondHalf = _events.Where(e => BaseMinute(e.Minute) > 45 && (!wentToExtraTime || BaseMinute(e.Minute) <= 90)).ToList();
+        _firstExtraTime = wentToExtraTime ? _events.Where(e => BaseMinute(e.Minute) is > 90 and <= 105).ToList() : [];
+        _secondExtraTime = wentToExtraTime ? _events.Where(e => BaseMinute(e.Minute) > 105).ToList() : [];
 
         // Own Goal is a distinct MatchEvent.Type from Goal (see MatchEventRow) but still counts on
         // the scoreline - Event.Team already carries the team credited with it, not the scorer's
@@ -422,6 +478,21 @@
         var homeGoalsAtHalf = _firstHalf.Count(e => (e.Type == "Goal" || e.Type == "Own Goal") && e.Team == "Home");
         var awayGoalsAtHalf = _firstHalf.Count(e => (e.Type == "Goal" || e.Type == "Own Goal") && e.Team == "Away");
         _halfTimeScore = $"{homeGoalsAtHalf} - {awayGoalsAtHalf}";
+
+        // Derived from events rather than read off Match.HomeScore/AwayScore, same reasoning as
+        // _halfTimeScore above - the stored score is the final (AET-inclusive) one, so it's only
+        // correct as "the 90-minute score" when extra time never happened. Counting actual goal
+        // events up to and including minute 90 is correct either way.
+        var upToNinety = _firstHalf.Concat(_secondHalf);
+        var homeGoalsAt90 = upToNinety.Count(e => (e.Type == "Goal" || e.Type == "Own Goal") && e.Team == "Home");
+        var awayGoalsAt90 = upToNinety.Count(e => (e.Type == "Goal" || e.Type == "Own Goal") && e.Team == "Away");
+        _fullTimeScore = $"{homeGoalsAt90} - {awayGoalsAt90}";
+
+        // Same reasoning again for the break between the two ET periods - counts on top of the
+        // 90-minute tally rather than assuming anything about the stored final score.
+        var homeGoalsAt105 = homeGoalsAt90 + _firstExtraTime.Count(e => (e.Type == "Goal" || e.Type == "Own Goal") && e.Team == "Home");
+        var awayGoalsAt105 = awayGoalsAt90 + _firstExtraTime.Count(e => (e.Type == "Goal" || e.Type == "Own Goal") && e.Team == "Away");
+        _extraTimeHalfScore = $"{homeGoalsAt105} - {awayGoalsAt105}";
 
         _loading = false;
         await InvokeAsync(StateHasChanged);
@@ -437,7 +508,7 @@
         "InProgress" when match.IsHalfTime => "HT",
         "InProgress" when match.Minute is { } minute =>
             match.AddedTimeMinutes is { } added && added > 0 ? $"{minute}+{added}'" : $"{minute}'",
-        "Finished" => "FT",
+        "Finished" => MatchDisplay.FinishedLabel(match),
         _ => null,
     };
 

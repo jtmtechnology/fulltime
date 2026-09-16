@@ -214,9 +214,13 @@ public class HighlightlyMatchSyncService(
             // exception would look like a silent no-op), but a connected client missing one push
             // is harmless — it'll see the change on its next poll regardless — so this doesn't need
             // to block the sync loop or retry.
+            // Highlightly has no penalty-shootout field mapped (dormant rollback path, not worth
+            // building out further) - always reports "no shootout" rather than a wrong score.
             await hub.Clients.All.SendAsync(
                 "MatchUpdated",
-                new MatchLiveUpdate(match.Id, homeScore, awayScore, newStatus.ToString(), dto.State.Clock, null, isHalfTime),
+                new MatchLiveUpdate(
+                    match.Id, homeScore, awayScore, newStatus.ToString(), dto.State.Clock, null, isHalfTime,
+                    HomePenalties: null, AwayPenalties: null, WentToExtraTime: false),
                 ct);
         }
     }

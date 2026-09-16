@@ -31,9 +31,14 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
 
         foreach (var match in newlyFinished)
         {
-            match.Result = match.HomeScore == match.AwayScore
-                ? MatchOutcome.Draw
-                : match.HomeScore > match.AwayScore ? MatchOutcome.Home : MatchOutcome.Away;
+            // A penalty shootout can never end level - when one happened, it (not the pre-shootout
+            // HomeScore/AwayScore, which API-Football never folds the shootout into) is what
+            // actually decided the match. See Match.HomePenalties/AwayPenalties.
+            match.Result = match.HomePenalties is { } homePens && match.AwayPenalties is { } awayPens
+                ? homePens > awayPens ? MatchOutcome.Home : MatchOutcome.Away
+                : match.HomeScore == match.AwayScore
+                    ? MatchOutcome.Draw
+                    : match.HomeScore > match.AwayScore ? MatchOutcome.Home : MatchOutcome.Away;
         }
 
         await db.SaveChangesAsync(ct);

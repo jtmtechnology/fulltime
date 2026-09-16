@@ -12,7 +12,11 @@
             }
             else if (Match.Status == "Finished")
             {
-                <span class="live-clock finished">FT</span>
+                <span class="live-clock finished">@MatchDisplay.FinishedLabel(Match)</span>
+                @if (MatchDisplay.PenaltyScoreText(Match) is { } pens)
+                {
+                    <span class="live-clock finished">(@pens)</span>
+                }
             }
             @* Shown before and during a match - "notify me about this match" stops being
                meaningful once it's over, unlike Bet Builder/Match Details below. *@

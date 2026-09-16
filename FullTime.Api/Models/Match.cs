@@ -119,4 +119,16 @@ public class Match
     public int? AwayCorners { get; set; }
     public int? HomeCards { get; set; }
     public int? AwayCards { get; set; }
+
+    // Penalty shootout score - null unless the fixture actually needed one. Deliberately separate
+    // from HomeScore/AwayScore: API-Football's "goals" field is the score after normal/extra time
+    // only and never folds the shootout in, so a match a team actually won on penalties would
+    // otherwise show (and settle, see SettlementService.DeriveMatchResultsAsync) as a draw.
+    public int? HomePenalties { get; set; }
+    public int? AwayPenalties { get; set; }
+
+    // True if extra time was played - independent of whether it then went to penalties (some
+    // knockout competitions, e.g. the EFL Trophy's group stage, go straight from 90 minutes to
+    // penalties with no extra time at all). Only affects the "FT"/"AET" label shown once Finished.
+    public bool WentToExtraTime { get; set; }
 }

@@ -44,6 +44,20 @@ public class FixtureDto
 
     [JsonPropertyName("goals")]
     public GoalsInfo? Goals { get; set; }
+
+    [JsonPropertyName("score")]
+    public ScoreInfo? Score { get; set; }
+}
+
+// Only the two sub-fields actually needed to detect/settle a penalty shootout are mapped -
+// score.halftime/fulltime exist in the real payload too but nothing here needs them yet.
+public class ScoreInfo
+{
+    [JsonPropertyName("extratime")]
+    public GoalsInfo? Extratime { get; set; }
+
+    [JsonPropertyName("penalty")]
+    public GoalsInfo? Penalty { get; set; }
 }
 
 public class FixtureInfo

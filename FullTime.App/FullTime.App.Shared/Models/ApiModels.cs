@@ -46,7 +46,11 @@ public record UpcomingMatchDto(
     bool EventsAvailable,
     bool LineupsAvailable,
     long HomeTeamId,
-    long AwayTeamId);
+    long AwayTeamId,
+    // Null unless the match actually went to a shootout - see FullTime.Api's Match.HomePenalties.
+    int? HomePenalties,
+    int? AwayPenalties,
+    bool WentToExtraTime);
 
 public record ConfigResponse(int RefreshIntervalSeconds);
 
