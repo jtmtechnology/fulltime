@@ -204,7 +204,7 @@ public class ApiFootballSettlementSupportService(
                 var teamName = redCard.Team == SelectionSide.Home ? match.HomeTeam : match.AwayTeam;
                 await matchAlerts.NotifyAsync(
                     match, MatchAlertType.RedCard, "Red card!",
-                    $"{redCard.PlayerName} ({teamName}) sent off - {match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
+                    $"{redCard.PlayerName} ({teamName}) - {match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
                     sequence: ParseMinuteForSequence(redCard.Minute), ct: ct);
             }
 
@@ -218,7 +218,7 @@ public class ApiFootballSettlementSupportService(
                 var teamName = yellowCard.Team == SelectionSide.Home ? match.HomeTeam : match.AwayTeam;
                 await matchAlerts.NotifyAsync(
                     match, MatchAlertType.YellowCard, "Yellow card",
-                    $"{yellowCard.PlayerName} ({teamName}) booked - {match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
+                    $"{yellowCard.PlayerName} ({teamName}) - {match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
                     sequence: ParseMinuteForSequence(yellowCard.Minute), ct: ct);
             }
         }
