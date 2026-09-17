@@ -200,8 +200,14 @@ public class ApiFootballMatchSyncService(
         var now = DateTime.UtcNow;
         var idle = TimeSpan.FromSeconds(opts.IdleRefreshIntervalSeconds);
 
+        // KickoffTime >= now guards against a match stuck at Upcoming past its own kickoff (e.g. a
+        // postponement our sync never caught - confirmed in production 2026-09-17: Levante v Athletic
+        // Club sat Upcoming with a kickoff 18+ hours in the past, always sorted first below, and its
+        // permanently-negative "time until kickoff" was pinning every tick to the fast
+        // LiveRefreshIntervalSeconds cadence instead of the idle one). A stuck row like that still
+        // needs fixing at the data level, but must never be able to force fast-polling forever.
         var nextKickoff = await db.Matches
-            .Where(m => m.Status == MatchStatus.Upcoming && m.KickoffTime <= now + idle)
+            .Where(m => m.Status == MatchStatus.Upcoming && m.KickoffTime >= now && m.KickoffTime <= now + idle)
             .OrderBy(m => m.KickoffTime)
             .Select(m => m.KickoffTime)
             .FirstOrDefaultAsync(ct);

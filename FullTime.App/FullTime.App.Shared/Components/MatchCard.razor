@@ -18,9 +18,14 @@
                     <span class="live-clock finished">(@pens)</span>
                 }
             }
+            else if (Match.Status == "Postponed")
+            {
+                <span class="live-clock postponed">Postponed</span>
+            }
             @* Shown before and during a match - "notify me about this match" stops being
-               meaningful once it's over, unlike Bet Builder/Match Details below. *@
-            @if (Match.Status != "Finished")
+               meaningful once it's over or once it no longer has a real kickoff time, unlike
+               Bet Builder/Match Details below. *@
+            @if (Match.Status is not ("Finished" or "Postponed"))
             {
                 <button type="button" class="alert-bell-btn @(AlertSubs.IsAlerted(Match) ? "active" : "")" @onclick="ToggleAlertAsync"
                         aria-label="@(AlertSubs.IsAlerted(Match) ? "Remove match alert" : "Add match alert")">
@@ -37,7 +42,7 @@
             <LogoImg Src="@Match.HomeLogoUrl" CssClass="crest" Alt="@Match.HomeTeam" />
             <span class="team-name">@Match.HomeTeam</span>
         </div>
-        <div class="match-score @(Match.Status == "Upcoming" ? "pending" : "")">@ScoreText()</div>
+        <div class="match-score @(Match.Status is "Upcoming" or "Postponed" ? "pending" : "")">@ScoreText()</div>
         <div class="match-team">
             <LogoImg Src="@Match.AwayLogoUrl" CssClass="crest" Alt="@Match.AwayTeam" />
             <span class="team-name">@Match.AwayTeam</span>

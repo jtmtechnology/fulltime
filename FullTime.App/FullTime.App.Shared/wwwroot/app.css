@@ -317,6 +317,7 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 }
 .live-clock { color: var(--accent); font-weight: 700; }
 .live-clock.finished { color: var(--text-muted); }
+.live-clock.postponed { color: var(--warn); }
 .kickoff-row-trailing { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
 /* An inline SVG (currentColor) rather than the 🔔 emoji - the emoji renders in its own fixed
    gold/yellow regardless of state, which doesn't match this app's actual "active" colour (the

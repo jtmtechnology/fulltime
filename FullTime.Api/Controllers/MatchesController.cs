@@ -110,7 +110,11 @@ public class MatchesController(
         }
         else
         {
-            query = db.Matches.Where(m => m.Status == MatchStatus.Upcoming || m.Status == MatchStatus.InProgress);
+            // Postponed included here (unlike the specific-date branch above) - this is the main
+            // "what's coming up" listing, and a postponed fixture that hasn't been given a new
+            // kickoff yet is still relevant to show, just labelled instead of listed with a time.
+            query = db.Matches.Where(m =>
+                m.Status == MatchStatus.Upcoming || m.Status == MatchStatus.InProgress || m.Status == MatchStatus.Postponed);
         }
 
         if (leagueId is { } selectedLeagueId)
