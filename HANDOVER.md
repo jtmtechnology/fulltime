@@ -496,7 +496,7 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-16, see §22 for the latest):**
+**Top priorities for whoever picks this up next (updated end of 2026-09-17, see §24 for the latest):**
 1. **`fulltime-web` is deliberately out of scope — do not flag it as stale or suggest redeploying it.**
    The owner explicitly said "ignore fulltime-web, don't use the web app" (2026-09-15, §20) — this
    supersedes every earlier note in this file about `fulltime-web` being behind `main`. It's had no
@@ -507,11 +507,20 @@ still in effect:
    correctly with multiple family members using it independently the same day, but that hasn't
    actually been observed with two real accounts yet. Worth watching the first time more than one
    person uses it on the same day.
-3. **Trigger a fresh iOS Codemagic build (`ios-testflight`)** — still the owner's next step for iOS,
-   untouched again this session. Also tests the §6.11 hypothesis (owner's full delete+restart+reinstall
-   did NOT fix the stale notification icon, ruling out the local-cache theory) - if the new build's
-   notification icon comes through correct, that confirms TestFlight/APNs caches icon artwork
-   per-build rather than reading the live bundle.
+3. **SUPERSEDED by §23: the owner is mid-migration to a new Apple Developer account, so "just trigger
+   ios-testflight" is no longer the whole story.** The old account is being abandoned (not
+   transferred) — since iOS never passed App Review, nothing of real value is lost. New iOS-only
+   bundle ID is `co.uk.jtmtechnology.fulltime.app` (Android's `com.jtmtechnology.fulltime.app` is
+   untouched — see §23 for why it can't change). Three repo files are already edited for this
+   **but still uncommitted** — `FullTime.App.csproj` (iOS-only `ApplicationId` override),
+   `codemagic.yaml` (both iOS workflows' `bundle_identifier`), and
+   `Platforms/iOS/GoogleService-Info.plist` (swapped to the new Firebase iOS app registration the
+   owner already created). Full remaining checklist — all external console work only the owner can
+   do (Apple Developer Portal App ID + Push capability + APNs key, Firebase APNs key upload, a fresh
+   App Store Connect app record + `remove_ads` IAP + listing metadata, a new App Store Connect API
+   key into Codemagic's `FullTime` integration, then `ios-ad-hoc` before `ios-testflight`) — is in
+   §23. The §6.11 stale-notification-icon TestFlight test is still worth doing once a build actually
+   goes out, just no longer the primary reason to trigger one.
 4. **DONE (§21): a fresh signed AAB is built and waiting — version 1.7/14, folds in everything
    through §21 (Bet Builder Match result/Dynamic Odds, relative player ratings, Match alerts
    button, plus every §20 change).** Output:
@@ -536,7 +545,8 @@ still in effect:
    call type specifically), neither has been watched over a genuinely heavy multi-league matchday yet
    at the new cadences. The new quota-alert emails (item 7 above) are the safety net if this turns out
    too aggressive. Also still watching for the "Failed to re-fetch N match(es) dropped from live=all"
-   warning added in §15's resilience fix (`5b72c41`) - it has never actually fired yet.
+   warning added in §15's resilience fix (`5b72c41`) - it has never actually fired yet (checked again
+   during §23's stuck-match investigation, still no occurrence found).
 9. **API-Football account upgraded to 75,000 calls/day** (§17.5, was Pro/7,500) — the old
    §6.13/§11.4 "needs an upgrade before pushing cadences lower" blocker is resolved, and is what
    made §20's 10s events-refresh cadence and item 7's quota tracker worth doing now.
@@ -640,6 +650,30 @@ still in effect:
     a clean build only, for all of `MatchCard.razor`/`MatchSummarySheet.razor`. Worth an actual live
     check (or a synthetic penalty-shootout/extra-time test match) next time it's touched, and note
     it's `FullTime.App.Shared`-only - it ships on the next Android/iOS build, not via any VM deploy.
+31. **New (§23): `codemagic-ios.yaml` is a stale-looking duplicate of `codemagic.yaml`'s two iOS
+    workflows, still on the OLD bundle ID (`com.jtmtechnology.fulltime.app`), and whether Codemagic's
+    dashboard actually reads it instead of `codemagic.yaml` is unconfirmed** - the owner deferred
+    checking this. Git history (`d1476f9`/`469a02a`) suggests it's leftover from an old
+    revert-then-restore of the Android workflow, i.e. probably dead, but this must be confirmed in
+    Codemagic's project settings before trusting `codemagic.yaml`'s bundle-ID edit alone - if
+    `codemagic-ios.yaml` is actually live, it needs the same `co.uk.jtmtechnology.fulltime.app` edit
+    or iOS CI will keep building against the old (now-abandoned) bundle ID.
+32. **New (§23): a Barcelona v Racing Santander match sat stuck `InProgress` for hours overnight
+    2026-09-16/17, investigated and closed with no code change.** Confirmed no code-level failure
+    (the live-sync loop kept polling normally through at least 23:14 UTC, well past the match's real
+    full-time); leading explanation is a provider-side (API-Football) data lag for that one fixture,
+    unconfirmed beyond that since there's no dashboard access to check their side. The 210-minute
+    stale-InProgress watchdog (§12.4) fired as designed and alerted the owner - it's alert-only by
+    design, doesn't force-resolve, since a genuinely long match shouldn't be guessed at. No bets
+    existed on this match, so no settlement impact. If this recurs on a match with real bets on it,
+    worth revisiting whether the stale watchdog should also take a corrective action instead of just
+    alerting - not done, just floated in conversation, no decision made.
+33. **RESOLVED (§24): a stuck-`Upcoming` postponed match was pinning `ApiFootballMatchSyncService`'s
+    poll cadence to its fast interval continuously, all day, with zero matches actually live** - fixed
+    both the one bad row and the underlying code gap (`NextPollDelayAsync` now ignores kickoffs
+    already in the past). Worth watching `journalctl`/the API-Football `/status` call count over the
+    next few days to confirm it's actually settled to idle-rate polling, since this was only verified
+    once, right after deploy, with nothing live to test the fast path against.
 
 Full list:
 
@@ -2480,3 +2514,178 @@ doing that.
   match had already settled a bet as a wrong `Draw` before the fix landed (no backfill performed
   either way, since the owner said to deploy without checking first); no live/emulator verification
   of the new Match Summary display behaviour.
+
+---
+
+## 23. 2026-09-17 session — Apple Developer account migration prep, Barcelona stuck-InProgress investigation
+
+### 23.1 Apple Developer account migration — repo-side prep done, everything else is the owner's
+
+- Owner is switching to a new Apple Developer account and abandoning the old one entirely (confirmed
+  explicitly: not using Apple's "Transfer App" flow). This is low-risk specifically *because* iOS has
+  never passed App Review (confirmed by reading `HANDOVER.md`/git history this session, not just
+  assumed) - the only things left behind are one stale TestFlight build ("7", ~August) and an
+  unresolved TestFlight 422 that's now moot with a fresh app record.
+- **New iOS-only bundle ID: `co.uk.jtmtechnology.fulltime.app`.** Critically, this does **not**
+  change Android's `ApplicationId` - `FullTime.App.csproj` had a single shared `ApplicationId`
+  (`com.jtmtechnology.fulltime.app`) across every platform, and Android's is already live on Play
+  Store (can't change post-publish). Added a platform-conditioned override instead:
+  ```xml
+  <ApplicationId Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">co.uk.jtmtechnology.fulltime.app</ApplicationId>
+  ```
+  MacCatalyst/Windows still inherit the shared Android-matching ID - not touched, since neither is
+  actually shipped anywhere.
+- **Three files edited, still uncommitted** (`git status` confirms, deliberately held back pending
+  the owner's go-ahead - last thing asked was whether to hold off for one clean commit, unanswered
+  when the session moved on to the Barcelona investigation):
+  - `FullTime.App/FullTime.App/FullTime.App.csproj` - the iOS-only `ApplicationId` override above.
+  - `codemagic.yaml` - `bundle_identifier` updated to the new value in both `ios-ad-hoc` and
+    `ios-testflight` workflows' `ios_signing` blocks.
+  - `FullTime.App/FullTime.App/Platforms/iOS/GoogleService-Info.plist` - swapped for a new one the
+    owner generated from Firebase (project `fulltime-98cc9` unchanged, but `BUNDLE_ID` and
+    `GOOGLE_APP_ID` are new - `GOOGLE_APP_ID` went from `...ios:9fffcd32a33a97fb139d25` to
+    `...ios:8097bf1f2a76b944139d25`, confirming a genuinely new Firebase iOS app registration, not
+    just a hand-edit). The owner dropped the new file at the repo root; it was verified (bundle ID
+    checked) then moved into place and the loose root copy deleted.
+- **Found along the way**: `codemagic-ios.yaml` (repo root) is a byte-for-byte duplicate of the two
+  iOS workflows, still on the *old* bundle ID. Git history (`d1476f9` "Revert codemagic.yaml to
+  iOS-only, save the Android workflow separately", `469a02a` "Swap codemagic.yaml to include the
+  Android debug workflow again") suggests it's a leftover from an old back-and-forth, probably dead
+  since Codemagic defaults to reading `codemagic.yaml` - but **this is unconfirmed**, the owner
+  deferred checking Codemagic's actual project settings. See §7 item 31 - this needs resolving before
+  trusting that the `codemagic.yaml` edit alone is enough for CI.
+- **Full remaining checklist, all external console work only the owner can do** (nothing further for
+  a future Claude session here unless asked to help with a related repo change):
+  1. Apple Developer Portal (new account): register App ID `co.uk.jtmtechnology.fulltime.app` with
+     the **Push Notifications capability enabled** (required - `Entitlements.plist` declares
+     `aps-environment: production`, and Codemagic's automatic signing will fail to produce a valid
+     profile without it registered first). Generate a new APNs Authentication Key (.p8).
+  2. Firebase console: upload that new APNs key against the new iOS app entry in project
+     `fulltime-98cc9` (Cloud Messaging → Apple app configuration) - this is what keeps push
+     notifications working, since APNs keys are Team-scoped and the old team's key stops applying.
+  3. App Store Connect (new account): create a new app record for the new bundle ID; recreate the
+     `remove_ads` non-consumable IAP (product ID must match exactly - hardcoded in
+     `MauiAdsRemovalService.cs`); re-enter listing metadata (description/keywords were never saved
+     anywhere per the original Sept 2 session, so this is from scratch), both screenshot sizes, App
+     Privacy declaration, Content Rights, Age rating, and this time fill in TestFlight's **Test
+     Information** fully (leading suspect for the old, now-moot, 422); add a review test account;
+     generate a new App Store Connect API key (Issuer ID + Key ID + .p8).
+  4. Codemagic dashboard: update the `FullTime` `app_store_connect` integration with that new API
+     key. Confirm/resolve the `codemagic-ios.yaml` question (§7 item 31) first. Trigger `ios-ad-hoc`
+     as a cheap signing smoke test before `ios-testflight`. Re-invite TestFlight testers (fresh app
+     record, none carried over).
+
+### 23.2 Barcelona v Racing Santander stuck-`InProgress` — investigated, closed, no code change
+
+- Owner reported the match (kicked off 2026-09-16 19:30 UTC, home 7-2 final) was stuck showing as in
+  progress. Confirmed in the production DB it's now correctly `Finished`/7-2, i.e. it self-corrected,
+  but sat wrong for a real stretch (the owner separately confirmed the §12.4 210-minute
+  stale-InProgress email alert actually fired for it).
+- **Ruled out**: our own sync loop being stuck or crashed - confirmed via `journalctl` that the live
+  sync (`ApiFootballMatchSyncBackgroundService`) kept ticking at its normal fast cadence through at
+  least 23:14 UTC, well past when this match should have naturally finished (~21:20). No
+  `Failed to re-fetch ... dropped from live=all` warning found either (that resilience path exists
+  for exactly this class of problem - see `RefreshLiveAsync`).
+- **`Match.EventsFetchedAt` is a red herring for "when did it actually finish"** - worth remembering
+  for next time. It's set by the *separate* `ApiFootballSettlementSupportService.ResolveMatchEventsAsync`
+  job (`WHERE Status == Finished AND EventsFinalizedAt == null`), which only runs *after* `Status` is
+  already `Finished` - it tells you when the events/settlement job caught up (here, 05:08:41 UTC),
+  not when the match transitioned to `Finished`. There's no `UpdatedAt`/status-history column on
+  `Match` to get the real transition timestamp; `SentMatchAlerts.SentAt` would give it (logged per
+  alert type including `FullTime`) but only if someone had an alert subscription on this match - this
+  one had none, so that table had zero rows for it and couldn't help either.
+- **Leading explanation (unconfirmed beyond this): a provider-side (API-Football) data lag for this
+  one fixture**, not a bug in our sync code. No visibility into API-Football's own dashboard to
+  confirm further. **No bets existed on this match** (`BetLegs` count = 0), so no settlement fallout
+  either way - this was purely a display/alerting annoyance, not a money-affecting bug.
+- No code changes made. Floated (not decided, not actioned) the idea that if this recurs on a match
+  with real bets on it, the stale-InProgress watchdog might be worth extending to take a corrective
+  action rather than just alerting - see §7 item 32.
+
+---
+
+## 24. 2026-09-17 session (continued) — API-Football quota-drain root cause found and fixed
+
+Owner asked what was using today's API-Football quota. Investigated live rather than guessing from
+code alone - see §7 item 33 for the one-line summary.
+
+### 24.1 Root cause, confirmed with real data at every step
+
+- API-Football's own `/status` endpoint (the authoritative source, not our self-tracked counter)
+  showed **11,623 of 75,000 daily calls used by 13:30 UTC**, with the account confirmed on the
+  **Ultra plan** (`{"subscription":{"plan":"Ultra", ...}}`) - a plan upgrade that happened at some
+  point after §17.5 recorded it as newly-upgraded-to-75,000/day; worth noting for whoever next checks
+  billing, since "Ultra" wasn't a plan name mentioned before this session.
+- `journalctl -u fulltime-api --since today` showed **9,313 "API-Football live match sync tick
+  complete" log lines** for the day so far - by far the dominant call source (odds sync: 43-44 ticks,
+  settlement support: 159, lineups-check: 161, fixture discovery: 1).
+- **But the owner pointed out no match was actually live at the time**, which didn't square with a
+  cadence that's only supposed to poll fast (`ApiFootballOptions.LiveRefreshIntervalSeconds`, 5s) while
+  something's genuinely in progress. Confirmed via direct DB query: zero rows with `Status = 2`
+  (InProgress) at the time of asking - the owner was right to push back.
+- Queried every match kicked off in the last 24h: every one from the previous evening had correctly
+  self-corrected to `Finished` (1) **except one** - `Levante v Athletic Club` (kickoff 2026-09-16
+  19:30 UTC), still sitting at `Status = 0` (Upcoming), 18+ hours after its scheduled kickoff.
+- Confirmed directly against API-Football's `/fixtures?id=` for that fixture's `ExternalId`
+  (`1570389`): the provider itself reports `"status":{"long":"Match Postponed","short":"PST"}` - a
+  real, genuine postponement our system never picked up.
+- **Why our sync never caught it**: `RefreshLiveAsync`'s "dropped from live" re-fetch
+  (`ApiFootballMatchSyncService.cs`) only re-checks matches that were previously `InProgress` in our
+  own DB - this one never was, since a postponed match goes straight from Upcoming to Postponed at
+  the provider without ever appearing in `fixtures?live=all`. Fixture discovery (the only other path
+  that would have caught it) only runs once every 24h, so if the postponement was announced after that
+  day's discovery tick, nothing else would re-check it until the next one.
+- **Why that one stuck row drove ~13.5 hours of continuous fast polling**: `NextPollDelayAsync`
+  ([ApiFootballMatchSyncService.cs](FullTime.Api/BetBuilder/ApiFootball/ApiFootballMatchSyncService.cs))
+  picks the "next upcoming kickoff" by querying `Upcoming` matches ordered by `KickoffTime` ascending,
+  with no floor excluding a kickoff already in the past. Since this match's kickoff was 18+ hours old,
+  it always sorted first, and "time until kickoff" came out deeply negative - which the code treated
+  the same as "kickoff is imminent," forcing the fast 5s interval **continuously**, never falling back
+  to the 3,600s idle interval. The math checks out almost exactly: ~13.5h since UTC midnight ÷ 5s ≈
+  9,700 ticks, versus the observed 9,313.
+
+### 24.2 Fix - both the data and the code gap, owner explicitly approved both plus a UI change
+
+- **Production DB**: manually corrected that one match's `Status` to `3` (Postponed) via direct SQL
+  over SSH (owner's explicit go-ahead, per this project's confirm-before-writing-to-prod-DB rule).
+  Verified via `/api/config` immediately after the code deploy below: it now reports
+  `refreshIntervalSeconds: 3600` (idle), confirming the cadence bug is actually fixed, not just the
+  symptom.
+- **Code fix** (commit `8534e6b`, pushed to `main`, deployed to `fulltime-api`):
+  `NextPollDelayAsync`'s "next kickoff" query now also requires `KickoffTime >= now`, so a stuck or
+  lost fixture with a past kickoff can never again pin the poll loop to fast-mode indefinitely. The
+  underlying gap that lets a postponed match escape both sync paths (§24.1) was **not** fixed - only
+  the blast radius (runaway polling) was. If another fixture gets silently postponed in the future,
+  it'll still need a manual DB correction like this one; it just won't burn quota while stuck.
+- **Owner also asked to stop hiding Postponed matches from the app** - same commit:
+  - `MatchesController.GetUpcoming`'s default (no-date) query now includes `Postponed` alongside
+    `Upcoming`/`InProgress`, instead of a postponed fixture just vanishing from the list.
+  - `MatchCard.razor` shows an amber "Postponed" badge (new `.live-clock.postponed` style in
+    `app.css`, using the existing `--warn` token) in place of the countdown/score; the alert-bell
+    button is now also hidden for Postponed (extended from Finished-only), since there's no real
+    kickoff time left to alert on.
+  - **Deliberately left alone**: `GetUpcoming`'s specific-date branch still excludes `Postponed` (a
+    separate, explicit owner request from §6.9 - a postponed fixture showing "as if it happened" on
+    its old date was the complaint there). Only the main list behavior changed this session. If the
+    owner wants the date-view reversed too, that's a one-line follow-up
+    (`FullTime.Api/Controllers/MatchesController.cs`, remove `&& m.Status != MatchStatus.Postponed`
+    from the date-branch `Where`).
+  - **Not yet visible on a real device** - this is `FullTime.App.Shared`, so it ships on the next
+    Android/iOS build like any other UI change, not via the VM deploy that already happened for the
+    API side.
+
+### 24.3 Files changed this session
+
+- `FullTime.Api/BetBuilder/ApiFootball/ApiFootballMatchSyncService.cs` - `NextPollDelayAsync` kickoff
+  query gains `KickoffTime >= now`.
+- `FullTime.Api/Controllers/MatchesController.cs` - default `GetUpcoming` query includes `Postponed`.
+- `FullTime.App/FullTime.App.Shared/Components/MatchCard.razor` - Postponed badge, alert-bell hidden
+  for Postponed too.
+- `FullTime.App/FullTime.App.Shared/wwwroot/app.css` - `.live-clock.postponed` style.
+- Production DB: one row (`Matches.Id = eb06f523-fd22-4745-a134-d450d8564e82`) `Status` corrected
+  `0 → 3`.
+- Deployed to `fulltime-api` (build/publish/scp/systemd-restart, per `CLAUDE.md`'s standard pattern);
+  verified via `/api/config` returning the idle interval post-deploy.
+- **Not touched this session** (still sitting exactly as §23 left them, uncommitted): the three iOS
+  Apple-Developer-migration files (`FullTime.App.csproj`, `codemagic.yaml`,
+  `Platforms/iOS/GoogleService-Info.plist`) - see §7 item 3/§23 for that full checklist.
