@@ -30,7 +30,12 @@ public class BetBuilderBoostService(AppDbContext db, IOptions<BettingOptions> op
     public async Task<BetBuilderBoostStatus> GetStatusAsync(Guid userId, CancellationToken ct = default)
     {
         var match = await GetOrPickTodaysMatchAsync(ct);
-        if (match is null)
+        // Kickoff-time check rather than waiting on live-sync to flip Status away from Upcoming -
+        // the banner should vanish the moment the match actually kicks off, not whenever the next
+        // poll tick happens to notice. Today's pick is never replaced once it starts (see the class
+        // comment) - a new match only appears once GetOrPickTodaysMatchAsync rolls over to a new
+        // calendar day.
+        if (match is null || match.KickoffTime <= DateTime.Now)
         {
             return new BetBuilderBoostStatus(false, null, null, null, options.Value.BetBuilderBoostPercent, options.Value.BetBuilderBoostMinSelections);
         }

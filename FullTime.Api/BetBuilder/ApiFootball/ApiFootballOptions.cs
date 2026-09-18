@@ -19,7 +19,13 @@ public class ApiFootballOptions
     // even though the live provider already had them). PRO tier (7,500 req/day, 300 req/min)
     // comfortably supports this at the daily FixtureDiscoveryIntervalMinutes cadence.
     public int MatchSyncDaysAhead { get; set; } = 8;
-    public int FixtureDiscoveryIntervalMinutes { get; set; } = 1440;
+    // Lowered 1440 (once/day) -> 60 (hourly) 2026-09-18 - the daily cadence left up to 24h before a
+    // provider-side postponement on an Upcoming match got noticed at all (RefreshLiveAsync never
+    // looks at Upcoming matches, only live/previously-InProgress ones - see
+    // ApiFootballMatchSyncService's class comment and RecheckStaleUpcomingAsync below). 14 tracked
+    // leagues x 24 ticks/day = 336 calls/day vs 14/day before - a ~322/day increase, trivial against
+    // the 75,000/day Ultra budget.
+    public int FixtureDiscoveryIntervalMinutes { get; set; } = 60;
 
     // RefreshLiveAsync backs off to this cadence when nothing's live.
     public int IdleRefreshIntervalSeconds { get; set; } = 3600;
@@ -80,6 +86,14 @@ public class ApiFootballOptions
     // cadence forever - the exact same class of quota risk as the Postponed/staleKickoffs bug this
     // whole cutover already fixed once, just via a different trigger.
     public int StaleInProgressMinutes { get; set; } = 210;
+
+    // A match still Upcoming this long past its own kickoff almost certainly means a postponement
+    // (or other status change) our sync never caught - RefreshLiveAsync only ever looks at matches
+    // that are currently live or were previously InProgress in our DB, so a match that goes straight
+    // from Upcoming to Postponed at the provider is otherwise invisible to it (see
+    // ApiFootballMatchSyncService.RecheckStaleUpcomingAsync). 60 minutes gives real kickoffs plenty
+    // of time to show up via the live poll before being treated as suspicious.
+    public int StaleUpcomingMinutes { get; set; } = 60;
 
     // Blank by default (checked-in secret-like placeholder, same convention as
     // Highlightly:AlertEmail) - set via ApiFootball__AlertEmail on the VM. Shared by two distinct

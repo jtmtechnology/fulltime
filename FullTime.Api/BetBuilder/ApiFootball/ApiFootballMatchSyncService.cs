@@ -117,6 +117,53 @@ public class ApiFootballMatchSyncService(
             await db.SaveChangesAsync(ct);
             logger.LogInformation("API-Football fixture discovery: upserted {Count} tracked match(es)", upsertedCount);
         }
+
+        await RecheckStaleUpcomingAsync(ct);
+    }
+
+    // Closes a gap RefreshFixturesAsync's own date-windowed query can't: that query only ever asks
+    // the provider for fixtures from today onwards, so once a match's original kickoff date is in
+    // the past it silently drops out of every future discovery tick's window - a postponement missed
+    // on the day it was announced would otherwise never be rechecked again (confirmed in production
+    // 2026-09-17 - see HANDOVER.md §24). Fetching by fixture ID via GetFixturesByIdsAsync has no date
+    // filter at all, so it reaches a match regardless of how long ago its date slipped into the past.
+    private async Task RecheckStaleUpcomingAsync(CancellationToken ct)
+    {
+        var cutoff = DateTime.UtcNow.AddMinutes(-options.Value.StaleUpcomingMinutes);
+        var staleExternalIds = await db.Matches
+            .Where(m => m.Status == MatchStatus.Upcoming && m.KickoffTime <= cutoff)
+            .Select(m => m.ExternalId)
+            .ToListAsync(ct);
+
+        if (staleExternalIds.Count == 0)
+        {
+            return;
+        }
+
+        List<FixtureDto> fixtures;
+        try
+        {
+            fixtures = await client.GetFixturesByIdsAsync(staleExternalIds.Select(long.Parse), ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to re-check {Count} stale-Upcoming match(es)", staleExternalIds.Count);
+            return;
+        }
+
+        var upsertedCount = 0;
+        foreach (var fixture in fixtures)
+        {
+            await UpsertMatchAsync(fixture, ct);
+            upsertedCount++;
+        }
+
+        if (upsertedCount > 0)
+        {
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation(
+                "API-Football stale-Upcoming recheck: re-fetched {Count} match(es) still Upcoming past kickoff", upsertedCount);
+        }
     }
 
     // Excludes matches stuck InProgress well past any real match's actual duration (extra time +
