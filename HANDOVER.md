@@ -496,7 +496,7 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-18, see §25 for the latest):**
+**Top priorities for whoever picks this up next (updated end of 2026-09-18, see §26 for the latest):**
 1. **`fulltime-web` is deliberately out of scope — do not flag it as stale or suggest redeploying it.**
    The owner explicitly said "ignore fulltime-web, don't use the web app" (2026-09-15, §20) — this
    supersedes every earlier note in this file about `fulltime-web` being behind `main`. It's had no
@@ -518,9 +518,11 @@ still in effect:
    reason. The §6.11 stale-notification-icon TestFlight test is still an open question — worth
    triggering `ios-testflight` at some point to test it, now unblocked by any account-migration
    console work.
-4. **DONE (§21): a fresh signed AAB is built and waiting — version 1.7/14, folds in everything
-   through §21 (Bet Builder Match result/Dynamic Odds, relative player ratings, Match alerts
-   button, plus every §20 change).** Output:
+4. **DONE (§26): a fresh signed AAB is built and waiting — version 1.8/15, supersedes the 1.7/14
+   build from §21 (which the owner confirmed IS already uploaded to Play Console).** Folds in
+   everything through §25: Dynamic Odds restricted to the Popular tab, penalty-shootout capture/
+   settle/display, Postponed matches shown in-app (all §22-era `FullTime.App.Shared` changes that
+   post-date the 1.7/14 build), plus the §25 API-only fixes along for the ride. Output:
    `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`.
    **Upload to Play Console is still the owner's action** — this has now been stale at the end of
    every session since §13; genuinely worth uploading this one before it goes stale too.
@@ -690,6 +692,12 @@ still in effect:
     postponement-detection gap** - see §25 for detail. Worth a `journalctl` check over the next few
     days to confirm the hourly discovery tick + recheck settle into a sane call-volume pattern, same
     spirit as item 8's live-score-quota watch.
+36. **Unfinished (§26.1): a test push to Dad's Android device was requested but never sent** - the
+    owner interrupted mid-investigation to ask for the Android build (item 4/§26.2) instead. Dad's
+    most recent Android `DeviceToken` on file is from 2026-09-09 (`b531a68c-...`) - re-query
+    `DeviceTokens` for user `eff4d5b2-ceb3-4bfa-b728-25fbece33e4d` before trusting it's still current,
+    then send via the same throwaway-script-against-the-real-Firebase-service-account-key approach as
+    §20.1/§25.4.
 
 Full list:
 
@@ -2828,3 +2836,58 @@ push fix was a Firebase/Apple console credential, not code.
   SSH pattern, explicitly excluding INSERT/UPDATE/DELETE (which should still prompt/require explicit
   confirmation per this project's existing write-to-prod-DB convention). Confirmed working immediately
   after - the next SSH+psql SELECT query succeeded without a block.
+
+---
+
+## 26. 2026-09-18 session 2 — test push investigation (interrupted), fresh Android release build (1.8/15)
+
+New session, continuing from §25 (same calendar day). Opened with a `/load` briefing (no code
+changes, just confirmed HANDOVER.md's §25 state matched real `git log`/`git status` exactly - not
+stale). Two threads followed; the first was left mid-flight.
+
+### 26.1 Test push to Dad's Android device — started, not completed
+
+- Owner asked to send a test push to Dad's Android device (`Dad`, `alan@jtmtechnology.co.uk`,
+  user id `eff4d5b2-ceb3-4bfa-b728-25fbece33e4d` - same account identified in §25.4). Read
+  `PushNotificationService.cs`/`DeviceToken.cs` to confirm the exact `Message`/`ApnsConfig` shape to
+  replicate (same approach as §20.1/§25.4's throwaway test-push scripts).
+- Queried `DeviceTokens` read-only via the §25.5 SSH+psql allowance: Dad has 12 registered tokens,
+  2 of them `Platform = 0` (Android) - `b531a68c-...` (2026-09-09 08:26 UTC, most recent Android one)
+  and `40c3c51d-...` (2026-09-08 18:10 UTC). Retrieved the full token value for the most recent one
+  (`fcJ_tGpVS56Wedlw-5Crq1:APA91b...`).
+- **Owner interrupted before the push was actually sent** to ask for an Android build instead (§26.2).
+  **Nothing was sent, no script was written to disk.** The Android token on file is from
+  2026-09-09 - nearly 10 days stale relative to this session - so it may no longer be valid depending
+  on whether the app has been reinstalled/token-refreshed since. **Next session: re-run the same
+  `DeviceTokens` query before reusing this token** (registration tokens can rotate), then send via the
+  same throwaway-script approach as §25.4, using the `fulltime-98cc9-firebase-adminsdk-fbsvc-*.json`
+  service-account key already present locally (gitignored) - and delete the script after, per that
+  session's practice of leaving nothing committed.
+
+### 26.2 Fresh Android signed release build — v1.8/15
+
+- Owner confirmed the existing 1.7/14 AAB (built §21, never confirmed uploaded in earlier sessions)
+  **has now actually been uploaded to Play Console**. Since then, main had picked up more
+  `FullTime.App.Shared` changes not in that build (Dynamic Odds scope restriction, penalty-shootout
+  display, Postponed matches shown in-app - all landed between the §21 version bump and now, see
+  §22-§25). Bumped `ApplicationDisplayVersion`/`ApplicationVersion` 1.7/14 -> 1.8/15 in
+  `FullTime.App/FullTime.App/FullTime.App.csproj` (commit `03f941e`, pushed).
+- First build attempt failed with `APT2258: The data is invalid` on stale `.flata` resource
+  intermediates under `obj/Release/net10.0-android/lp/...` - the same class of MAUI Android
+  file-lock/corruption issue `CLAUDE.md` already documents (there under the `XARLP7024` symptom, this
+  session's was a different error code but the same root cause family). Fixed via `CLAUDE.md`'s
+  documented remedy: `dotnet build-server shutdown`, then force-`Remove-Item -Recurse -Force` on both
+  `obj/Release/net10.0-android` and `bin/Release/net10.0-android` (PowerShell, not bash `rm -rf`, per
+  the existing note about Windows sometimes not fully releasing MAUI's lock on these paths) - a clean
+  rebuild after that succeeded first try. **Worth adding to the gotcha's pattern-matching: this error
+  code (`APT2258`) is a second known symptom of the same stale-`obj`-under-Windows issue, not just
+  `XARLP7024`.**
+- Built successfully per `signing/README.md`'s documented command. Output:
+  `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`
+  (confirmed present, ~40MB). **Upload to Play Console is the owner's action**, same as every prior
+  build - see §7 item 4.
+- Noticed two pre-existing untracked files in the working tree (`ODDS_API_PLAYER_PROPS_INVESTIGATION.md`,
+  `emulator.log`) that predate this session and aren't referenced anywhere in this handover - left
+  untouched since they weren't part of this session's work, but worth the owner's own call on whether
+  to delete, gitignore, or commit them; `emulator.log` in particular looks like accidental build output
+  that probably shouldn't ever be committed.
