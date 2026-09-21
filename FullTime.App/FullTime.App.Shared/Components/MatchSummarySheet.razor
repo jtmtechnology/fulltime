@@ -472,11 +472,17 @@
         _firstExtraTime = wentToExtraTime ? _events.Where(e => BaseMinute(e.Minute) is > 90 and <= 105).ToList() : [];
         _secondExtraTime = wentToExtraTime ? _events.Where(e => BaseMinute(e.Minute) > 105).ToList() : [];
 
-        // Own Goal is a distinct MatchEvent.Type from Goal (see MatchEventRow) but still counts on
-        // the scoreline - Event.Team already carries the team credited with it, not the scorer's
-        // own side, so no extra flip is needed here.
-        var homeGoalsAtHalf = _firstHalf.Count(e => (e.Type == "Goal" || e.Type == "Own Goal") && e.Team == "Home");
-        var awayGoalsAtHalf = _firstHalf.Count(e => (e.Type == "Goal" || e.Type == "Own Goal") && e.Team == "Away");
+        // Own Goal and Penalty are distinct MatchEvent.Types from Goal (see MatchEventRow) but both
+        // still count on the scoreline - Event.Team already carries the team credited with it, not
+        // the scorer's own side for an own goal, so no extra flip is needed here. VAR Goal Confirmed
+        // is deliberately excluded - a goal that goes to VAR review is stored as both a "Goal" row
+        // and a separate "VAR Goal Confirmed" row for the same goal (confirmed live against
+        // production data), so counting both here would double it; a disallowed goal only ever
+        // stores a "VAR Goal Cancelled" row with no matching "Goal" row, so it's correctly never
+        // counted at all.
+        var isGoal = (MatchEventDto e) => (e.Type == "Goal" || e.Type == "Own Goal" || e.Type == "Penalty");
+        var homeGoalsAtHalf = _firstHalf.Count(e => isGoal(e) && e.Team == "Home");
+        var awayGoalsAtHalf = _firstHalf.Count(e => isGoal(e) && e.Team == "Away");
         _halfTimeScore = $"{homeGoalsAtHalf} - {awayGoalsAtHalf}";
 
         // Derived from events rather than read off Match.HomeScore/AwayScore, same reasoning as
@@ -484,14 +490,14 @@
         // correct as "the 90-minute score" when extra time never happened. Counting actual goal
         // events up to and including minute 90 is correct either way.
         var upToNinety = _firstHalf.Concat(_secondHalf);
-        var homeGoalsAt90 = upToNinety.Count(e => (e.Type == "Goal" || e.Type == "Own Goal") && e.Team == "Home");
-        var awayGoalsAt90 = upToNinety.Count(e => (e.Type == "Goal" || e.Type == "Own Goal") && e.Team == "Away");
+        var homeGoalsAt90 = upToNinety.Count(e => isGoal(e) && e.Team == "Home");
+        var awayGoalsAt90 = upToNinety.Count(e => isGoal(e) && e.Team == "Away");
         _fullTimeScore = $"{homeGoalsAt90} - {awayGoalsAt90}";
 
         // Same reasoning again for the break between the two ET periods - counts on top of the
         // 90-minute tally rather than assuming anything about the stored final score.
-        var homeGoalsAt105 = homeGoalsAt90 + _firstExtraTime.Count(e => (e.Type == "Goal" || e.Type == "Own Goal") && e.Team == "Home");
-        var awayGoalsAt105 = awayGoalsAt90 + _firstExtraTime.Count(e => (e.Type == "Goal" || e.Type == "Own Goal") && e.Team == "Away");
+        var homeGoalsAt105 = homeGoalsAt90 + _firstExtraTime.Count(e => isGoal(e) && e.Team == "Home");
+        var awayGoalsAt105 = awayGoalsAt90 + _firstExtraTime.Count(e => isGoal(e) && e.Team == "Away");
         _extraTimeHalfScore = $"{homeGoalsAt105} - {awayGoalsAt105}";
 
         _loading = false;
