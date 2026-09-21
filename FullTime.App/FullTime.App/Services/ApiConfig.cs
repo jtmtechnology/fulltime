@@ -4,5 +4,5 @@ namespace FullTime.App.Services;
 // same address — no more routing around "the emulator can't reach the host machine's localhost".
 public static class ApiConfig
 {
-    public static string BaseUrl => "http://34.23.16.148:5199";
+    public static string BaseUrl => "https://api.jtmtechnology.co.uk";
 }
