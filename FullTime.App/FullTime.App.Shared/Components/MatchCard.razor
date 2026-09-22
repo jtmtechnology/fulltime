@@ -72,8 +72,9 @@
         }
         @* Independent of the Bet Builder link above (not else-if) - once lineups are announced,
            typically ~1h before kickoff, Match Details is worth showing alongside Bet Builder, not
-           only after the match has actually started/finished. *@
-        @if (Match.EventsAvailable || Match.LineupsAvailable)
+           only after the match has actually started/finished. Postponed is excluded regardless -
+           there's nothing to show for a match that hasn't happened and has no fixed kickoff. *@
+        @if (Match.Status != "Postponed" && (Match.EventsAvailable || Match.LineupsAvailable))
         {
             <button type="button" class="bet-builder-link" @onclick="() => Summary.Open(Match)">Match Details</button>
         }
