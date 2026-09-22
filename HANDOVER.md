@@ -504,7 +504,13 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-21, see §27 for the latest):**
+**Top priorities for whoever picks this up next (updated end of 2026-09-22, see §28 for the latest):**
+0. **`CLAUDE.md`'s deployment section is still the old GCP `gcloud compute scp`/`ssh` recipe and needs
+   replacing with the Oracle one.** §28.2 has a proven, actually-executed working recipe (plain
+   `scp`/`ssh` with `~/.ssh/oracle_fulltime`, `ubuntu@89.168.59.239`, and critically **`-r linux-arm64`
+   not `linux-x64`** for the publish step, since Oracle's box is ARM64) - just needs promoting into
+   `CLAUDE.md` verbatim with the `-api`/`-website`/etc. parameterization the old recipe had. Low
+   urgency (the recipe works fine read out of §28.2 in the meantime) but easy to just do.
 1. **`fulltime-web` is deliberately out of scope — do not flag it as stale or suggest redeploying it.**
    The owner explicitly said "ignore fulltime-web, don't use the web app" (2026-09-15, §20) — this
    supersedes every earlier note in this file about `fulltime-web` being behind `main`. It's had no
@@ -3118,3 +3124,72 @@ any session's work - still the owner's call.
     had its first App Store approval yet.
 - **Owner said to shelve this for now - nothing implemented.** Also saved to the cross-session
   memory system (not just here) so a future session doesn't re-research from scratch.
+
+---
+
+## 28. 2026-09-22 session — Postponed-match display polish, first confirmed Oracle deploy recipe
+
+New session, continuing from §27. Opened with a `/load` briefing (no code changes, confirmed §27's
+state matched real `git log`/`git status` exactly). Two small UI/API changes, both committed and
+deployed/ready. Also produced the first actually-executed, confirmed-working deploy recipe for the
+new Oracle host - `CLAUDE.md`'s deployment section is still the old GCP one and needs updating with
+this (see Next steps in §7).
+
+### 28.1 Postponed matches: shown by date, de-emphasized styling
+
+- Owner asked "do we hide matches that are postponed" - answered from code
+  (`MatchesController.GetUpcoming`): no, not on the main list (included since §24.2), but yes on the
+  specific-date view (excluded since §6.9, a deliberate earlier request).
+- Owner then asked to also show them on the specific-date view. Confirmed via `AskUserQuestion` this
+  meant reversing the §6.9 exclusion, not something else. **Fix** (commit `eb605cf`):
+  `MatchesController.cs`'s date-branch query no longer excludes `MatchStatus.Postponed` - a postponed
+  fixture now shows on its original date with the same badge the main list already used.
+- Same commit, two follow-up asks from the owner once the above was live: postponed matches now
+  **never show the "Match Details" button** (`MatchCard.razor` - `Match.Status != "Postponed"` added
+  to the existing `EventsAvailable || LineupsAvailable` gate; there's nothing to show for a match that
+  never happened), and the postponed badge is **grey, not amber**
+  (`app.css` - `.live-clock.postponed` changed from `var(--warn)` to `var(--text-muted)`, matching the
+  existing `.live-clock.finished` treatment).
+- This is `FullTime.App.Shared` UI code - **not yet in any shipped Android/iOS build**, will ride
+  along with the next AAB/TestFlight bump (see §7 item 4, still open from before this session).
+
+### 28.2 API-side half of 28.1 deployed to Oracle - first confirmed working deploy recipe post-migration
+
+- The `MatchesController.cs` change (API-side) was deployed to `fulltime-api` on Oracle the same
+  session it was written, ahead of the owner's later two follow-up asks (which are `FullTime.App.Shared`
+  UI-only and don't need a server deploy at all).
+- **`CLAUDE.md`'s deployment section is still the old `gcloud compute scp`/`ssh` GCP recipe and has not
+  been updated yet** (flagged as stale since §27, still true) - this session had to work out the Oracle
+  equivalent from scratch, confirmed it end-to-end, and it's recorded here so the next session (or
+  whoever updates `CLAUDE.md`) doesn't have to re-derive it:
+  1. **`dotnet publish -c Release -r linux-arm64 --self-contained false -o publish-api`** - **not**
+     `linux-x64` like the old GCP recipe. Oracle's box is Ampere A1 (ARM64/`aarch64`, per §27.3) -
+     publishing for the wrong architecture would produce a binary that can't even start. This is the
+     one genuinely easy-to-get-wrong step if someone copies the old `CLAUDE.md` recipe verbatim.
+  2. `tar czf publish-api.tar.gz -C publish-api .`
+  3. `scp -i ~/.ssh/oracle_fulltime publish-api.tar.gz ubuntu@89.168.59.239:~/publish-api.tar.gz` - plain
+     `scp`/`ssh` with the Oracle key and `ubuntu` user, in place of `gcloud compute scp`/`ssh`.
+  4. Over the same `ssh -i ~/.ssh/oracle_fulltime ubuntu@89.168.59.239`: `sudo systemctl stop
+     fulltime-api`; back up the live deploy to `/opt/fulltime-api-previous` (`rm -rf` it first, then
+     `cp -r /opt/fulltime-api /opt/fulltime-api-previous`); clear and re-populate `/opt/fulltime-api`
+     from the tarball; `sudo chown -R fulltime:fulltime /opt/fulltime-api`; `sudo systemctl start
+     fulltime-api`. **Confirmed the remote path (`/opt/fulltime-api`) and service name (`fulltime-api`)
+     mirror the old GCP layout exactly** - only the SSH access method and publish RID actually differ.
+  5. Verified via `sudo systemctl status fulltime-api` (active, already making successful
+     `ApiFootballClient` calls within 2s of restart) and `curl https://api.jtmtechnology.co.uk/api/config`
+     returning `{"refreshIntervalSeconds":3600}` over the live TLS domain.
+  6. Cleaned up local `publish-api/` and `publish-api.tar.gz` afterward, same as the old convention.
+- **This recipe is now proven, not just theorized** - worth promoting into `CLAUDE.md`'s deployment
+  section verbatim (with the `-api`/`-website`/etc. parameterization the old GCP recipe had) next time
+  someone's doing a deploy-adjacent session, so future sessions don't have to reconstruct it from this
+  handover section.
+
+### 28.3 Files changed this session
+
+- `FullTime.Api/Controllers/MatchesController.cs` - date-branch query no longer excludes `Postponed`.
+- `FullTime.App/FullTime.App.Shared/Components/MatchCard.razor` - Match Details hidden for Postponed.
+- `FullTime.App/FullTime.App.Shared/wwwroot/app.css` - `.live-clock.postponed` now grey, not amber.
+- Commit `eb605cf`, pushed to `main`. API half deployed to Oracle (§28.2); UI half not yet in a mobile
+  build.
+- Untracked `ODDS_API_PLAYER_PROPS_INVESTIGATION.md`/`emulator.log` still sitting there, still
+  untouched, still the owner's call (unchanged since §26.2/§27).
