@@ -112,6 +112,13 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
     }
 
+    public async Task DeleteAccountAsync(string password)
+    {
+        Authorize();
+        var res = await httpClient.PostAsJsonAsync("api/users/me/delete", new DeleteAccountRequest(password));
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+    }
+
     public async Task<List<UpcomingMatchDto>> GetUpcomingMatchesAsync(DateOnly? date = null)
     {
         var url = date is { } d ? $"api/matches/upcoming?date={d:yyyy-MM-dd}" : "api/matches/upcoming";
@@ -279,6 +286,13 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
     {
         Authorize();
         var res = await httpClient.PostAsJsonAsync("api/devices/register", new RegisterDeviceRequest(token, platform, utcOffsetMinutes));
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+    }
+
+    public async Task UnregisterDeviceAsync(string token)
+    {
+        Authorize();
+        var res = await httpClient.PostAsJsonAsync("api/devices/unregister", new UnregisterDeviceRequest(token));
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
     }
 

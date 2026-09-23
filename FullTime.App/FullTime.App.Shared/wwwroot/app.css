@@ -671,7 +671,20 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
     padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer;
     display: inline-block; text-decoration: none;
 }
-.primary-btn[disabled], .cancel-btn[disabled] { opacity: 0.5; }
+.primary-btn[disabled], .cancel-btn[disabled], .leave-league-btn[disabled] { opacity: 0.5; }
+
+.confirm-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 60; border: none;
+}
+.confirm-dialog {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 61;
+    background: var(--bg-elevated); border: 1px solid var(--danger); border-radius: 12px;
+    padding: 1.25rem; width: min(360px, calc(100vw - 2rem));
+}
+.confirm-dialog h2 { margin: 0 0 0.5rem; }
+.confirm-dialog p { margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--text-muted); }
+.confirm-dialog .leave-league-btn, .account-delete-btn { margin-top: 0; }
+.account-actions { margin-bottom: 1.5rem; }
 
 .button-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
 

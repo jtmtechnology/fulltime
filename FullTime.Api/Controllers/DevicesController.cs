@@ -10,6 +10,7 @@ using Npgsql;
 namespace FullTime.Api.Controllers;
 
 public record RegisterDeviceRequest(string Token, string Platform, int? UtcOffsetMinutes = null);
+public record UnregisterDeviceRequest(string Token);
 
 [ApiController]
 [Route("api/devices")]
@@ -76,6 +77,18 @@ public class DevicesController(AppDbContext db) : ControllerBase
         }
 
         return Ok();
+    }
+
+    // Called on logout, while the JWT is still valid - otherwise the phone keeps receiving the
+    // logged-out user's pushes until someone else happens to log in and re-claim the token.
+    [HttpPost("unregister")]
+    public async Task<IActionResult> Unregister([FromBody] UnregisterDeviceRequest request, CancellationToken ct)
+    {
+        await db.DeviceTokens
+            .Where(d => d.Token == request.Token && d.UserId == CurrentUserId)
+            .ExecuteDeleteAsync(ct);
+
+        return NoContent();
     }
 
     private Guid CurrentUserId =>

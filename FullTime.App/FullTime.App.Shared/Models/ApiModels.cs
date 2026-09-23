@@ -18,10 +18,12 @@ public record MeDto(Guid Id, string Name, string Email, bool EmailVerified, deci
     string? Country, string CurrencySymbol);
 public record UpdateProfileRequest(string Name, string? Country);
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+public record DeleteAccountRequest(string Password);
 
 public record MessageResponse(string? Message, string? Error, string? Reason);
 
 public record RegisterDeviceRequest(string Token, string Platform, int? UtcOffsetMinutes = null);
+public record UnregisterDeviceRequest(string Token);
 
 public record UpcomingMatchDto(
     Guid Id,

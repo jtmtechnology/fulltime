@@ -6,4 +6,6 @@ namespace FullTime.App.Web.Services;
 public class WebPushRegistrar : IPushRegistrar
 {
     public Task RegisterAsync() => Task.CompletedTask;
+
+    public Task UnregisterAsync() => Task.CompletedTask;
 }

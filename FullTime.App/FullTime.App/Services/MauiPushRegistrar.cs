@@ -40,6 +40,24 @@ public class MauiPushRegistrar(
         }
     }
 
+    public async Task UnregisterAsync()
+    {
+        // Without this reset, whoever logs in next in the same session would never get their
+        // token registered - RegisterAsync's once-per-session guard would already be spent.
+        _registrationTask = null;
+
+        if (pushNotification.Token is not { } token) return;
+
+        try
+        {
+            await api.UnregisterDeviceAsync(token);
+        }
+        catch
+        {
+            // Best-effort, same as registration - logging out must never be blocked by this.
+        }
+    }
+
     private async Task SendTokenAsync(string token)
     {
         try

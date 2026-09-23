@@ -13,6 +13,7 @@ public record MeDto(Guid Id, string Name, string Email, bool EmailVerified, deci
     string? Country, string CurrencySymbol);
 public record UpdateProfileRequest(string Name, string? Country);
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+public record DeleteAccountRequest(string Password);
 
 [ApiController]
 [Route("api/users")]
@@ -75,6 +76,64 @@ public class UsersController(AppDbContext db) : ControllerBase
         await db.SaveChangesAsync(ct);
 
         return Ok(new { message = "Password changed." });
+    }
+
+    // Apple's App Review guideline 5.1.1(v) requires in-app account deletion for any app that lets
+    // people sign up. Every user-owned table cascades off Users, so deleting the row does most of
+    // the work - except Leagues.CreatedByUserId, whose cascade would wipe a whole league (and every
+    // other member's standing in it) just because its creator left.
+    [HttpPost("me/delete")]
+    public async Task<IActionResult> DeleteMe([FromBody] DeleteAccountRequest request, CancellationToken ct)
+    {
+        var userId = CurrentUserId;
+        var user = await db.Users.FindAsync([userId], ct);
+        if (user is null) return NotFound();
+
+        if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        {
+            return Unauthorized(new { error = "Password is incorrect." });
+        }
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        // Explicitly first: Bets.LeagueId is Restrict, so the user's own league bets have to be gone
+        // before any league they solely own can be deleted below.
+        await db.Bets.Where(b => b.UserId == userId).ExecuteDeleteAsync(ct);
+
+        var ownedLeagueIds = await db.Leagues
+            .Where(l => l.CreatedByUserId == userId)
+            .Select(l => l.Id)
+            .ToListAsync(ct);
+
+        foreach (var leagueId in ownedLeagueIds)
+        {
+            var heir = await db.LeagueMemberships
+                .Where(m => m.LeagueId == leagueId && m.UserId != userId)
+                .OrderBy(m => m.JoinedAt)
+                .Select(m => (Guid?)m.UserId)
+                .FirstOrDefaultAsync(ct)
+                // A league with no members left can still hold settled bets from people who've since
+                // left it - Restrict blocks deleting it, so hand it to one of them instead.
+                ?? await db.Bets
+                    .Where(b => b.LeagueId == leagueId)
+                    .Select(b => (Guid?)b.UserId)
+                    .FirstOrDefaultAsync(ct);
+
+            if (heir is { } heirId)
+            {
+                await db.Leagues.Where(l => l.Id == leagueId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(l => l.CreatedByUserId, heirId), ct);
+            }
+            else
+            {
+                await db.Leagues.Where(l => l.Id == leagueId).ExecuteDeleteAsync(ct);
+            }
+        }
+
+        await db.Users.Where(u => u.Id == userId).ExecuteDeleteAsync(ct);
+        await tx.CommitAsync(ct);
+
+        return NoContent();
     }
 
     private Guid CurrentUserId =>

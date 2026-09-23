@@ -5,6 +5,7 @@
 @inject NavigationManager Nav
 @inject MatchLeaguePreferences LeaguePrefs
 @inject IAdsRemovalService AdsRemoval
+@inject IPushRegistrar PushRegistrar
 
 <PageTitle>FullTime — Settings</PageTitle>
 
@@ -59,6 +60,12 @@
         </EditForm>
         <div class="status @(_passwordError ? "error" : "")">@_passwordStatus</div>
 
+        <h2>Account</h2>
+        <div class="button-row account-actions">
+            <button type="button" class="primary-btn" @onclick="LogOutAsync">Log out</button>
+            <button type="button" class="leave-league-btn account-delete-btn" @onclick="() => _confirmingDelete = true">Delete account</button>
+        </div>
+
         <h2>Extra leagues</h2>
         <p class="hint">The Premier League and the English pyramid always show in Matches. Add other countries' top flights or the UEFA cups too:</p>
         <div class="league-toggle-list">
@@ -78,6 +85,25 @@
         <p class="hint">Get a push notification for lineups, kick-off, goals and more - for your favourite teams, leagues, or matches you pick yourself.</p>
         <a class="primary-btn" href="/match-alerts">Manage match alerts</a>
     </div>
+
+    @if (_confirmingDelete)
+    {
+        <button type="button" class="confirm-overlay" @onclick="CancelDelete" disabled="@_deleting" aria-label="Cancel"></button>
+        <div class="confirm-dialog" role="alertdialog" aria-labelledby="delete-account-title">
+            <h2 id="delete-account-title">Delete your account?</h2>
+            <p>This permanently deletes your account, bets and league standings. It can't be undone.
+               Any league you created passes to another member.</p>
+            <div class="field">
+                <label for="delete-password">Enter your password to confirm</label>
+                <InputText id="delete-password" type="password" @bind-Value="_deletePassword" />
+            </div>
+            <div class="status @(_deleteError ? "error" : "")">@_deleteStatus</div>
+            <div class="button-row">
+                <button type="button" class="leave-league-btn" disabled="@_deleting" @onclick="DeleteAccountAsync">Delete forever</button>
+                <button type="button" class="cancel-btn" disabled="@_deleting" @onclick="CancelDelete">Cancel</button>
+            </div>
+        </div>
+    }
 }
 
 @code {
@@ -95,6 +121,11 @@
     private bool _purchasing;
     private string _adsStatus = "";
     private bool _adsError;
+    private bool _confirmingDelete;
+    private bool _deleting;
+    private string _deletePassword = "";
+    private string _deleteStatus = "";
+    private bool _deleteError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -159,6 +190,54 @@
         {
             _passwordStatus = $"Error: {ex.Message}";
             _passwordError = true;
+        }
+    }
+
+    private async Task LogOutAsync()
+    {
+        await PushRegistrar.UnregisterAsync();
+        await AuthState.LogoutAsync();
+        Nav.NavigateTo("/login");
+    }
+
+    private void CancelDelete()
+    {
+        _confirmingDelete = false;
+        _deletePassword = "";
+        _deleteStatus = "";
+        _deleteError = false;
+    }
+
+    private async Task DeleteAccountAsync()
+    {
+        if (string.IsNullOrEmpty(_deletePassword))
+        {
+            _deleteStatus = "Enter your password.";
+            _deleteError = true;
+            return;
+        }
+
+        _deleting = true;
+        _deleteStatus = "Deleting…";
+        _deleteError = false;
+
+        try
+        {
+            await Api.DeleteAccountAsync(_deletePassword);
+            // The server already cascaded the device token away; this just resets the registrar
+            // so a fresh login on this phone registers again.
+            await PushRegistrar.UnregisterAsync();
+            await AuthState.LogoutAsync();
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            _deleteStatus = $"Error: {ex.Message}";
+            _deleteError = true;
+        }
+        finally
+        {
+            _deleting = false;
         }
     }
 

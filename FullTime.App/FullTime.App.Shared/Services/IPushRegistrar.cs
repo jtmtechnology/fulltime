@@ -5,4 +5,7 @@ namespace FullTime.App.Shared.Services;
 public interface IPushRegistrar
 {
     Task RegisterAsync();
+
+    // Must run before AuthState.LogoutAsync - the unregister call needs the still-valid JWT.
+    Task UnregisterAsync();
 }
