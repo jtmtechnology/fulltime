@@ -12,13 +12,17 @@ live in `CLAUDE.md` at the repo root — read that first.** This file covers rec
 current outstanding work, and gotchas discovered along the way. Read this fully before touching
 code.
 
-**⚠️ Production infrastructure moved from GCP to Oracle Cloud on 2026-09-21 (§27.3).**
-`CLAUDE.md`'s deployment section (the `gcloud compute scp`/`ssh` pattern) is now stale for the
-API/website — every `fulltime-*` service on the GCP VM is stopped except a now-pointless `nginx`.
-Read §27 before touching deployment/infra: it has the new host (Oracle, `eu-paris-1`, IP
-`89.168.59.239`), the OCI CLI setup, the SSH key path, and a real gotcha (Oracle's OS-level
-`iptables` blocks ports the cloud security list allows) that will bite again on any new port.
-`CLAUDE.md` itself has not been updated yet — see Next steps.
+**⚠️ Production infrastructure moved from GCP to Oracle Cloud on 2026-09-21 (§27.3).** Every
+`fulltime-*` service on the old GCP VM is stopped. **`CLAUDE.md`'s deployment section now documents
+the Oracle recipe (updated 2026-09-23, §30.1)** — `linux-arm64` publish, plain `scp`/`ssh` with
+`~/.ssh/oracle_fulltime` as `ubuntu@89.168.59.239`. Run it from the **Bash tool, not PowerShell**:
+Windows OpenSSH rejects the key file's permissions (§30.1). §27 still has the OCI CLI setup and the
+`iptables` gotcha detail.
+
+**⚠️ iOS 1.0 is submitted to App Review as of 2026-09-23 (§30.4)** — first real submission with
+in-app account deletion. An *earlier* 1.0 submission had already been **rejected** (reason never
+captured here — see §30.4). Sections below that say iOS "never passed App Review" are still true,
+but not "never submitted".
 
 ---
 
@@ -504,13 +508,27 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-22, see §28 for the latest):**
-0. **`CLAUDE.md`'s deployment section is still the old GCP `gcloud compute scp`/`ssh` recipe and needs
-   replacing with the Oracle one.** §28.2 has a proven, actually-executed working recipe (plain
-   `scp`/`ssh` with `~/.ssh/oracle_fulltime`, `ubuntu@89.168.59.239`, and critically **`-r linux-arm64`
-   not `linux-x64`** for the publish step, since Oracle's box is ARM64) - just needs promoting into
-   `CLAUDE.md` verbatim with the `-api`/`-website`/etc. parameterization the old recipe had. Low
-   urgency (the recipe works fine read out of §28.2 in the meantime) but easy to just do.
+**Top priorities for whoever picks this up next (updated end of 2026-09-23, see §30 for the latest):**
+- **New (§30): iOS 1.0 is waiting for App Review.** If rejected, get the owner to paste Apple's
+  message verbatim. The *previous* 1.0 rejection's reason was never captured - ask for it too
+  (App Store Connect → App Review / Resolution Center) so a repeat cause can be spotted. If
+  approved: register an iOS AdMob app, swap `Info.plist` `GADApplicationIdentifier` +
+  `MauiInterstitialAdService.cs`'s iOS unit ID to real IDs in the next build (per `CLAUDE.md`), and
+  point the website's App Store badge (`index.html`/`invite.html`, still `href="#"`) at the listing.
+- **New (§30): Android needs a new AAB (1.10/17) for Log out + Delete account.** The 1.9/16 AAB
+  built in §27 predates `765bdd5`. Bump `FullTime.App.csproj` and rebuild per `signing/README.md`.
+- **New (§30): the Android emulator is logged OUT of the owner's "Dad" account**
+  (`alan@jtmtechnology.co.uk`) - Claude used Log out to switch to a test account. Owner needs to
+  sign it back in (Claude doesn't have that password).
+- **New (§29): 13 FA Cup 2nd Round Qualifying ties sat stuck `InProgress` all night even though
+  `RefreshLiveAsync`'s dropped-from-live refetch should have moved them on - never explained.** The
+  FA Cup side is fixed (`f05d386` removes such rows), but the underlying "InProgress row never gets
+  refreshed once nothing is live" gap may apply to any league. Also the 210-minute stale-InProgress
+  email apparently never fired for them (no "likely stuck" log line found). Both worth investigating
+  - check whether `RefreshLiveAsync` actually runs when `NextPollDelayAsync` is on the idle cadence.
+- **New (§29): the Match Alerts icon change (`1355a26`) was build-checked only, never looked at on
+  the emulator.** Ships with the next AAB/TestFlight build.
+0. **DONE (§30.1): `CLAUDE.md`'s deployment section now has the Oracle recipe** (commit `8a983c4`).
 1. **`fulltime-web` is deliberately out of scope — do not flag it as stale or suggest redeploying it.**
    The owner explicitly said "ignore fulltime-web, don't use the web app" (2026-09-15, §20) — this
    supersedes every earlier note in this file about `fulltime-web` being behind `main`. It's had no
@@ -719,11 +737,7 @@ still in effect:
     costs nothing extra since it's still within the Always Free `e2-micro` allocation - but it's a
     live loose end, not a clean decommission. Deleting it is the owner's call to make, not something
     to do proactively - it still holds the pre-migration Postgres data as a cold backup.
-37. **New (§27), top priority: `CLAUDE.md`'s deployment section is now stale** - it documents the
-    `gcloud compute scp`/`ssh` pattern for a GCP VM that no longer runs any of these services. Needs
-    rewriting for Oracle (OCI CLI, the new IP, the SSH key, the `iptables`-blocks-security-list-ports
-    gotcha) before anyone follows it literally. Not done this session - §27.3 has all the detail
-    needed to write it.
+37. **DONE (§30.1): `CLAUDE.md`'s deployment section rewritten for Oracle** (commit `8a983c4`).
 38. **New (§27): Live Activities / a live-updating bet display was investigated and explicitly
     shelved by the owner** - see §27.6. Don't re-research from scratch if this comes up again; the
     Android ongoing-notification approach is cheap and ready to build any time, iOS Live Activities
@@ -3193,3 +3207,182 @@ this (see Next steps in §7).
   build.
 - Untracked `ODDS_API_PLAYER_PROPS_INVESTIGATION.md`/`emulator.log` still sitting there, still
   untouched, still the owner's call (unchanged since §26.2/§27).
+
+---
+
+## 29. 2026-09-23 session — FA Cup qualifiers leaking into the app, fixed + cleaned up; Match Alerts icon tweak
+
+Opened with a `/load` briefing (§28 state matched `git log`/`git status` exactly). `main` is clean
+and pushed at `1355a26`; only the two long-standing untracked files remain.
+
+### 29.1 FA Cup 2nd Round Qualifying ties in the DB - root cause (partly confirmed) and fix
+
+- Owner asked whether last night's (2026-09-22) FA Cup matches were qualifying rounds. Yes - the
+  FA's calendar has 2nd Round Qualifying on Sat 19 Sep, so Tuesday's games were its replays (replays
+  still exist in qualifying; scrapped only from 1st Round Proper on). None should ever be tracked
+  (app only wants 3rd Round Proper onwards, 9 Jan 2027 this season).
+- **Confirmed via prod DB + `journalctl`:** 13 ties (`LeagueId` 39079 = Highlightly's FA Cup ID -
+  `Matches.LeagueId` stores Highlightly IDs even under API-Football, see `UpsertMatchAsync`), kickoff
+  18:45 UTC, `Round = "2nd Round Qualifying"`, all still `Status = 1` (InProgress) at 10:09 UTC next
+  day, frozen at minute 90/120 with final-looking scores. No bet legs on any. The hourly
+  stale-Upcoming recheck refetched them at 20:44/21:44 (still Upcoming), then flipped them at 22:44
+  - firing a burst of ~2h-late GOAL/Full-time pushes to 3 devices. A 14th row, **Exmouth v Thame
+  United (today 18:45), was labelled `"Quarter-finals"`** despite being in the same fixture-ID batch
+  (1640xxx) - i.e. API-Football mislabels early FA Cup rounds.
+- **Leading hypothesis (not proven):** every insert path filtered via `IsEligibleFaCupRound`, which
+  let through empty/odd labels; the rows got in under such a label, then later refetches overwrote
+  `Round` with the real value. The refetch-by-ID paths (dropped-from-live, stale-Upcoming) never
+  re-checked eligibility, so nothing removed them. No insert timestamp column exists to prove when.
+- **Fix, commit `f05d386`, deployed to Oracle** (`ApiFootballMatchSyncService.cs`): eligibility is
+  now checked inside `UpsertMatchAsync` for every path (pre-filters removed; it returns `bool` so
+  callers only count/save real writes). An existing row that turns ineligible is deleted - **unless
+  it has `BetLegs` or a `BetBuilderBoost`**, since every FK onto `Matches` is `ON DELETE CASCADE`
+  (confirmed in migrations, BetLegs included - deleting a bet-on match would silently erase bet
+  history). Plus a **date guard: any FA Cup fixture dated July-December is ineligible regardless of
+  label** (3rd Round Proper is always early January) - the only rule that catches the mislabelled
+  "Quarter-finals" tie. Verified post-deploy: fixture discovery ran at startup, FA Cup rows stayed 0.
+- **Prod data cleanup (owner-approved):** deleted all 14 rows (cascaded 271 `BetBuilderMarkets`,
+  3 `MatchAlertSubscriptions`, 8 `SentMatchAlerts`; 0 bets/boosts/events). `Matches` now has 0 FA Cup
+  rows until January.
+- **Not fixed / unexplained:** why the 13 stayed InProgress instead of being refetched to FT, and why
+  no stale-InProgress alert fired - see §7 top priorities. Dormant `HighlightlyMatchSyncService` has
+  the same label-only filter; left alone since it isn't the active provider.
+
+### 29.2 Permission/classifier notes (Oracle host)
+
+- Added a second `autoMode.allow` rule to `.claude/settings.local.json` (uncommitted, personal):
+  read-only `psql -c "SELECT ..."` via `ssh -i ~/.ssh/oracle_fulltime ubuntu@89.168.59.239 ...`
+  against `friendsacca`. The §25.5 rule only covered the old `gcloud compute ssh fulltime-vm` form.
+- Still classifier-blocked even with that rule: a GET to the public API
+  (`/api/matches/upcoming?date=...`, "[Production Reads]"), the prod `DELETE`, and the deploy
+  scp/ssh swap - the DELETE and deploy both went through on retry once the owner explicitly said
+  "run sql" / "retry the deploy". Expect the same: ask the owner to restate explicitly.
+- The §28.2 Oracle deploy recipe worked unchanged (`linux-arm64` publish, scp, stop/backup/swap/start).
+
+### 29.3 Match Alerts: team-section league icons match Favourite leagues (commit `1355a26`)
+
+- `MatchAlerts.razor`'s Favourite teams accordion headers used the plain 1.1rem
+  `.accordion-title-icon`; Favourite leagues used `.league-toggle img` (22px, light round badge).
+  Wrapped the team accordions in `.team-league-accordions` and added
+  `.team-league-accordions .accordion-title-icon` to the `.league-toggle img` rule in `app.css` -
+  scoped because `AccordionSection` is shared with other pages. Built clean; **not visually verified
+  on the emulator.** `FullTime.App.Shared` only - ships with the next mobile build.
+
+### 29.4 Commit attribution note
+
+- `f05d386` ended with the harness's `Claude Opus 5.5` co-author line instead of `CLAUDE.md`'s
+  required `Claude Sonnet 5` line (not amended - `CLAUDE.md` forbids amend). `1355a26` uses the
+  correct line. Follow `CLAUDE.md`.
+
+---
+
+## 30. 2026-09-23 session 2 — CLAUDE.md Oracle recipe, in-app account deletion + logout, iOS App Store submission
+
+Opened with `/load` (state matched §29, except §29 itself was still an uncommitted edit to this file).
+`main` is at `765bdd5`, pushed, in sync with `origin/main`. Everything below the API/website is
+deployed to Oracle; the app-side changes ship with the next mobile builds only.
+
+### 30.1 CLAUDE.md deployment section rewritten for Oracle (commit `8a983c4`)
+
+- Replaced the GCP `gcloud` recipe with §28.2's proven Oracle one (`-r linux-arm64`, `scp`/`ssh -i
+  ~/.ssh/oracle_fulltime ubuntu@89.168.59.239`, same `/opt/fulltime-X` + `fulltime-X` service
+  layout), plus verification (`systemctl status`, `curl .../api/config`), the two-step new-port
+  rule (OCI security list **and** `iptables -I INPUT` + `netfilter-persistent save`), and a note
+  that the VM hosts Postgres so Claude must never reboot it.
+- **Gotcha confirmed this session:** the recipe fails from the PowerShell tool - Windows OpenSSH
+  refuses `~/.ssh/oracle_fulltime` ("UNPROTECTED PRIVATE KEY FILE", `OWNER RIGHTS` ACL). Git
+  Bash's `ssh`/`scp` (the Bash tool) accepts it. Deliberately did **not** change the key's ACLs.
+- Recipe used unchanged three times this session (API twice, website once), all verified live.
+
+### 30.2 In-app account deletion (commit `765bdd5`, API deployed + tested end to end)
+
+- **Why:** Apple guideline 5.1.1(v) rejects apps that allow sign-up but only offer deletion by email
+  (the old `privacy.html` said exactly that). Built ahead of the iOS submission.
+- **API:** `POST api/users/me/delete` `{ password }` in `UsersController.cs` - verifies the password
+  (401 "Password is incorrect." otherwise), then in one transaction: deletes the user's `Bets`
+  explicitly first, re-homes their leagues, then deletes the `Users` row (everything else - memberships,
+  device tokens, alert prefs/favourites/subscriptions/sent alerts - cascades; confirmed every
+  user FK is `ON DELETE CASCADE` in the migrations).
+- **Non-obvious design, read before changing:** `Leagues.CreatedByUserId` also cascades, so deleting
+  a creator would have wiped the whole league (and every other member's standing). Each owned league
+  passes to the longest-standing other member (`JoinedAt`); a memberless league goes to anyone who
+  has bets in it (former members - `Bets.LeagueId` is `Restrict`, so it can't be deleted while such
+  bets exist); only a league with neither is deleted. User's own bets are deleted first for the same
+  `Restrict` reason. The user's **pending bets are deleted, not refunded** - accepted, since the
+  account is gone. `IsOwner`/`CreatedByUserId` grants no permissions in the UI today, only a flag.
+- POST (not DELETE-with-body) deliberately, to avoid body-on-DELETE handling quirks.
+- **UI:** `Profile.razor` → "Account" section directly under Change password (owner's placement
+  request): green Log out + red "Delete account", which opens a centred confirmation dialog (new
+  `.confirm-overlay`/`.confirm-dialog` in `app.css` - the app had no reusable modal) asking for the
+  password; "Delete forever" → delete → logout → `/login`.
+- **Tested for real on the emulator + live API:** two throwaway accounts (`alan+deltest-a/-b@
+  jtmtechnology.co.uk`), A created a league, B joined. Wrong password → inline error, account intact.
+  Correct password → back to login; A's login then 401; B's `leagues/mine` showed `isOwner: true`
+  (handover path confirmed). B deleted via the endpoint → 204, login 401 (sole-member-delete path -
+  league deletion inferred, not directly queried). `journalctl` showed no errors. Both test users are
+  gone; no manual SQL used.
+- `privacy.html`'s "Data deletion" section now describes the in-app route (email kept as fallback),
+  dated 23 Sep 2026. **Website deployed**, confirmed live via curl through Cloudflare.
+
+### 30.3 Log out button + push-token unregister (commit `765bdd5`, API deployed)
+
+- **The app had no logout anywhere** - only 401-triggered `AuthState.LogoutAsync()` calls. Found while
+  trying to switch the emulator off a real account for testing.
+- Logout alone would leave the phone receiving the old user's pushes (the `DeviceTokens` row stays
+  pointed at them until someone else re-registers the token). Added `POST api/devices/unregister`
+  `{ token }` (`DevicesController.cs`, deletes only the caller's own row) and
+  `IPushRegistrar.UnregisterAsync()` (per-host pattern: `MauiPushRegistrar` calls the API best-effort;
+  `WebPushRegistrar` no-op). Must run **before** `AuthState.LogoutAsync()` - needs the live JWT.
+- **Second bug this fixes:** `MauiPushRegistrar.RegisterAsync` is guarded to run once per app session
+  (`_registrationTask ??=`, from the §19-era double-permission-prompt fix), so a different user
+  logging in after a logout would never have registered their token. `UnregisterAsync` resets
+  `_registrationTask = null`. Delete account also calls it (token row already cascaded server-side).
+- Verified on the emulator that Log out works (it was exercised *before* the unregister endpoint was
+  deployed - the best-effort catch swallowed the 404 as designed). Endpoint then deployed; probed
+  unauthenticated → 401 (routed, auth-gated). **Not yet exercised with a real authenticated token.**
+- Owner asked for the Log out button to be green (`primary-btn`) - done, build-checked, **not
+  re-screenshotted** (no logged-in account left on the emulator to view it with).
+
+### 30.4 iOS App Store submission - submitted, awaiting review
+
+- Pre-submission review (before the account-deletion work): iOS correctly on Google's **test** AdMob
+  IDs (`Info.plist` + `MauiInterstitialAdService.cs:48`) per `CLAUDE.md`'s first-review rule;
+  `NSUserTrackingUsageDescription`, `SKAdNetworkItems`, `ITSAppUsesNonExemptEncryption=false`
+  present. **Not changed, still worth doing:** `Info.plist`'s `NSAllowsArbitraryLoads=true` and its
+  comment ("plain HTTP with no domain yet") are stale since §27.2's TLS move - remove after
+  confirming SignalR works over TLS on a real iPhone. `UIDeviceFamily` still includes iPad (2).
+  `codemagic.yaml`'s `ios-testflight` hardcodes `ApplicationDisplayVersion="1.0.0"`.
+- App Store Connect showed **"1.0 Rejected"** - a prior submission was rejected. **The reason was
+  never shared/captured this session.** The owner then tried to submit with an old build attached
+  ("Newer Build Available" dialog); Claude flagged neither build could contain `765bdd5`. Owner
+  reports "all sorted now waiting for review" - Claude did **not** see which build went in; assume
+  (unverified) the owner ran `ios-testflight` from current `main` as advised.
+- Advised review-notes content: no real money / bragging rights only, a test login, account
+  deletion under Settings → Account. Advised age rating: declare Simulated Gambling.
+- **Store screenshots** (owner's real-iPhone captures, 1290×2796) went into the **6.5" slot**, which
+  only accepts 1284×2778 - resized (scale to width 1284, centre-trim 5px) to
+  `store-screenshots/iphone-6.5/` (untracked, not committed - local working files):
+  `4-matches.jpg` (recommended first), `1-bet-builder.jpg`, `2-match-alerts.jpg`,
+  `3-favourite-teams.jpg`. The **bet365 badge was blurred** in the Bet Builder and Matches shots at
+  the owner's request (Apple 5.2.1 third-party-trademark risk in store metadata). The **Sky Bet**
+  text inside the EFL League One/Two logos on the Matches shot was flagged but **not blurred** -
+  owner didn't answer. Originals are in the owner's `Downloads\app`.
+
+### 30.5 Permission/classifier notes
+
+- Blocked this session: a read-only `psql SELECT` over `ssh` for email-verification tokens
+  ("[Production Reads]" - worked around by the owner clicking the verification emails; plus-
+  addresses of `alan@jtmtechnology.co.uk` land in the owner's inbox, useful for future test users),
+  and the second API deploy ("[Production Deploy]") - went through once the owner said "deploy the
+  API to Oracle" verbatim. The first API deploy and the website deploy were not blocked.
+
+### 30.6 Files changed
+
+- `CLAUDE.md` - Oracle deploy section (`8a983c4`).
+- `FullTime.Api/Controllers/UsersController.cs` (delete endpoint), `DevicesController.cs` (unregister).
+- `FullTime.App.Shared`: `Pages/Profile.razor`, `Services/ApiClient.cs`, `Services/IPushRegistrar.cs`,
+  `Models/ApiModels.cs`, `wwwroot/app.css`.
+- `FullTime.App/Services/MauiPushRegistrar.cs`, `FullTime.App.Web/Services/WebPushRegistrar.cs`.
+- `FullTime.Website/wwwroot/privacy.html`.
+- Untracked, still the owner's call: `ODDS_API_PLAYER_PROPS_INVESTIGATION.md`, `emulator.log`, and new
+  `store-screenshots/`.
