@@ -24,6 +24,10 @@ in-app account deletion. An *earlier* 1.0 submission had already been **rejected
 captured here — see §30.4). Sections below that say iOS "never passed App Review" are still true,
 but not "never submitted".
 
+**Latest (2026-09-23 session 3, §31): Android 1.10/17 AAB built and uploaded to Play Console by the
+owner** - first Android build carrying Log out/Delete account (§30) and the §28/§29 UI changes.
+`main` at `57d09bc`, pushed.
+
 ---
 
 ## 1. Current state (as of this handover, 2026-09-09)
@@ -515,8 +519,8 @@ still in effect:
   approved: register an iOS AdMob app, swap `Info.plist` `GADApplicationIdentifier` +
   `MauiInterstitialAdService.cs`'s iOS unit ID to real IDs in the next build (per `CLAUDE.md`), and
   point the website's App Store badge (`index.html`/`invite.html`, still `href="#"`) at the listing.
-- **New (§30): Android needs a new AAB (1.10/17) for Log out + Delete account.** The 1.9/16 AAB
-  built in §27 predates `765bdd5`. Bump `FullTime.App.csproj` and rebuild per `signing/README.md`.
+- **DONE (§31): Android 1.10/17 AAB built and uploaded to Play Console** (owner confirmed upload).
+  Rollout/review status in Play Console not checked from here. Next Android build = 1.11/18.
 - **New (§30): the Android emulator is logged OUT of the owner's "Dad" account**
   (`alan@jtmtechnology.co.uk`) - Claude used Log out to switch to a test account. Owner needs to
   sign it back in (Claude doesn't have that password).
@@ -527,7 +531,7 @@ still in effect:
   email apparently never fired for them (no "likely stuck" log line found). Both worth investigating
   - check whether `RefreshLiveAsync` actually runs when `NextPollDelayAsync` is on the idle cadence.
 - **New (§29): the Match Alerts icon change (`1355a26`) was build-checked only, never looked at on
-  the emulator.** Ships with the next AAB/TestFlight build.
+  the emulator.** Now shipped in Android 1.10/17 (§31) - check it on a real device or the emulator.
 0. **DONE (§30.1): `CLAUDE.md`'s deployment section now has the Oracle recipe** (commit `8a983c4`).
 1. **`fulltime-web` is deliberately out of scope — do not flag it as stale or suggest redeploying it.**
    The owner explicitly said "ignore fulltime-web, don't use the web app" (2026-09-15, §20) — this
@@ -550,8 +554,9 @@ still in effect:
    reason. The §6.11 stale-notification-icon TestFlight test is still an open question — worth
    triggering `ios-testflight` at some point to test it, now unblocked by any account-migration
    console work.
-4. **DONE (§27): a fresh signed AAB is built and waiting — version 1.9/16, supersedes 1.8/15 from
-   §26.** Folds in the domain/TLS switch (§27.2) and the Match Summary score-tally fixes (§27.5),
+4. **SUPERSEDED (§31): 1.10/17 was built and uploaded by the owner on 2026-09-23 - the rest of this
+   item is history.** (Old text: a fresh signed AAB is built and waiting — version 1.9/16, supersedes 1.8/15 from
+   §26.) Folds in the domain/TLS switch (§27.2) and the Match Summary score-tally fixes (§27.5),
    on top of everything through §25/§26. Output:
    `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`.
    **Upload to Play Console is still the owner's action** — and whether 1.8/15 itself ever got
@@ -3384,5 +3389,29 @@ deployed to Oracle; the app-side changes ship with the next mobile builds only.
   `Models/ApiModels.cs`, `wwwroot/app.css`.
 - `FullTime.App/Services/MauiPushRegistrar.cs`, `FullTime.App.Web/Services/WebPushRegistrar.cs`.
 - `FullTime.Website/wwwroot/privacy.html`.
-- Untracked, still the owner's call: `ODDS_API_PLAYER_PROPS_INVESTIGATION.md`, `emulator.log`, and new
-  `store-screenshots/`.
+- Untracked, still the owner's call: `ODDS_API_PLAYER_PROPS_INVESTIGATION.md`, `emulator.log`.
+  (`store-screenshots/` and `.claude/settings.json` were committed afterwards in `1dc9d3c`.)
+
+---
+
+## 31. 2026-09-23 session 3 — Android 1.10/17 release build, uploaded
+
+Opened with `/load`. State matched §30 apart from two commits after it (`1c28488` handover,
+`1dc9d3c` screenshots + shared `.claude/settings.json`).
+
+- Pre-build check: Android `AndroidManifest.xml` + `MauiInterstitialAdService.cs` carry the **real**
+  AdMob IDs (correct, Android is live); iOS branch still on Google test IDs (correct, pending first
+  approval).
+- Bumped `FullTime.App.csproj` 1.9/16 → **1.10/17** (commit `57d09bc`, pushed). Built signed AAB per
+  `signing/README.md` from the Bash tool. Output:
+  `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`
+  (~40MB). **Owner uploaded it to Play Console.** Signature not verified locally (`jarsigner` isn't on
+  PATH); not installed on the emulator. Contains everything on `main` through `57d09bc`.
+- **Gotcha:** first publish failed with `APT2258: The data is invalid` on
+  `obj/Release/net10.0-android/lp/303/.../303.flata` - a corrupt aapt2 cache, a new variant of
+  CLAUDE.md's file-lock gotcha. `dotnet build-server shutdown` + PowerShell `Remove-Item -Recurse
+  -Force` of `FullTime.App/FullTime.App/obj` and `bin` fixed it; second publish was clean.
+- **Gotcha:** `git push` returned `! [remote rejected] main -> main (Internal Server Error)` twice in a
+  row, even though githubstatus.com showed all operational and `git ls-remote` worked. A third retry
+  a few minutes later succeeded. It was a transient GitHub error, not a repo rule - just retry.
+- Many `NU1608` AndroidX package-constraint warnings during the build - pre-existing, harmless.
