@@ -34,14 +34,15 @@ public class ApiFootballMatchSyncService(
         var fixtures = await client.GetLiveFixturesAsync(ct);
         var tracked = fixtures
             .Where(f => ApiFootballLeagueMap.TrackedLeagueIds.Contains(f.League.Id))
-            .Where(f => IsEligibleFaCupRound(f.League))
             .ToList();
 
         var upsertedCount = 0;
         foreach (var fixture in tracked)
         {
-            await UpsertMatchAsync(fixture, ct);
-            upsertedCount++;
+            if (await UpsertMatchAsync(fixture, ct))
+            {
+                upsertedCount++;
+            }
         }
 
         // A match that's still InProgress in our DB but didn't come back in this tick's live=all
@@ -65,8 +66,10 @@ public class ApiFootballMatchSyncService(
                 var followUp = await client.GetFixturesByIdsAsync(droppedFromLive.Select(long.Parse), ct);
                 foreach (var fixture in followUp)
                 {
-                    await UpsertMatchAsync(fixture, ct);
-                    upsertedCount++;
+                    if (await UpsertMatchAsync(fixture, ct))
+                    {
+                        upsertedCount++;
+                    }
                 }
             }
             catch (Exception ex)
@@ -105,10 +108,12 @@ public class ApiFootballMatchSyncService(
                 continue;
             }
 
-            foreach (var fixture in fixtures.Where(f => IsEligibleFaCupRound(f.League)))
+            foreach (var fixture in fixtures)
             {
-                await UpsertMatchAsync(fixture, ct);
-                upsertedCount++;
+                if (await UpsertMatchAsync(fixture, ct))
+                {
+                    upsertedCount++;
+                }
             }
         }
 
@@ -154,8 +159,10 @@ public class ApiFootballMatchSyncService(
         var upsertedCount = 0;
         foreach (var fixture in fixtures)
         {
-            await UpsertMatchAsync(fixture, ct);
-            upsertedCount++;
+            if (await UpsertMatchAsync(fixture, ct))
+            {
+                upsertedCount++;
+            }
         }
 
         if (upsertedCount > 0)
@@ -274,10 +281,23 @@ public class ApiFootballMatchSyncService(
 
     private static int SeasonFor(DateOnly date) => date.Month >= 7 ? date.Year : date.Year - 1;
 
-    private async Task UpsertMatchAsync(FixtureDto dto, CancellationToken ct)
+    // Returns false only when the fixture was skipped with nothing written - callers use it to decide
+    // whether a SaveChangesAsync is needed at all.
+    private async Task<bool> UpsertMatchAsync(FixtureDto dto, CancellationToken ct)
     {
         var externalId = dto.Fixture.Id.ToString();
         var match = await db.Matches.FirstOrDefaultAsync(m => m.ExternalId == externalId, ct);
+
+        // Gated here on every upsert, not just at discovery: API-Football's round label for early FA
+        // Cup ties isn't reliable when a fixture is first published (confirmed 2026-09-22/23 - 13
+        // 2nd Round Qualifying ties got in under a label the filter let through, then had their real
+        // round written over it by later syncs, and one sibling tie is still labelled
+        // "Quarter-finals"). The refetch-by-ID paths (dropped-from-live, stale-Upcoming) also never
+        // filtered, so once a row was in, nothing ever took it back out.
+        if (!IsEligibleFaCupRound(dto))
+        {
+            return match is not null && await RemoveIneligibleMatchAsync(match, dto.League.Round, ct);
+        }
         // A brand-new row's "previous" status/score are just freshly-initialized defaults, not a
         // real prior tick - without this, the very first time we see a match that's already
         // in-progress (e.g. a restart, or fixture discovery losing a race with the live sync - see
@@ -352,6 +372,30 @@ public class ApiFootballMatchSyncService(
         {
             await FireLiveAlertsAsync(match, previousStatus, previousHomeScore, previousAwayScore, previousIsHalfTime, newStatus, ct);
         }
+
+        return true;
+    }
+
+    // Every FK onto Matches is ON DELETE CASCADE, BetLegs included - removing a match someone has
+    // bet on would silently erase that bet's legs, so those rows are left alone for a human to sort
+    // out. Same for a BetBuilderBoost, whose cascade would wipe that day's featured boost.
+    private async Task<bool> RemoveIneligibleMatchAsync(Match match, string? round, CancellationToken ct)
+    {
+        var hasBets = await db.BetLegs.AnyAsync(l => l.MatchId == match.Id, ct);
+        var hasBoost = await db.BetBuilderBoosts.AnyAsync(b => b.MatchId == match.Id, ct);
+        if (hasBets || hasBoost)
+        {
+            logger.LogWarning(
+                "Match {MatchId} ({HomeTeam} v {AwayTeam}) is now in ineligible FA Cup round {Round} but has bets or a boost on it - not removing",
+                match.Id, match.HomeTeam, match.AwayTeam, round);
+            return false;
+        }
+
+        db.Matches.Remove(match);
+        logger.LogInformation(
+            "Removed match {MatchId} ({HomeTeam} v {AwayTeam}) - FA Cup round {Round} is not tracked",
+            match.Id, match.HomeTeam, match.AwayTeam, round);
+        return true;
     }
 
     // Kickoff/half-time/full-time/goal alerts - everything MatchAlertService needs to decide who
@@ -448,11 +492,21 @@ public class ApiFootballMatchSyncService(
     // published this season's later round names yet when this was written (only "1st Round
     // Qualifying" existed) - "contains Qualifying" or "starts with 1st/2nd Round" (its own Replays
     // included) covers every round before 3rd Round Proper regardless of exact suffix formatting.
-    private static bool IsEligibleFaCupRound(LeagueInfo league)
+    // The label alone isn't enough, though - API-Football has mislabelled a 2nd Round Qualifying
+    // tie as "Quarter-finals" (Exmouth v Thame United, 2026-09-23), which no label rule can catch.
+    // 3rd Round Proper is always the first weekend of January and 2nd Round Proper early December,
+    // so any FA Cup fixture dated July-December is pre-3rd-Round whatever it's called.
+    private static bool IsEligibleFaCupRound(FixtureDto fixture)
     {
+        var league = fixture.League;
         if (league.Id != ApiFootballLeagueMap.FaCup)
         {
             return true;
+        }
+
+        if (fixture.Fixture.Date.UtcDateTime.Month >= 7)
+        {
+            return false;
         }
 
         var round = league.Round;
