@@ -71,13 +71,18 @@ than branching on `DeviceInfo.Platform` inside shared code.
 
 ## Deployment
 
-Standard pattern for pushing a new build to the VM (`fulltime-vm`, GCP zone `us-east1-b`):
+Production runs on a single Oracle Cloud VM (`eu-paris-1`, `VM.Standard.A1.Flex`, Ubuntu 24.04
+**ARM64**), public IP `89.168.59.239`, SSH as `ubuntu` with key `~/.ssh/oracle_fulltime`. The API is
+served at `https://api.jtmtechnology.co.uk` via Cloudflare. It moved off GCP on 2026-09-21 — the
+old `fulltime-vm` GCP box and `gcloud compute scp`/`ssh` commands are no longer the deploy target.
+
+Standard pattern for pushing a new build (`X` = `api`, `website`, etc.; paths and service names
+mirror the old GCP layout):
 ```
-dotnet publish -c Release -r linux-x64 --self-contained false -o publish-X
+dotnet publish -c Release -r linux-arm64 --self-contained false -o publish-X
 tar czf publish-X.tar.gz -C publish-X .
-export CLOUDSDK_PYTHON="/c/Program Files (x86)/Google/Cloud SDK/google-cloud-sdk/platform/bundledpython/python.exe"
-gcloud compute scp publish-X.tar.gz fulltime-vm:publish-X.tar.gz --zone=us-east1-b
-gcloud compute ssh fulltime-vm --zone=us-east1-b --command='
+scp -i ~/.ssh/oracle_fulltime publish-X.tar.gz ubuntu@89.168.59.239:~/publish-X.tar.gz
+ssh -i ~/.ssh/oracle_fulltime ubuntu@89.168.59.239 '
   sudo systemctl stop fulltime-X
   sudo rm -rf /opt/fulltime-X-previous
   sudo cp -r /opt/fulltime-X /opt/fulltime-X-previous
@@ -87,9 +92,16 @@ gcloud compute ssh fulltime-vm --zone=us-east1-b --command='
   sudo systemctl start fulltime-X
 '
 ```
-Clean up local `publish-X/` and `publish-X.tar.gz` afterward — don't commit them.
+- **Publish for `linux-arm64`, not `linux-x64`** — the box is Ampere ARM; an x64 build won't start.
+- Verify with `sudo systemctl status fulltime-X`, and for the API,
+  `curl https://api.jtmtechnology.co.uk/api/config` (expects `refreshIntervalSeconds` in the body).
+- Clean up local `publish-X/` and `publish-X.tar.gz` afterward — don't commit them.
+- **Opening a new port needs two changes**: the OCI security list rule *and* an OS-level
+  `sudo iptables -I INPUT ... -j ACCEPT` followed by `sudo netfilter-persistent save`. Oracle's
+  Ubuntu image REJECTs everything but SSH in `iptables` regardless of the security list.
+- The VM hosts Postgres too, so org policy forbids Claude rebooting it — ask the owner.
 
-For local Postgres access (a service already runs on this machine, distinct from the VM's DB):
+For local Postgres access (a service already runs on this machine, distinct from the Oracle VM's DB):
 don't try to guess or hunt for credentials — ask the user directly.
 
 ## Working conventions
