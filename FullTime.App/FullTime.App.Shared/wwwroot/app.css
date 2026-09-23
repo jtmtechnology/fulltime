@@ -729,7 +729,8 @@ button[type="submit"] {
     font-size: 0.9rem; cursor: pointer;
 }
 .league-toggle input { margin: 0; accent-color: var(--accent); }
-.league-toggle img {
+.league-toggle img,
+.team-league-accordions .accordion-title-icon {
     width: 22px; height: 22px; object-fit: contain;
     background: #f4f7fa; border-radius: 50%; padding: 3px; box-sizing: border-box;
 }

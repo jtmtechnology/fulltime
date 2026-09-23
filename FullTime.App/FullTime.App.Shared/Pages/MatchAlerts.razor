@@ -57,6 +57,7 @@ else
     <div class="page-card">
         <h2>Favourite teams</h2>
         <p class="hint">Every match either of these teams plays gets alerts, in any competition.</p>
+        <div class="team-league-accordions">
         @foreach (var leagueId in _teamLeagueIds)
         {
             <AccordionSection Id="@leagueId.ToString()" Title="@LeagueCatalog.Name(leagueId)" TitleIconUrl="@LeagueCatalog.LogoUrl(leagueId)"
@@ -74,6 +75,7 @@ else
                 </div>
             </AccordionSection>
         }
+        </div>
     </div>
 
     <div class="page-card">
