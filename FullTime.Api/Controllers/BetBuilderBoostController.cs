@@ -16,9 +16,9 @@ public record BetBuilderBoostStatusDto(
 public class BetBuilderBoostController(BetBuilderBoostService boostService) : ControllerBase
 {
     [HttpGet("status")]
-    public async Task<ActionResult<BetBuilderBoostStatusDto>> GetStatus(CancellationToken ct)
+    public async Task<ActionResult<BetBuilderBoostStatusDto>> GetStatus([FromQuery] bool leagueAware, CancellationToken ct)
     {
-        var status = await boostService.GetStatusAsync(CurrentUserId, ct);
+        var status = await boostService.GetStatusAsync(CurrentUserId, leagueAware, ct);
         return Ok(new BetBuilderBoostStatusDto(
             status.Available, status.MatchId, status.HomeTeam, status.AwayTeam, status.Percent, status.MinSelections,
             status.KickoffTime, status.HomeLogoUrl, status.AwayLogoUrl, status.LeagueId));

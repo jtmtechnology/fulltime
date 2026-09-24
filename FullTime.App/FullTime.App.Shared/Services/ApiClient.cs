@@ -173,7 +173,9 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
     public async Task<BetBuilderBoostStatusDto> GetBetBuilderBoostStatusAsync()
     {
         Authorize();
-        var res = await httpClient.GetAsync("api/betbuilderboost/status");
+        // Tells the API this build hides the banner itself for leagues the user hasn't opted into -
+        // without it the API withholds non-English-pyramid boosts (see BetBuilderBoostService).
+        var res = await httpClient.GetAsync("api/betbuilderboost/status?leagueAware=true");
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
         return (await res.Content.ReadFromJsonAsync<BetBuilderBoostStatusDto>())!;
     }

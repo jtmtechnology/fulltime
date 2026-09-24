@@ -30,9 +30,18 @@ public class BetBuilderBoostService(AppDbContext db, IOptions<BettingOptions> op
     // four English tiers has an eligible match.
     private static readonly long[] EligibleLeagueIds = [33973, 34824, 35675, 36526, 5];
 
-    public async Task<BetBuilderBoostStatus> GetStatusAsync(Guid userId, CancellationToken ct = default)
+    private static readonly HashSet<long> AlwaysVisibleLeagueIds = [33973, 34824, 35675, 36526];
+
+    // clientIsLeagueAware is false for every app build up to 1.10/17: those builds can't show the
+    // Nations League at all, so a boost on one would advertise a match the user can't find. Only
+    // builds that hide the banner themselves for non-opted-in leagues send it as true.
+    public async Task<BetBuilderBoostStatus> GetStatusAsync(Guid userId, bool clientIsLeagueAware = false, CancellationToken ct = default)
     {
         var match = await GetOrPickTodaysMatchAsync(ct);
+        if (match is not null && !clientIsLeagueAware && !AlwaysVisibleLeagueIds.Contains(match.LeagueId))
+        {
+            match = null;
+        }
         // Kickoff-time check rather than waiting on live-sync to flip Status away from Upcoming -
         // the banner should vanish the moment the match actually kicks off, not whenever the next
         // poll tick happens to notice. Today's pick is never replaced once it starts (see the class
