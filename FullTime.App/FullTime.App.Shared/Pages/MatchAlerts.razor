@@ -60,10 +60,12 @@ else
         <div class="team-league-accordions">
         @foreach (var leagueId in _teamLeagueIds)
         {
-            <AccordionSection Id="@leagueId.ToString()" Title="@LeagueCatalog.Name(leagueId)" TitleIconUrl="@LeagueCatalog.LogoUrl(leagueId)"
+            var isNationalTeams = leagueId == LeagueCatalog.NationsLeague;
+            <AccordionSection Id="@leagueId.ToString()" Title="@(isNationalTeams ? "National teams" : LeagueCatalog.Name(leagueId))"
+                               TitleIconUrl="@LeagueCatalog.LogoUrl(leagueId)"
                                Expanded="_expandedTeamLeagues" OnToggle="ToggleTeamLeagueSection">
                 <div class="league-toggle-list">
-                    @foreach (var team in _teams.Where(t => t.LeagueId == leagueId))
+                    @foreach (var team in TeamsFor(leagueId))
                     {
                         <label class="league-toggle">
                             <input type="checkbox" checked="@AlertSubs.IsFavouriteTeam(team.TeamId)"
@@ -123,6 +125,12 @@ else
             // redesign of GetAlertTeamsAsync for.
             var presentLeagueIds = _teams.Select(t => t.LeagueId).ToHashSet();
             _teamLeagueIds = LeagueCatalog.LeaguesOnly.Where(presentLeagueIds.Contains).ToList();
+            // The one cup exception: a national team's latest match is always a Nations League one,
+            // so without this section they'd have nowhere to appear at all.
+            if (presentLeagueIds.Contains(LeagueCatalog.NationsLeague))
+            {
+                _teamLeagueIds.Add(LeagueCatalog.NationsLeague);
+            }
             // Shared with MatchCard's bell icon rather than a separate local copy - this used to be
             // its own ApiClient call + local HashSet, which meant favouriting a team/league here
             // never reached the cache MatchCard actually reads from, so a newly-favourited league's
@@ -138,6 +146,22 @@ else
     }
 
     private void OnAlertSubsChanged() => InvokeAsync(StateHasChanged);
+
+    // Home nations first for the national teams list - it's 50+ countries and those five are the
+    // ones this family actually follows. Everything else stays in the API's alphabetical order.
+    private static readonly string[] HomeNations = ["England", "Scotland", "Wales", "Northern Ireland", "Rep. Of Ireland"];
+
+    private IEnumerable<AlertTeamDto> TeamsFor(long leagueId)
+    {
+        var teams = _teams.Where(t => t.LeagueId == leagueId);
+        if (leagueId != LeagueCatalog.NationsLeague)
+        {
+            return teams;
+        }
+
+        return teams.OrderBy(t => Array.IndexOf(HomeNations, t.TeamName) is var i and >= 0 ? i : HomeNations.Length)
+            .ThenBy(t => t.TeamName);
+    }
 
     private void ToggleTeamLeagueSection(string id)
     {
