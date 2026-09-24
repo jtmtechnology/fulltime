@@ -52,7 +52,9 @@ public record UpcomingMatchDto(
     // Null unless the match actually went to a shootout - see FullTime.Api's Match.HomePenalties.
     int? HomePenalties,
     int? AwayPenalties,
-    bool WentToExtraTime);
+    bool WentToExtraTime,
+    // Defaulted so this build still works against an API that doesn't send it yet.
+    string? Round = null);
 
 public record ConfigResponse(int RefreshIntervalSeconds);
 

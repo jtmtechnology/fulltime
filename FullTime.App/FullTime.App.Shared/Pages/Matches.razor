@@ -69,9 +69,16 @@ else if (!string.IsNullOrEmpty(_status))
             <LogoImg Src="@LeagueCatalog.LogoUrl(leagueGroup.Key)" Alt="@LeagueCatalog.Name(leagueGroup.Key)" />
             <span>@LeagueCatalog.Name(leagueGroup.Key)</span>
         </div>
-        @foreach (var m in leagueGroup)
+        @foreach (var tierGroup in LeagueCatalog.GroupByTier(leagueGroup))
         {
-            <MatchCard Match="m" ReturnUrl="@($"/?date={_selectedDate:yyyy-MM-dd}")" />
+            @if (tierGroup.Key is not null)
+            {
+                <div class="league-tier-header">@tierGroup.Key</div>
+            }
+            @foreach (var m in tierGroup)
+            {
+                <MatchCard Match="m" ReturnUrl="@($"/?date={_selectedDate:yyyy-MM-dd}")" />
+            }
         }
     }
 }

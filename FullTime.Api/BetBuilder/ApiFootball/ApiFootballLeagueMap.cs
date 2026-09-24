@@ -19,6 +19,9 @@ public static class ApiFootballLeagueMap
     public const int ChampionsLeague = 2;
     public const int EuropaLeague = 3;
     public const int ConferenceLeague = 848;
+    // Looked up 2026-09-24 via /leagues?search=nations - not to be confused with 1040 (the women's
+    // competition), which comes back from the same search.
+    public const int NationsLeague = 5;
 
     public static readonly HashSet<long> TrackedLeagueIds = new()
     {
@@ -36,5 +39,6 @@ public static class ApiFootballLeagueMap
         ChampionsLeague,
         EuropaLeague,
         ConferenceLeague,
+        NationsLeague,
     };
 }

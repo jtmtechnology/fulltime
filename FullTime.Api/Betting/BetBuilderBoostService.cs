@@ -25,7 +25,10 @@ public class BetBuilderBoostService(AppDbContext db, IOptions<BettingOptions> op
     // when the higher one has none, rather than picking uniformly across all four at once (which
     // let a League Two match get featured just as often as a Premier League one, even on a day
     // with Premier League fixtures available).
-    private static readonly long[] EligibleLeagueIds = [33973, 34824, 35675, 36526];
+    // Nations League (stored under API-Football's ID, see HighlightlyToApiFootballLeagueMap) is a
+    // last resort by owner request - only featured on an international-break day when none of the
+    // four English tiers has an eligible match.
+    private static readonly long[] EligibleLeagueIds = [33973, 34824, 35675, 36526, 5];
 
     public async Task<BetBuilderBoostStatus> GetStatusAsync(Guid userId, CancellationToken ct = default)
     {

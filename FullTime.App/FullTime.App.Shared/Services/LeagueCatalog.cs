@@ -1,3 +1,5 @@
+using FullTime.App.Shared.Models;
+
 namespace FullTime.App.Shared.Services;
 
 // Known league/cup IDs, keyed on Highlightly's own league IDs (see FullTime.Api's
@@ -9,6 +11,8 @@ namespace FullTime.App.Shared.Services;
 // or shared qualifying-round pool to maintain here any more.
 public static class LeagueCatalog
 {
+    public const long NationsLeague = 5;
+
     public static readonly Dictionary<long, string> Names = new()
     {
         [33973] = "Premier League",
@@ -25,6 +29,9 @@ public static class LeagueCatalog
         [2486] = "Champions League",
         [3337] = "Europa League",
         [722432] = "Conference League",
+        // No Highlightly ID exists for this one (added after Highlightly was dropped) - it's stored
+        // under API-Football's own ID, see the API's HighlightlyToApiFootballLeagueMap.
+        [NationsLeague] = "Nations League",
     };
 
     // Always shown regardless of preference: the domestic English pyramid only. FA Cup (39079) is
@@ -44,6 +51,7 @@ public static class LeagueCatalog
         ("Champions League", [2486]),
         ("Europa League", [3337]),
         ("Conference League", [722432]),
+        ("Nations League", [NationsLeague]),
     ];
 
     public static readonly long[] DisplayOrder =
@@ -54,7 +62,7 @@ public static class LeagueCatalog
     // cup competitions in the sense that matters for the Match Alerts "Favourite leagues" picker -
     // there's no genuine week-to-week table to follow the way there is for a domestic league.
     private static readonly HashSet<long> CupCompetitionIds =
-        [39079, 41632, 450112, 2486, 3337, 722432];
+        [39079, 41632, 450112, 2486, 3337, 722432, NationsLeague];
 
     // DisplayOrder with cup competitions filtered out - just the domestic top-flight leagues.
     public static readonly long[] LeaguesOnly = [.. DisplayOrder.Where(id => !CupCompetitionIds.Contains(id))];
@@ -77,6 +85,7 @@ public static class LeagueCatalog
         [2486] = "Europe",
         [3337] = "Europe",
         [722432] = "Europe",
+        [NationsLeague] = "Europe",
     };
 
     // No-op now that every competition (main draw and qualifying alike) lives under one Highlightly
@@ -87,11 +96,36 @@ public static class LeagueCatalog
     // rather than linking to a page that could only ever say "no table available".
     private static readonly HashSet<long> KnockoutOnly = [39079, 41632, 450112]; // FA Cup, EFL Cup, Community Shield
 
-    public static bool HasTable(long leagueId) => !KnockoutOnly.Contains(leagueId);
+    // The Nations League does have tables, but ~14 small groups of them - the API's standings
+    // endpoint only returns the first group, which would show League A Group 1 for every match.
+    // Hidden until the Table page supports multiple groups.
+    public static bool HasTable(long leagueId) => !KnockoutOnly.Contains(leagueId) && leagueId != NationsLeague;
+
+    // Nations League rounds come back as "League A - 1" (tier, then matchday) - the tier is the only
+    // grouping the fixture data carries (the groups within a tier only exist in standings). Null for
+    // every other competition, and for Nations League rounds outside the league phase (finals,
+    // play-offs), so those render ungrouped exactly as before.
+    public static string? Tier(long leagueId, string? round)
+    {
+        if (leagueId != NationsLeague || round is null || !round.StartsWith("League ", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var dash = round.IndexOf(" - ", StringComparison.Ordinal);
+        return dash > 0 ? round[..dash] : round;
+    }
+
+    // Ungrouped (null-tier) matches first, then League A..D - ordinal order on "League X" is already
+    // tier order.
+    public static IEnumerable<IGrouping<string?, UpcomingMatchDto>> GroupByTier(IEnumerable<UpcomingMatchDto> matches) =>
+        matches.GroupBy(m => Tier(m.LeagueId, m.Round)).OrderBy(g => g.Key, StringComparer.Ordinal);
 
     public static string Name(long leagueId) => Names.GetValueOrDefault(leagueId, $"League {leagueId}");
 
     public static string Country(long leagueId) => Countries.GetValueOrDefault(leagueId, "");
 
-    public static string LogoUrl(long leagueId) => $"https://highlightly.net/soccer/images/leagues/{leagueId}.png";
+    public static string LogoUrl(long leagueId) => leagueId == NationsLeague
+        ? $"https://media.api-sports.io/football/leagues/{leagueId}.png"
+        : $"https://highlightly.net/soccer/images/leagues/{leagueId}.png";
 }

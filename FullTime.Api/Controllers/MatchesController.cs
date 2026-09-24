@@ -39,7 +39,10 @@ public record UpcomingMatchDto(
     // Null unless the match actually went to a shootout - see Match.HomePenalties/AwayPenalties.
     int? HomePenalties,
     int? AwayPenalties,
-    bool WentToExtraTime);
+    bool WentToExtraTime,
+    // Raw provider round label, e.g. "League A - 1" - the client uses it to split the Nations
+    // League into its A-D tiers. Last and defaulted so older app builds deserialize unchanged.
+    string? Round = null);
 
 public record BetBuilderMarketDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore, decimal Price,
@@ -165,7 +168,8 @@ public class MatchesController(
                 m.AwayTeamId,
                 m.HomePenalties,
                 m.AwayPenalties,
-                m.WentToExtraTime))
+                m.WentToExtraTime,
+                m.Round))
             .ToListAsync(ct);
 
         return Ok(matches);

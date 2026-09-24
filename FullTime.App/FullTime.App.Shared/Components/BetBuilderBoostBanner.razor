@@ -2,8 +2,13 @@
 @inject ApiClient Api
 @inject NavigationManager Nav
 @inject BetSlipState Slip
+@inject MatchLeaguePreferences Prefs
 
-@if (_available)
+@* Hidden when the featured match is in a league this user hasn't opted into (e.g. a Nations League
+   fallback pick) - it'd be promoting a match their own Matches list deliberately hides. Checked at
+   render time, not in RefreshAsync, because Matches.razor loads Prefs asynchronously and may not be
+   done by the time this first fetches the boost status. *@
+@if (_available && Prefs.IsVisible(_leagueId))
 {
     <button type="button" class="bbboost-banner" @onclick="Go">
         <div class="bbboost-banner-icon">🚀</div>
@@ -36,10 +41,13 @@
         // still hides this banner immediately once today's boost has been used, instead of only
         // refreshing on a full page remount.
         Slip.Changed += OnSlipChanged;
+        Prefs.Changed += OnPrefsChanged;
         await RefreshAsync();
     }
 
     private void OnSlipChanged() => _ = InvokeAsync(RefreshAsync);
+
+    private void OnPrefsChanged() => _ = InvokeAsync(StateHasChanged);
 
     private async Task RefreshAsync()
     {
@@ -92,5 +100,9 @@
         $"&kickoff={Uri.EscapeDataString(_kickoffTime.ToString("O"))}&league={Uri.EscapeDataString(LeagueCatalog.Name(_leagueId))}" +
         $"&homeLogo={Uri.EscapeDataString(_homeLogoUrl ?? "")}&awayLogo={Uri.EscapeDataString(_awayLogoUrl ?? "")}");
 
-    public void Dispose() => Slip.Changed -= OnSlipChanged;
+    public void Dispose()
+    {
+        Slip.Changed -= OnSlipChanged;
+        Prefs.Changed -= OnPrefsChanged;
+    }
 }

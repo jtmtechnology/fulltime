@@ -42,9 +42,16 @@ else if (!string.IsNullOrEmpty(_status))
     <div class="status @(_error ? "error" : "")">@_status</div>
 }
 
-@foreach (var m in _matches)
+@foreach (var tierGroup in LeagueCatalog.GroupByTier(_matches))
 {
-    <MatchCard Match="m" ReturnUrl="@($"/matches/league/{LeagueId}?date={_selectedDate:yyyy-MM-dd}")" />
+    @if (tierGroup.Key is not null)
+    {
+        <div class="league-tier-header">@tierGroup.Key</div>
+    }
+    @foreach (var m in tierGroup)
+    {
+        <MatchCard Match="m" ReturnUrl="@($"/matches/league/{LeagueId}?date={_selectedDate:yyyy-MM-dd}")" />
+    }
 }
 
 @code {

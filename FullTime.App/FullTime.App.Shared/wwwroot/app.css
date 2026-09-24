@@ -304,6 +304,10 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
     width: 24px; height: 24px; object-fit: contain;
     background: #f4f7fa; border-radius: 50%; padding: 3px; box-sizing: border-box;
 }
+.league-tier-header {
+    margin: 0.75rem 0 0.4rem; padding-left: 0.6rem; border-left: 3px solid var(--accent);
+    color: var(--text); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+}
 
 /* ===== Match cards ===== */
 .match-card {

@@ -25,6 +25,10 @@ public static class HighlightlyToApiFootballLeagueMap
         [HighlightlyLeagueMap.ChampionsLeague] = ApiFootballLeagueMap.ChampionsLeague,
         [HighlightlyLeagueMap.EuropaLeague] = ApiFootballLeagueMap.EuropaLeague,
         [HighlightlyLeagueMap.ConferenceLeague] = ApiFootballLeagueMap.ConferenceLeague,
+        // Added after Highlightly was dropped, so it has no Highlightly ID - it's stored under
+        // API-Football's own ID instead. Safe because every real Highlightly league ID is in the
+        // thousands, so a small API-Football ID can't collide with one.
+        [ApiFootballLeagueMap.NationsLeague] = ApiFootballLeagueMap.NationsLeague,
     };
 
     // Reverse of the above - needed by ApiFootballMatchSyncService.UpsertMatchAsync, which discovers
