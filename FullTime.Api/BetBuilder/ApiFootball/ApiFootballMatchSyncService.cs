@@ -254,6 +254,18 @@ public class ApiFootballMatchSyncService(
         var now = DateTime.UtcNow;
         var idle = TimeSpan.FromSeconds(opts.IdleRefreshIntervalSeconds);
 
+        // The kickoff-timed tick below lands at kickoff+60s, but API-Football doesn't always list a
+        // match in live=all that soon (confirmed 2026-09-24: Andorra v Malta, 16:00 kickoff, still
+        // absent at 16:01:00). Once its kickoff is in the past the query below skips it, so the loop
+        // fell back to the hourly idle cadence and missed the whole first half. Bounded by
+        // StaleUpcomingMinutes so a genuinely stuck Upcoming row (see the Levante note below) can
+        // only hold the fast cadence for that long before RecheckStaleUpcomingAsync takes over.
+        var awaitingKickoffCutoff = now.AddMinutes(-opts.StaleUpcomingMinutes);
+        if (await db.Matches.AnyAsync(m => m.Status == MatchStatus.Upcoming && m.KickoffTime < now && m.KickoffTime > awaitingKickoffCutoff, ct))
+        {
+            return TimeSpan.FromSeconds(opts.LiveRefreshIntervalSeconds);
+        }
+
         // KickoffTime >= now guards against a match stuck at Upcoming past its own kickoff (e.g. a
         // postponement our sync never caught - confirmed in production 2026-09-17: Levante v Athletic
         // Club sat Upcoming with a kickoff 18+ hours in the past, always sorted first below, and its
