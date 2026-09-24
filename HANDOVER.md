@@ -24,10 +24,11 @@ in-app account deletion. An *earlier* 1.0 submission had already been **rejected
 captured here — see §30.4). Sections below that say iOS "never passed App Review" are still true,
 but not "never submitted".
 
-**Latest (2026-09-24, §32): UEFA Nations League added (API deployed, app side waiting on the
-1.11/18 build - AAB NOT built yet); branded email-landing pages deployed.** `main` at `4cb4b9c`,
-pushed, in sync. **The owner says Highlightly is no longer used at all** - new competitions get
-API-Football IDs only (§32.2).
+**Latest (2026-09-24, §33): live-sync kickoff gap fixed + deployed; Match Details Events-tab
+endless spinner fixed (app-only, ships in 1.11/18).** `main` at `5cf8e8f` + this handover, pushed,
+in sync. Earlier the same day (§32): UEFA Nations League added (API deployed, app side waiting on
+the 1.11/18 build - AAB NOT built yet); branded email-landing pages deployed. **The owner says
+Highlightly is no longer used at all** - new competitions get API-Football IDs only (§32.2).
 
 ---
 
@@ -513,9 +514,13 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-24, see §32 for the latest):**
-- **New (§32): build + upload Android 1.11/18.** Version is already bumped in `FullTime.App.csproj`
-  and committed; everything through `4cb4b9c` goes in. The owner stopped the build mid-session
+**Top priorities for whoever picks this up next (updated end of 2026-09-24, see §33 for the latest):**
+- **New (§33): confirm the kickoff-gap fix (`cf02c41`, deployed) on the next kickoff API-Football
+  is slow to flag live** - journal should show 5s `live match sync tick complete` lines continuing
+  past kickoff+60s instead of a one-hour gap. Kick-off/half-time pushes should now fire on time.
+- **New (§32/§33): build + upload Android 1.11/18.** Version is already bumped in `FullTime.App.csproj`
+  and committed; everything through `5cf8e8f` goes in (that includes the §33.2 Events-spinner fix,
+  never run in the app - check it on the emulator first if convenient). The owner stopped the build mid-session
   ("dont build aab") - wait to be asked. The AAB left on disk (14:43 on 2026-09-24) is **stale**
   (missing the Boost banner fix, `leagueAware` flag and national teams) - never upload it.
   Until 1.11/18 is out, only the emulator has the Nations League toggle/headings.
@@ -3528,3 +3533,69 @@ CLAUDE.md recipe, all verified `active` + `/api/config`); the last deploy carrie
   `FullTime.App/FullTime.App/obj` and `bin`).
 - Debug builds on the emulator show a Google **test interstitial** on relaunch - dismiss it before
   judging what the Matches screen shows.
+
+---
+
+## 33. 2026-09-24 session 2 — live-sync kickoff gap, Events-tab endless spinner
+
+Opened with `/load` (state matched §32). Owner reported Andorra v Malta (Nations League, fixture
+`1545601`, 16:00 UTC kickoff) "very behind", then no events (endless spinner) and no stats. Two
+commits, both pushed: `cf02c41` (API, deployed 17:13 UTC and verified: `active`, `/api/config` OK,
+live sync resumed at 5s) and `5cf8e8f` (app-only).
+
+### 33.1 Live sync missed a whole first half (commit `cf02c41`, deployed) - root cause confirmed
+
+- **Evidence (journal):** exactly one `API-Football live match sync tick complete` at 16:01:00, then
+  none until 17:01:01. At 17:07 the DB row matched API-Football exactly (1-1, 48', `2H`), so once
+  polling resumed the data was correct - the lag was purely the missing hour.
+- **Cause:** `NextPollDelayAsync` schedules a tick at kickoff+60s. API-Football hadn't listed the
+  match in `live=all` yet at 16:01:00, so it stayed `Upcoming`. The next-kickoff query requires
+  `KickoffTime >= now` (the §24 Levante guard), so the just-kicked-off match was skipped, nothing
+  was `InProgress`, and the loop fell back to `IdleRefreshIntervalSeconds` = 3600.
+- **Consequences seen:** Kick-off push went ~1h late (17:01), half-time push never fired, no events
+  stored until 17:01. Not Nations-League-specific - any league where API-Football is slow to flip a
+  fixture to live more than 60s after kickoff is affected, and it's likely happened before unnoticed.
+- **Fix:** `NextPollDelayAsync` now returns the live cadence while any match is `Upcoming` with
+  kickoff in `(now - StaleUpcomingMinutes, now)` (60 min). Bounded so a genuinely stuck Upcoming row
+  can hold fast polling at most an hour (~720 extra `live=all` calls vs 75,000/day), after which
+  `RecheckStaleUpcomingAsync` owns it. **Not yet observed working on a real slow-to-go-live kickoff.**
+- Possibly related to §7's still-unexplained §29 item (FA Cup ties stuck InProgress overnight)? Not
+  investigated - different state (InProgress, which `HasLiveMatchAsync` already covers), so
+  probably not the same bug.
+
+### 33.2 Match Details Events tab spinning forever (commit `5cf8e8f`, app-only, not run in the app)
+
+- **Cause (confirmed from code, and the owner's app-restart workaround fits it):**
+  `MatchSummarySheet.razor` initialises `_loading = true` and only `OnSummaryChanged` ever called
+  `LoadEventsAsync`, guarded by `_loadedForMatchId`. The owner first opened this match while
+  `EventsAvailable` was false (no events stored - §33.1), so the sheet opened on Lineups and
+  recorded the match as loaded. The Matches list's 5s poll later flipped `EventsAvailable` true,
+  the Events tab appeared, and tapping it hit `SelectTab`, which had no Events branch → permanent
+  spinner. Reopening the same match didn't help (same `_loadedForMatchId`); only a restart did.
+- Also: `LoadEventsAsync` only caught `ApiException`, so an HttpClient timeout/network drop would
+  have skipped the `_loading = false` reset too.
+- **Fix:** new `_eventsLoadedForMatchId`; `SelectTab("Events")` loads if not loaded for this match;
+  `LoadEventsAsync` catches all exceptions and clears the marker so a re-tap retries. Build-checked
+  only - the emulator wasn't running. Ships with 1.11/18.
+- **Not fixed / known limitation:** an open Events tab still doesn't refresh live - it's a snapshot
+  from when it loaded (pre-existing behaviour for every league).
+
+### 33.3 Ruled out
+
+- **Server-side events:** DB had all 6 events for the match, with Home/Away mapped correctly
+  (`SelectionSide` 0 = Home, 2 = Away), and `GET api/matches/{id}/events` is a pure DB read - the
+  spinner was purely client-side.
+- **Stats tab empty:** not our bug. API-Football's `/fixtures/statistics?fixture=1545601` returns
+  `results: 0` - no stats coverage for this minnow fixture (events *are* covered). Expect the same
+  for other small Nations League games.
+- **Throttling/quota:** no warnings/errors in the journal over the 2h window.
+
+### 33.4 Environment notes
+
+- The combined API-Football `live=all` + `psql SELECT` read over ssh was **blocked as
+  "[Production Reads]"** the first time; it went through once the owner explicitly asked to run it
+  on the VM. Later single `psql SELECT`s and API-Football GETs ran unprompted.
+- The API's journal does **not** log inbound HTTP requests (no `Request starting` lines), so you
+  can't see from the VM whether/when an app called an endpoint.
+- `adb` isn't on the PowerShell tool's PATH - it's at
+  `C:\Program Files (x86)\Android\android-sdk\platform-tools\adb.exe`.
