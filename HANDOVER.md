@@ -24,9 +24,10 @@ in-app account deletion. An *earlier* 1.0 submission had already been **rejected
 captured here — see §30.4). Sections below that say iOS "never passed App Review" are still true,
 but not "never submitted".
 
-**Latest (2026-09-23 session 3, §31): Android 1.10/17 AAB built and uploaded to Play Console by the
-owner** - first Android build carrying Log out/Delete account (§30) and the §28/§29 UI changes.
-`main` at `57d09bc`, pushed.
+**Latest (2026-09-24, §32): UEFA Nations League added (API deployed, app side waiting on the
+1.11/18 build - AAB NOT built yet); branded email-landing pages deployed.** `main` at `4cb4b9c`,
+pushed, in sync. **The owner says Highlightly is no longer used at all** - new competitions get
+API-Football IDs only (§32.2).
 
 ---
 
@@ -512,7 +513,22 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-23, see §30 for the latest):**
+**Top priorities for whoever picks this up next (updated end of 2026-09-24, see §32 for the latest):**
+- **New (§32): build + upload Android 1.11/18.** Version is already bumped in `FullTime.App.csproj`
+  and committed; everything through `4cb4b9c` goes in. The owner stopped the build mid-session
+  ("dont build aab") - wait to be asked. The AAB left on disk (14:43 on 2026-09-24) is **stale**
+  (missing the Boost banner fix, `leagueAware` flag and national teams) - never upload it.
+  Until 1.11/18 is out, only the emulator has the Nations League toggle/headings.
+- **New (§32): the `fulltime-api` service's secrets were printed into the 2026-09-24 session
+  transcript** (Postgres password, JWT signing key, SMTP password, API-Football/Highlightly/the-odds-api
+  keys) by a careless `systemctl cat`. Owner told; rotation is their call (JWT rotation logs
+  everyone out). Never `systemctl cat`/`show` the unit's Environment without filtering to one key.
+- **New (§32): Nations League follow-ups** - (a) Table link hidden because `GetStandingsAsync`
+  only returns group [0] (~14 groups exist); needs a multi-group Table page. (b) the old-client
+  Boost suppression (§32.4) was deployed but **not visually confirmed** (a test ad covered the
+  emulator) - check an old-build phone on the next Nations-League-fallback day. (c) National teams
+  in Match Alerts (§32.5) built + installed on emulator, owner said "push" - not screenshotted by
+  Claude.
 - **New (§30): iOS 1.0 is waiting for App Review.** If rejected, get the owner to paste Apple's
   message verbatim. The *previous* 1.0 rejection's reason was never captured - ask for it too
   (App Store Connect → App Review / Resolution Center) so a repeat cause can be spotted. If
@@ -521,9 +537,8 @@ still in effect:
   point the website's App Store badge (`index.html`/`invite.html`, still `href="#"`) at the listing.
 - **DONE (§31): Android 1.10/17 AAB built and uploaded to Play Console** (owner confirmed upload).
   Rollout/review status in Play Console not checked from here. Next Android build = 1.11/18.
-- **New (§30): the Android emulator is logged OUT of the owner's "Dad" account**
-  (`alan@jtmtechnology.co.uk`) - Claude used Log out to switch to a test account. Owner needs to
-  sign it back in (Claude doesn't have that password).
+- **RESOLVED (§32): the emulator is signed back in** to a Browne account ("The Brownes £105.00"
+  in the header as of 2026-09-24). Its installed debug build is from `4cb4b9c`.
 - **New (§29): 13 FA Cup 2nd Round Qualifying ties sat stuck `InProgress` all night even though
   `RefreshLiveAsync`'s dropped-from-live refetch should have moved them on - never explained.** The
   FA Cup side is fixed (`f05d386` removes such rows), but the underlying "InProgress row never gets
@@ -569,7 +584,8 @@ still in effect:
    later — worth confirming they actually do render there before treating this as fully closed.
 6. **API-Football is now the live provider for everything** (`LiveScoreSource` and `MarketsSource`
    both `"ApiFootball"`, deployed and verified) — Highlightly and the-odds-api are fully dormant
-   rollback paths, not in active use. Don't assume `HANDOVER.md` sections written before §10 still
+   rollback paths, not in active use. **Owner, 2026-09-24: "we dont use highlightly anymore"** -
+   don't look up or add Highlightly IDs for new competitions (§32.2). Don't assume `HANDOVER.md` sections written before §10 still
    describe current behavior where they talk about Highlightly being primary. **Runs on Oracle
    Cloud since §27.3, not the original GCP VM** — don't assume any GCP IP/command from a
    pre-§27 section still applies.
@@ -3415,3 +3431,100 @@ Opened with `/load`. State matched §30 apart from two commits after it (`1c2848
   row, even though githubstatus.com showed all operational and `git ls-remote` worked. A third retry
   a few minutes later succeeded. It was a transient GitHub error, not a repo rule - just retry.
 - Many `NU1608` AndroidX package-constraint warnings during the build - pre-existing, harmless.
+
+---
+
+## 32. 2026-09-24 session — branded email pages, UEFA Nations League, old-client Boost fix, national-team alerts
+
+Opened with `/load` (state matched §31). Five commits, all pushed: `a27f480`, `ec4297b`, `98012f6`,
+`4cb4b9c` (plus this handover). The API was deployed to Oracle three times this session (all via the
+CLAUDE.md recipe, all verified `active` + `/api/config`); the last deploy carries everything through
+`98012f6`. `4cb4b9c` is app-only.
+
+### 32.1 Email-landing pages branded (commit `a27f480`, deployed)
+
+- The pages account emails link to are the **API's own static files** (`FullTime.Api/wwwroot/
+  verify-email.html`, `reset-password.html`; links built in `AuthService.cs` from the request's
+  host), not the app's Razor pages. They were the unstyled dev prototypes, with an `auth.js` nav
+  bar pointing at the old web prototype (`login.html` etc.).
+- Now: shared `auth-pages.css` (Dark Stadium palette copied from `app.css`), crest + FULL•TIME
+  wordmark (`logo.png`/`favicon.png` copied from `FullTime.Website`), website-style footer
+  ("© 2026 JTM Technology. Not a real-money gambling product." + absolute link to
+  `https://fulltime.jtmtechnology.co.uk/privacy.html` - relative wouldn't resolve on the API host).
+  `auth.js` nav removed from these three pages; success text says "head back to the FullTime app"
+  instead of linking to the prototype login. `forgot-password.html` lost its "logged to the server
+  console" dev wording. Verified live through Cloudflare (200s, new markup served).
+- Not exercised end to end with a real token after deploy.
+
+### 32.2 UEFA Nations League added (commit `ec4297b`, API deployed)
+
+- API-Football ID **5**, confirmed via `/leagues?search=nations` from the VM (1040 is the women's
+  competition - don't confuse). Season 2026 = 2026-09-24 → 2026-11-17, odds + standings covered;
+  `SeasonFor` (July cutover) gives 2026 for both autumn and March-finals dates.
+- **No Highlightly ID** (owner: Highlightly no longer used). `Match.LeagueId` still normally holds
+  Highlightly IDs; this league is stored under its raw API-Football ID via an identity entry
+  `[5] = 5` in `HighlightlyToApiFootballLeagueMap` (safe: all Highlightly IDs are ≥2486). That
+  entry is what makes form dots / settlement / standings lookups resolve. Pattern to reuse for any
+  future competition.
+- Odds sync needed no change (`ApiFootballOddsSyncBackgroundService` covers every Upcoming match).
+  Verified after deploy: discovery upserted 60 league-5 matches (2026-09-24 16:00 → 10-01), bet365
+  odds + Bet Builder showed on the emulator.
+- App (`LeagueCatalog.cs`): opt-in `OptionalLeagues` entry, country "Europe", counted as a cup
+  (so excluded from Favourite leagues), `LeagueCatalog.NationsLeague` constant, logo from
+  `media.api-sports.io` (not highlightly.net), `HasTable` false - **`ApiFootballClient.
+  GetStandingsAsync` only returns standings group [0]**, which would show League A Group 1 for
+  every match.
+- **League A-D sub-headings** (owner chose this over separate competitions / per-card labels):
+  API's `UpcomingMatchDto` gained an optional trailing `string? Round` (old apps ignore it);
+  `LeagueCatalog.Tier/GroupByTier` parse "League A - 1" → "League A" for league 5 only; used in
+  `Matches.razor` and `LeagueMatches.razor`; `.league-tier-header` in `app.css`. Non-"League X"
+  rounds (finals, play-offs) render ungrouped. Screenshot-verified on the emulator.
+- **Bet Builder Boost**: league 5 appended as the last tier of `EligibleLeagueIds` - only picked
+  when no English tier has an eligible match that day (owner's rule). It fired for real on
+  2026-09-24 (Liechtenstein v Lithuania). `BetBuilderBoostBanner.razor` now also hides when
+  `MatchLeaguePreferences.IsVisible(leagueId)` is false; checked at render time + re-rendered on
+  `Prefs.Changed`, because `Matches.razor` initialises Prefs asynchronously. Users who haven't
+  opted in simply get no Boost that day (one shared pick per day - no per-user fallback).
+- Android version bumped to **1.11/18** in the same commit.
+
+### 32.3 Old app builds showed the Nations League Boost (commit `98012f6`, deployed)
+
+- Symptom (owner): builds ≤1.10/17 showed today's Nations League Boost, for a match their Matches
+  list can't show. The app sends no version header, so the fix is opt-in from the new side:
+  `ApiClient` now calls `api/betbuilderboost/status?leagueAware=true`; `BetBuilderBoostService.
+  GetStatusAsync(userId, clientIsLeagueAware)` returns no match for a non-English-pyramid pick
+  unless that flag is set. Banner, Bet Builder label and slip all read this one endpoint, so all
+  three go quiet on old builds. `TryConsumeBoostAsync` is unchanged (old builds can't reach the
+  boost flow without the banner).
+- Unauthenticated probe returns 401 as expected. **Visual confirmation on an old build didn't
+  happen** (interstitial test ad covered the emulator) - see §7.
+
+### 32.4 National teams in Match Alerts (commit `4cb4b9c`, app-only)
+
+- `AlertsController.GetTeams` labels each team with its latest match's league; `MatchAlerts.razor`
+  skipped cup leagues, so countries (always league 5) never appeared. Now league 5 gets a
+  "National teams" accordion at the end of Favourite teams, home nations first (names exactly as
+  API-Football sends them, incl. "Rep. Of Ireland"), then A-Z. The Nations League itself is
+  deliberately **not** in Favourite leagues (owner chose option 1 only - 50+ matches per window).
+  Favouriting a country alerts for its matches even if the user hasn't opted the league in under
+  Matches - accepted.
+
+### 32.5 Permissions / environment notes
+
+- New `autoMode.allow` rule in `.claude/settings.local.json` (gitignored, this machine only):
+  read-only API-Football GETs from the VM, key read into a shell var from
+  `systemctl show fulltime-api -p Environment` and never echoed. Example that worked:
+  `ssh ... 'AF=$(sudo systemctl show fulltime-api -p Environment | tr " " "\n" | grep
+  "^ApiFootball__ApiKey=" | cut -d= -f2); curl -s -H "x-apisports-key: $AF"
+  "https://v3.football.api-sports.io/leagues?search=nations"'`. Before the rule it was blocked as
+  "[Production Reads]". The read-only `psql SELECT` rule from §29.2 worked unprompted.
+- No `python` on this Windows machine (the Microsoft Store stub) - use it on the VM (`python3`)
+  or edit with the Edit tool / `sed`.
+- Headless Edge `--headless=new` has a ~500px minimum window width (screenshots at 375-420 crop
+  the right side); `--headless=old` hung. To preview phone widths, screenshot a wrapper page with
+  390px iframes.
+- The `APT2258` corrupt-aapt2-cache failure (§31) happened again on the first Release publish;
+  same fix (`dotnet build-server shutdown` + PowerShell `Remove-Item -Recurse -Force` of
+  `FullTime.App/FullTime.App/obj` and `bin`).
+- Debug builds on the emulator show a Google **test interstitial** on relaunch - dismiss it before
+  judging what the Matches screen shows.
