@@ -1,0 +1,112 @@
+/* Shared by the pages that account emails link to (verify-email, reset-password, forgot-password).
+   Palette mirrors FullTime.App.Shared's app.css "Dark Stadium" theme so landing here from an email
+   feels like the app, not a different product. */
+:root {
+    --bg: #0d1117;
+    --bg-elevated: #161b22;
+    --border: #262d38;
+    --text: #f0f3f7;
+    --text-muted: #9aa4b2;
+    --accent: #39ff88;
+    --accent-ink: #05130a;
+    --danger: #ff4d5e;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    min-height: 100%;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 3rem 1rem;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+}
+
+.brand-crest { width: 72px; height: 72px; object-fit: contain; }
+
+.wordmark { font-weight: 800; font-size: 2rem; letter-spacing: 0.02em; }
+.wordmark .full { color: var(--text); }
+.wordmark .dot { color: var(--accent); margin: 0 0.14rem; }
+.wordmark .time { color: var(--accent); }
+
+.card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.75rem 1.5rem;
+}
+
+.card h1 { font-size: 1.35rem; margin: 0 0 0.75rem; }
+
+.card p { margin: 0 0 1rem; line-height: 1.45; }
+
+label {
+    display: block;
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+input {
+    width: 100%;
+    margin-top: 0.35rem;
+    padding: 0.7rem 0.8rem;
+    font: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(57, 255, 136, 0.2);
+}
+
+button {
+    width: 100%;
+    margin-top: 1.5rem;
+    padding: 0.75rem 1.3rem;
+    font: inherit;
+    font-weight: 700;
+    color: var(--accent-ink);
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+button:hover { opacity: 0.92; }
+button:disabled { opacity: 0.5; cursor: default; }
+
+.status { margin-top: 1rem; font-size: 0.92rem; line-height: 1.45; }
+.status:empty { display: none; }
+.status.error { color: var(--danger); }
+.status.success { color: var(--accent); font-weight: 600; }
+
+.muted { color: var(--text-muted); }
+
+.footer { margin-top: 2rem; text-align: center; font-size: 0.8rem; color: var(--text-muted); }
+.footer p { margin: 0.35rem 0; }
