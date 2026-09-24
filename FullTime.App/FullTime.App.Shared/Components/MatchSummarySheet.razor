@@ -229,6 +229,7 @@
 
     private bool _loading = true;
     private Guid _loadedForMatchId;
+    private Guid? _eventsLoadedForMatchId;
     private List<MatchEventDto> _events = [];
     private List<MatchEventDto> _firstHalf = [];
     private List<MatchEventDto> _secondHalf = [];
@@ -304,7 +305,14 @@
             return;
         }
 
-        if (tab == "Stats" && !_statsLoading && _statsLoadedForMatchId != match.Id)
+        // A sheet first opened before a match had any events starts on Lineups and never loads
+        // them, so the Events tab appearing later (the list refreshes EventsAvailable) must load on
+        // tap - otherwise _loading's initial true shows a spinner forever (found 2026-09-24).
+        if (tab == "Events" && _eventsLoadedForMatchId != match.Id)
+        {
+            _ = LoadEventsAsync(match.Id);
+        }
+        else if (tab == "Stats" && !_statsLoading && _statsLoadedForMatchId != match.Id)
         {
             _ = LoadStatsAsync(match.Id);
         }
@@ -440,6 +448,7 @@
 
     private async Task LoadEventsAsync(Guid matchId)
     {
+        _eventsLoadedForMatchId = matchId;
         _loading = true;
         await InvokeAsync(StateHasChanged);
 
@@ -447,9 +456,12 @@
         {
             _events = await Api.GetMatchEventsAsync(matchId);
         }
-        catch (ApiException)
+        catch (Exception)
         {
+            // Not just ApiException - a network drop or HttpClient timeout (TaskCanceledException) used to skip the
+            // _loading reset below and leave the spinner up forever. Cleared so a re-tap retries.
             _events = [];
+            _eventsLoadedForMatchId = null;
         }
 
         // Stoppage-time minutes ("45+2") still belong to the half they extend, not the next one -
