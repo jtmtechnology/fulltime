@@ -525,9 +525,9 @@ still in effect:
   everyone out). Never `systemctl cat`/`show` the unit's Environment without filtering to one key.
 - **New (§32): Nations League follow-ups** - (a) Table link hidden because `GetStandingsAsync`
   only returns group [0] (~14 groups exist); needs a multi-group Table page. (b) the old-client
-  Boost suppression (§32.4) was deployed but **not visually confirmed** (a test ad covered the
+  Boost suppression (§32.3) was deployed but **not visually confirmed** (a test ad covered the
   emulator) - check an old-build phone on the next Nations-League-fallback day. (c) National teams
-  in Match Alerts (§32.5) built + installed on emulator, owner said "push" - not screenshotted by
+  in Match Alerts (§32.4) built + installed on emulator, owner said "push" - not screenshotted by
   Claude.
 - **New (§30): iOS 1.0 is waiting for App Review.** If rejected, get the owner to paste Apple's
   message verbatim. The *previous* 1.0 rejection's reason was never captured - ask for it too
