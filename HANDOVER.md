@@ -24,11 +24,13 @@ in-app account deletion. An *earlier* 1.0 submission had already been **rejected
 captured here — see §30.4). Sections below that say iOS "never passed App Review" are still true,
 but not "never submitted".
 
-**Latest (2026-09-24, §33): live-sync kickoff gap fixed + deployed; Match Details Events-tab
-endless spinner fixed (app-only, ships in 1.11/18).** `main` at `5cf8e8f` + this handover, pushed,
-in sync. Earlier the same day (§32): UEFA Nations League added (API deployed, app side waiting on
-the 1.11/18 build - AAB NOT built yet); branded email-landing pages deployed. **The owner says
-Highlightly is no longer used at all** - new competitions get API-Football IDs only (§32.2).
+**Latest (2026-09-25, §34): Android 1.11/18 signed AAB built** (contains everything through
+`5734fa0`, upload is the owner's action - not confirmed uploaded). Boost-banner rocket enlarged,
+circle removed (`5734fa0`). Dad's Brownes league balance topped up £100 in prod (Balance +
+StartingBalance, profit-neutral). `main` at `5734fa0` + this handover, pushed, in sync. §33
+(2026-09-24): live-sync kickoff gap fixed + deployed, Events-tab spinner fixed. §32: Nations
+League added. **The owner says Highlightly is no longer used at all** - new competitions get
+API-Football IDs only (§32.2).
 
 ---
 
@@ -514,16 +516,15 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-24, see §33 for the latest):**
+**Top priorities for whoever picks this up next (updated end of 2026-09-25, see §34 for the latest):**
+- **New (§34): Android 1.11/18 AAB is built and on disk** - ask whether the owner uploaded it to
+  Play Console; don't assume. Next Android build = **1.12/19** (bump before building). The §33.2
+  Events-tab fix is in it but still never exercised in the app.
 - **New (§33): confirm the kickoff-gap fix (`cf02c41`, deployed) on the next kickoff API-Football
   is slow to flag live** - journal should show 5s `live match sync tick complete` lines continuing
   past kickoff+60s instead of a one-hour gap. Kick-off/half-time pushes should now fire on time.
-- **New (§32/§33): build + upload Android 1.11/18.** Version is already bumped in `FullTime.App.csproj`
-  and committed; everything through `5cf8e8f` goes in (that includes the §33.2 Events-spinner fix,
-  never run in the app - check it on the emulator first if convenient). The owner stopped the build mid-session
-  ("dont build aab") - wait to be asked. The AAB left on disk (14:43 on 2026-09-24) is **stale**
-  (missing the Boost banner fix, `leagueAware` flag and national teams) - never upload it.
-  Until 1.11/18 is out, only the emulator has the Nations League toggle/headings.
+- **DONE (§34): Android 1.11/18 built** (the stale 2026-09-24 AAB was deleted when `bin` was
+  cleared). Until it's live on Play, only the emulator has the Nations League toggle/headings.
 - **New (§32): the `fulltime-api` service's secrets were printed into the 2026-09-24 session
   transcript** (Postgres password, JWT signing key, SMTP password, API-Football/Highlightly/the-odds-api
   keys) by a careless `systemctl cat`. Owner told; rotation is their call (JWT rotation logs
@@ -3599,3 +3600,58 @@ live sync resumed at 5s) and `5cf8e8f` (app-only).
   can't see from the VM whether/when an app called an endpoint.
 - `adb` isn't on the PowerShell tool's PATH - it's at
   `C:\Program Files (x86)\Android\android-sdk\platform-tools\adb.exe`.
+
+---
+
+## 34. 2026-09-25 session — Dad's £100 top-up, Boost rocket restyle, Android 1.11/18 AAB
+
+Opened with `/load` (state matched §33). One code commit, pushed: `5734fa0` (app-only). No API
+deploy this session.
+
+### 34.1 £100 added to Dad's Brownes league balance (production DB write, owner-approved)
+
+- Two separate wallets exist: `Users.Balance` = **Worldwide**, `LeagueMemberships.Balance` =
+  **per league** (what the header "The Brownes £x" shows). Owner chose The Brownes league.
+- Leaderboard profit is `Balance - StartingBalance`. Dad's StartingBalance was **1880** vs 1290/1300
+  for Josh/Matt/Tom - i.e. earlier top-ups were evidently added to StartingBalance too, to stay
+  profit-neutral. Owner chose that ("A"): one-row transactional
+  `UPDATE "LeagueMemberships" SET "Balance" = "Balance" + 100, "StartingBalance" = "StartingBalance" + 100
+  WHERE "Id" = '06e0f943-4db5-493a-9402-f727f244f1a0'` (Dad's Brownes membership) → Balance 0.00 →
+  **100.00**, StartingBalance 1880 → **1980**. Use the same both-columns pattern for future top-ups
+  unless the owner says it should count as winnings.
+- Dad's account email is `alan@jtmtechnology.co.uk`. Brownes balances at the time: Josh 2259.97,
+  Matt 2930.47, Tom 0.00.
+- The first read-only `psql SELECT` over ssh was **blocked as "[Production Reads]"**; it went
+  through once the owner said "approved". The write went through after the owner picked option A.
+
+### 34.2 Boost banner rocket: circle removed, emoji enlarged (commit `5734fa0`)
+
+- `.bbboost-banner-icon` in `app.css`: dropped `border-radius`/`background`/`border`, `font-size`
+  1.6rem → 2.4rem; kept the 50×50 box so the text column doesn't move. Screenshot-checked on the
+  emulator (banner showed Georgia v Northern Ireland, Nations League fallback day).
+
+### 34.3 Android 1.11/18 signed AAB built
+
+- Pre-checks: `FullTime.App.csproj` 1.11/18 (bumped in §32, never uploaded); Android on **real**
+  AdMob IDs, iOS on Google **test** IDs - correct per `CLAUDE.md`.
+- Pre-emptively ran `dotnet build-server shutdown` + PowerShell `Remove-Item -Recurse -Force` of
+  `FullTime.App/FullTime.App/obj` and `bin` (APT2258 has now hit on 3 sessions running - just do
+  this before every build). Built per `signing/README.md` from Bash; no errors. Output:
+  `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`
+  (~40MB), contains everything through `5734fa0`. Signature not verified (no `jarsigner`).
+  **Upload not confirmed.**
+
+### 34.4 Environment gotchas
+
+- **Emulator had no network ("hostname nor servname provided" error / endless Matches spinner):**
+  the emulator inherited this PC's TelXL VPN DNS servers, which it can't reach - every lookup
+  failed while the host itself reached the API fine. Fix: start it with public DNS:
+  `emulator.exe -avd FullTime_Pixel8_API35 -dns-server 1.1.1.1,8.8.8.8` (after `adb emu kill`).
+  Check with `adb shell "toybox nc -z -w 5 api.jtmtechnology.co.uk 443"` - there's no `curl` on the
+  image and `ping` always shows 100% loss on the emulator even when networking works.
+- `adb exec-out screencap -p > file.png` from **PowerShell corrupts the PNG** (text-encoding
+  redirect). Use `adb shell screencap -p /sdcard/x.png` + `adb pull` (from PowerShell per
+  `CLAUDE.md`).
+- The Debug `-t:Run` build hit APT2258 too - same obj/bin clean fixes it.
+- The emulator's header showed "The Brownes £0.00" after the top-up - either it's signed in as Tom
+  (also £0) or the balance hadn't refreshed. Not checked.
