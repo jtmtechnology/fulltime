@@ -938,9 +938,8 @@ button[type="submit"] {
     .bbboost-banner, .bbboost-banner::after, .bbboost-banner-pct { animation: none; }
 }
 .bbboost-banner-icon {
-    flex-shrink: 0; width: 50px; height: 50px; border-radius: 50%;
-    background: var(--bg); border: 1.5px solid var(--accent);
-    display: flex; align-items: center; justify-content: center; font-size: 1.6rem;
+    flex-shrink: 0; width: 50px; height: 50px;
+    display: flex; align-items: center; justify-content: center; font-size: 2.4rem;
 }
 .bbboost-banner-text { flex: 1; min-width: 0; text-align: left; margin-left: 0.6rem; }
 .bbboost-banner-title {
