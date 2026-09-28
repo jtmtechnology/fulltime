@@ -99,9 +99,10 @@
 
       <div class="row">
         <div>
-          <label for="f-icon">Icon</label>
-          <input id="f-icon" placeholder="⚡">
-          <div class="hint">An emoji, or an https:// image URL.</div>
+          <label for="f-icon-preset">Icon</label>
+          <select id="f-icon-preset"></select>
+          <input id="f-icon" placeholder="Emoji or https:// image URL" hidden>
+          <div class="hint">Pick one, or Custom for any emoji or an image URL.</div>
         </div>
         <div>
           <label for="f-theme">Colour</label>
@@ -171,6 +172,26 @@ const API = '/api';
 const TOKEN_KEY = 'fulltime-admin-token';
 const NAME_KEY = 'fulltime-admin-name';
 const PRESET_LINKS = ['/daily-spinner', '/leaderboard', '/mybets', '/match-alerts', '/profile'];
+const PRESET_ICONS = [
+  ['⚡', 'Lightning'], ['🏆', 'Trophy'], ['🚀', 'Rocket'], ['🔥', 'Fire'], ['⚽', 'Football'],
+  ['🥅', 'Goal'], ['🎯', 'Target'], ['🎁', 'Gift'], ['💰', 'Money bag'], ['💷', 'Pound note'],
+  ['🎉', 'Party'], ['⭐', 'Star'], ['👑', 'Crown'], ['📣', 'Megaphone'], ['📅', 'Calendar'],
+  ['⏰', 'Alarm clock'], ['🆕', 'New'], ['📈', 'Chart'], ['🍀', 'Lucky clover'], ['🏟️', 'Stadium'],
+];
+
+(() => {
+  const select = document.getElementById('f-icon-preset');
+  const add = (value, label) => { const o = document.createElement('option'); o.value = value; o.textContent = label; select.append(o); };
+  add('', 'No icon');
+  for (const [emoji, name] of PRESET_ICONS) add(emoji, emoji + '  ' + name);
+  add('custom', 'Custom…');
+})();
+
+function currentIcon() {
+  const preset = $('f-icon-preset').value;
+  if (preset === 'custom') return $('f-icon').value.trim() || null;
+  return preset || null;
+}
 
 const $ = (id) => document.getElementById(id);
 let promos = [];
@@ -357,7 +378,7 @@ function formValue() {
   return {
     title: $('f-title').value.trim(),
     subtitle: $('f-subtitle').value.trim() || null,
-    icon: $('f-icon').value.trim() || null,
+    icon: currentIcon(),
     theme: $('f-theme').value,
     link: currentLink(),
     startsAt: fromLocalInput($('f-starts').value),
@@ -374,7 +395,11 @@ function openEditor(p) {
   $('edit-heading').textContent = p ? 'Edit promo' : 'New promo';
   $('f-title').value = p?.title ?? '';
   $('f-subtitle').value = p?.subtitle ?? '';
-  $('f-icon').value = p?.icon ?? '';
+  const icon = p?.icon ?? (p ? '' : '⚡');
+  const isPresetIcon = icon === '' || PRESET_ICONS.some(([emoji]) => emoji === icon);
+  $('f-icon-preset').value = isPresetIcon ? icon : 'custom';
+  $('f-icon').value = isPresetIcon ? '' : icon;
+  $('f-icon').hidden = isPresetIcon;
   $('f-theme').value = p?.theme ?? 'gold';
   const link = p?.link ?? '';
   const isPreset = link === '' || PRESET_LINKS.includes(link);
@@ -391,6 +416,12 @@ function openEditor(p) {
   $('f-title').focus();
 }
 
+$('f-icon-preset').addEventListener('change', () => {
+  const custom = $('f-icon-preset').value === 'custom';
+  $('f-icon').hidden = !custom;
+  if (custom) $('f-icon').focus();
+  refreshPreview();
+});
 $('f-link-preset').addEventListener('change', () => {
   $('f-link').hidden = $('f-link-preset').value !== 'custom';
   refreshPreview();
