@@ -31,7 +31,9 @@ builder.Services.AddScoped<MatchAlertSubscriptions>();
 
 var apiBaseUrl = builder.Configuration["Api:BaseUrl"]
     ?? throw new InvalidOperationException("Api:BaseUrl configuration is missing.");
-builder.Services.AddHttpClient<ApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl));
+builder.Services.AddTransient<ApiNetworkErrorHandler>();
+builder.Services.AddHttpClient<ApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl))
+    .AddHttpMessageHandler<ApiNetworkErrorHandler>();
 
 var app = builder.Build();
 

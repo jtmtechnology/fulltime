@@ -40,7 +40,9 @@ public static class MauiProgram
         builder.Services.AddScoped<MatchSummaryState>();
         builder.Services.AddScoped<StandingsState>();
         builder.Services.AddScoped<MatchAlertSubscriptions>();
-        builder.Services.AddHttpClient<ApiClient>(client => client.BaseAddress = new Uri(ApiConfig.BaseUrl));
+        builder.Services.AddTransient<ApiNetworkErrorHandler>();
+        builder.Services.AddHttpClient<ApiClient>(client => client.BaseAddress = new Uri(ApiConfig.BaseUrl))
+            .AddHttpMessageHandler<ApiNetworkErrorHandler>();
 
         builder.Services.AddMauiBlazorWebView();
 

@@ -1158,3 +1158,23 @@ button.promo-banner { cursor: pointer; }
     background: rgba(255,201,64,0.15); border: 1px solid #ffc940; color: #ffc940;
     font-size: 0.7rem; font-weight: 700; white-space: nowrap;
 }
+
+/* MainLayout's ErrorBoundary fallbacks - shown instead of the app crashing when a page or sheet
+   throws something it didn't handle. */
+.page-error {
+    text-align: center; padding: 3rem 1.25rem; margin: 1rem 0;
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px;
+}
+.page-error-icon { font-size: 2.5rem; }
+.page-error h2 { font-size: 1.2rem; margin: 0.75rem 0 0.4rem; }
+.page-error p { color: var(--text-muted); margin: 0 0 1.25rem; line-height: 1.4; }
+.overlay-error {
+    position: fixed; left: 1rem; right: 1rem; z-index: 2000;
+    bottom: calc(var(--tab-bar-height) + 0.75rem);
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    background: var(--bg-elevated); border: 1px solid var(--danger); border-radius: 10px;
+    padding: 0.7rem 0.9rem; color: var(--text); font-size: 0.9rem;
+}
+.overlay-error button {
+    background: transparent; color: var(--accent); border: none; font: inherit; font-weight: 700; cursor: pointer;
+}

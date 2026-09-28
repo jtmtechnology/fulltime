@@ -32,14 +32,39 @@
     @* @key forces a new DOM node per route so the fade-in CSS animation replays on every tab
        switch instead of only on first render. *@
     <div class="page-transition" @key="Nav.Uri">
-        @Body
+        @* Last line of defence: an exception a page doesn't handle shows this card instead of
+           taking the app down (in BlazorWebView an unhandled component exception is fatal).
+           Inside the @key'd div, so navigating to another tab gets a fresh boundary. *@
+        <ErrorBoundary @ref="_pageErrorBoundary">
+            <ChildContent>@Body</ChildContent>
+            <ErrorContent>
+                <div class="page-error">
+                    <div class="page-error-icon">⚠️</div>
+                    <h2>Something went wrong</h2>
+                    <p>This screen hit a problem. Check your connection, then try again.</p>
+                    <button type="button" class="primary-btn" @onclick="() => _pageErrorBoundary?.Recover()">Try again</button>
+                </div>
+            </ErrorContent>
+        </ErrorBoundary>
     </div>
 </main>
 
-<BetSlipSheet />
-<ContextSwitcherSheet />
-<MatchSummarySheet />
-<StandingsSheet />
+@* Sheets and overlays sit outside @Body, so they get their own boundary - a failure in one of them
+   shows a small notice rather than blanking the page under it. *@
+<ErrorBoundary @ref="_overlayErrorBoundary">
+    <ChildContent>
+        <BetSlipSheet />
+        <ContextSwitcherSheet />
+        <MatchSummarySheet />
+        <StandingsSheet />
+    </ChildContent>
+    <ErrorContent>
+        <div class="overlay-error">
+            <span>Something went wrong.</span>
+            <button type="button" @onclick="() => _overlayErrorBoundary?.Recover()">Dismiss</button>
+        </div>
+    </ErrorContent>
+</ErrorBoundary>
 <BottomTabBar />
 <WinCelebrationOverlay Bet="_celebrationBet" CurrencySymbol="@ContextState.CurrencySymbol" OnDismiss="DismissCelebration" />
 
@@ -51,6 +76,8 @@
 
 @code {
     private BetDto? _celebrationBet;
+    private ErrorBoundary? _pageErrorBoundary;
+    private ErrorBoundary? _overlayErrorBoundary;
     private bool _showAppSplash = true;
     private bool _appSplashHiding;
     // Created eagerly (before OnInitialized/OnAfterRender run) so ShowStartupAdThenMaybeCelebrateAsync
