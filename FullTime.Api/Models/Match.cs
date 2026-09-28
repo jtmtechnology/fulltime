@@ -62,6 +62,14 @@ public class Match
     // be derived from the final score alone. See BetBuilderSyncService.ResolveMatchEventsAsync.
     public SelectionSide? FirstGoalScorerSide { get; set; }
 
+    // When each side's current 2+ goal lead was first seen by the settlement sweep - cleared the
+    // moment the lead drops below 2. Early payout (SettlementService.ApplyEarlyPayoutsAsync) only
+    // fires once a lead has held for BettingOptions.EarlyPayoutHoldMinutes, so a goal VAR rules out
+    // shortly after doesn't pay anyone. Persisted rather than in-memory so an API restart mid-match
+    // doesn't restart the clock.
+    public DateTime? HomeTwoGoalLeadSince { get; set; }
+    public DateTime? AwayTwoGoalLeadSince { get; set; }
+
     // Corner kicks summed across both teams from API-Football's fixtures/statistics endpoint — null
     // until a finished match's player-stats resolution pass has run. Settles MarketType.TotalCorners
     // the same way OverUnder settles off HomeScore+AwayScore (see SettlementService.IsPickCorrect).

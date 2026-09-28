@@ -37,4 +37,8 @@ public class BettingOptions
     // Matches bet365's own "Boost your Bet Builder" terms (3+ selections, combined odds of evens or
     // greater) - see BetBuilderBoostService.TryConsumeBoostAsync.
     public int BetBuilderBoostMinSelections { get; set; } = 3;
+
+    // How long a 2-goal lead must stand before Match Result picks on that side pay out early - long
+    // enough to cover most VAR checks on the goal that made it 2 (owner's choice, 2026-09-28).
+    public int EarlyPayoutHoldMinutes { get; set; } = 3;
 }

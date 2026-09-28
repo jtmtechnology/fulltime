@@ -2,19 +2,86 @@ using FullTime.Api.Data;
 using FullTime.Api.Models;
 using FullTime.Api.Notifications;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace FullTime.Api.Betting;
 
 // Runs on its own timer (SettlementSweepService), separate from HighlightlyMatchSyncBackgroundService — the
 // odds/score sync and bet settlement are independent concerns with independent cadences.
-public class SettlementService(AppDbContext db, PushNotificationService push, ILogger<SettlementService> logger)
+public class SettlementService(
+    AppDbContext db, PushNotificationService push, IOptions<BettingOptions> options, ILogger<SettlementService> logger)
 {
     public async Task SweepAsync(CancellationToken ct = default)
     {
         await DeriveMatchResultsAsync(ct);
+        var earlyPayouts = await ApplyEarlyPayoutsAsync(ct);
         await ResolvePicksAsync(ct);
         await ResolveLegsAsync(ct);
-        await SettleBetsAsync(ct);
+        var wonBetIds = await SettleBetsAsync(earlyPayouts.Select(e => e.BetId).ToHashSet(), ct);
+
+        // A bet the early payout just completed already got a "Bet Won — early payout" push from
+        // SettleBetsAsync; only bets still waiting on other picks/legs get the separate heads-up.
+        foreach (var payout in earlyPayouts.Where(e => !wonBetIds.Contains(e.BetId)).DistinctBy(e => e.BetId))
+        {
+            await push.SendToUserAsync(payout.UserId, "Early payout! ⚡",
+                $"{payout.Team} are 2 goals up - your {payout.HomeTeam} v {payout.AwayTeam} win pick has been paid out.", ct);
+        }
+    }
+
+    private record EarlyPayout(Guid BetId, Guid UserId, string Team, string HomeTeam, string AwayTeam);
+
+    // 2 Goals Ahead Early Payout: a Match Result pick on a side that has led by 2+ goals for
+    // EarlyPayoutHoldMinutes is settled Correct there and then, whatever happens after. Applies
+    // inside Bet Builder legs too (owner's choice) - the leg itself still waits for its other picks,
+    // same as any partially-resolved leg. The final-result pass (ResolvePicksAsync) only touches
+    // Pending picks, so it never overturns one of these.
+    private async Task<List<EarlyPayout>> ApplyEarlyPayoutsAsync(CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var liveMatches = await db.Matches
+            .Where(m => m.Status == MatchStatus.InProgress && m.HomeScore != null && m.AwayScore != null)
+            .ToListAsync(ct);
+
+        foreach (var match in liveMatches)
+        {
+            var margin = match.HomeScore!.Value - match.AwayScore!.Value;
+            match.HomeTwoGoalLeadSince = margin >= 2 ? match.HomeTwoGoalLeadSince ?? now : null;
+            match.AwayTwoGoalLeadSince = margin <= -2 ? match.AwayTwoGoalLeadSince ?? now : null;
+        }
+        await db.SaveChangesAsync(ct);
+
+        var heldSince = now - TimeSpan.FromMinutes(options.Value.EarlyPayoutHoldMinutes);
+        var picks = await db.BetLegPicks
+            .Include(p => p.BetLeg).ThenInclude(l => l!.Match)
+            .Include(p => p.BetLeg).ThenInclude(l => l!.Bet)
+            // Bet still Pending: an acca already lost on another leg gets nothing from this, and
+            // telling its owner their pick "paid out" would be misleading.
+            .Where(p => p.Outcome == SelectionOutcome.Pending && p.MarketType == MarketType.MatchResult
+                && p.BetLeg!.Bet!.Status == BetStatus.Pending
+                && p.BetLeg.Match!.Status == MatchStatus.InProgress
+                && ((p.Side == SelectionSide.Home && p.BetLeg.Match.HomeTwoGoalLeadSince <= heldSince)
+                    || (p.Side == SelectionSide.Away && p.BetLeg.Match.AwayTwoGoalLeadSince <= heldSince)))
+            .ToListAsync(ct);
+
+        if (picks.Count == 0)
+        {
+            return [];
+        }
+
+        foreach (var pick in picks)
+        {
+            pick.Outcome = SelectionOutcome.Correct;
+            pick.PaidOutEarlyAt = now;
+        }
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation("Early payout applied to {Count} Match Result pick(s)", picks.Count);
+
+        return picks.Select(p =>
+        {
+            var match = p.BetLeg!.Match!;
+            return new EarlyPayout(p.BetLeg.BetId, p.BetLeg.Bet!.UserId,
+                p.Side == SelectionSide.Home ? match.HomeTeam : match.AwayTeam, match.HomeTeam, match.AwayTeam);
+        }).ToList();
     }
 
     private async Task DeriveMatchResultsAsync(CancellationToken ct)
@@ -330,7 +397,9 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
         logger.LogInformation("Resolved {Count} bet leg(s)", resolvedCount);
     }
 
-    private async Task SettleBetsAsync(CancellationToken ct)
+    // Returns the IDs of bets settled Won this sweep. earlyPaidBetIds are bets an early payout
+    // touched this same sweep - if one of those is what completed the bet, its Bet Won push says so.
+    private async Task<HashSet<Guid>> SettleBetsAsync(HashSet<Guid> earlyPaidBetIds, CancellationToken ct)
     {
         var pendingBets = await db.Bets
             .Include(b => b.Legs).ThenInclude(l => l.Match)
@@ -363,7 +432,7 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
 
         if (settledCount == 0)
         {
-            return;
+            return [];
         }
 
         // A won bet credits whichever pool its stake originally came from — the global Worldwide
@@ -404,13 +473,16 @@ public class SettlementService(AppDbContext db, PushNotificationService push, IL
         foreach (var bet in wonBets)
         {
             var symbol = Localization.CurrencyCatalog.SymbolFor(bet.User?.Country);
-            await push.SendToUserAsync(bet.UserId, "Bet Won", $"{DescribeBet(bet)} — +{symbol}{bet.PotentialReturn:0.00}", ct);
+            var title = earlyPaidBetIds.Contains(bet.Id) ? "Bet Won - early payout ⚡" : "Bet Won";
+            await push.SendToUserAsync(bet.UserId, title, $"{DescribeBet(bet)} — +{symbol}{bet.PotentialReturn:0.00}", ct);
         }
 
         foreach (var bet in lostBets)
         {
             await push.SendToUserAsync(bet.UserId, "Bet Lost", $"{DescribeBet(bet)} didn't come in.", ct);
         }
+
+        return wonBets.Select(b => b.Id).ToHashSet();
     }
 
     // A single-match bet (a straight pick or a same-game Bet Builder multi) is identified by its

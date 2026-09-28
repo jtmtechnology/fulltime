@@ -15,7 +15,7 @@ public record PlaceBetRequest(decimal Stake, List<LegRequest> Legs, Guid? League
 
 public record BetLegPickDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore,
-    decimal OddsAtPlacement, string Outcome, string? PlayerName, string? Team);
+    decimal OddsAtPlacement, string Outcome, string? PlayerName, string? Team, bool PaidOutEarly = false);
 public record BetLegDto(
     Guid MatchId, string HomeTeam, string AwayTeam, string? HomeLogoUrl, string? AwayLogoUrl,
     DateTime KickoffTime, decimal OddsAtPlacement, string Outcome, List<BetLegPickDto> Picks);
@@ -161,7 +161,7 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
             l.Picks.Select(p => new BetLegPickDto(
                 p.MarketType.ToString(), p.Line, p.Side.HasValue ? p.Side.ToString() : null,
                 p.PredictedHomeScore, p.PredictedAwayScore, p.OddsAtPlacement, p.Outcome.ToString(),
-                p.PlayerName, p.Team)).ToList()
+                p.PlayerName, p.Team, p.PaidOutEarlyAt != null)).ToList()
         )).ToList());
 
     private Guid CurrentUserId =>

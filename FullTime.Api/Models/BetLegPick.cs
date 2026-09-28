@@ -28,4 +28,8 @@ public class BetLegPick
     // input — see BetService.PlaceBetAsync) — set only for the four player-prop market types.
     public string? PlayerName { get; set; }
     public string? Team { get; set; }
+
+    // Set when a MatchResult pick was settled Correct mid-match by the 2-goals-ahead early payout,
+    // rather than on the final result - My Bets labels these.
+    public DateTime? PaidOutEarlyAt { get; set; }
 }
