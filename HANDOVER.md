@@ -24,13 +24,18 @@ in-app account deletion. An *earlier* 1.0 submission had already been **rejected
 captured here — see §30.4). Sections below that say iOS "never passed App Review" are still true,
 but not "never submitted".
 
-**Latest (2026-09-25, §34): Android 1.11/18 signed AAB built** (contains everything through
-`5734fa0`, upload is the owner's action - not confirmed uploaded). Boost-banner rocket enlarged,
-circle removed (`5734fa0`). Dad's Brownes league balance topped up £100 in prod (Balance +
-StartingBalance, profit-neutral). `main` at `5734fa0` + this handover, pushed, in sync. §33
-(2026-09-24): live-sync kickoff gap fixed + deployed, Events-tab spinner fixed. §32: Nations
-League added. **The owner says Highlightly is no longer used at all** - new competitions get
-API-Football IDs only (§32.2).
+**Latest (2026-09-28, §35): big session, all committed + pushed, API deployed to Oracle through
+`be5bff9`/`9f90a98` (app-only commits after that).** API side, live now: settlement-support crash
+fixed (a null VAR `detail` had blocked all post-match settlement for 2 days), goal-disallowed push
+alert, HTML-entity player names decoded, **2 Goals Ahead Early Payout**, a `Promos` table +
+**admin page at `https://api.jtmtechnology.co.uk/admin/promos.html`** (owner-only). App side,
+**committed but in no released build yet** (ships with Android **1.12/19**, not yet built, and the
+next iOS build): Matches-page promo carousel, "Paid out early" tag, and network-error handling
+(no more crash when the API is unreachable). **The owner says Highlightly is no longer used at
+all** - new competitions get API-Football IDs only (§32.2).
+
+**§1 below is a 2026-09-09 snapshot (GCP-era) and is historical** - trust this banner, §7's top
+priorities and the newest numbered sections instead.
 
 ---
 
@@ -516,10 +521,21 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-25, see §34 for the latest):**
-- **New (§34): Android 1.11/18 AAB is built and on disk** - ask whether the owner uploaded it to
-  Play Console; don't assume. Next Android build = **1.12/19** (bump before building). The §33.2
-  Events-tab fix is in it but still never exercised in the app.
+**Top priorities for whoever picks this up next (updated end of 2026-09-28, see §35 for the latest):**
+- **New (§35): build Android 1.12/19** (bump `FullTime.App.csproj` first; do the obj/bin clean
+  first, APT2258). It's the first build with the promo carousel, the early-payout tag and the
+  network-error handling (`335a742`, `3fb5ff0`). Whether 1.11/18 was ever uploaded is still unasked.
+- **New (§35): a "Test promo / Just a test" row the owner made via the admin page is live** in
+  `Promos`. Invisible until 1.12/19 ships, but ask the owner to delete or deactivate it before then.
+- **New (§35): early payout and the goal-disallowed alert are deployed but never observed on a real
+  match.** Early payout: journal should show `Early payout applied to N Match Result pick(s)` ~3 min
+  after a backed team goes 2 up. Disallowed goal: `Sent GoalDisallowed alert`. Check after the next
+  matchday with bets on it.
+- **New (§35): Codemagic installs the *latest* .NET 10 SDK + `maui-ios` workload on every run** (not
+  pinned). Not proven to have caused anything, but it means two iOS builds of near-identical code can
+  differ. Also: before trusting an iOS build, check which commit Codemagic actually built - the
+  owner's crashing ad-hoc build on 2026-09-28 turned out to be pre-21-Sep code (§35.8).
+- **(§34) Android 1.11/18 AAB** - upload never confirmed; superseded by 1.12/19 once built.
 - **New (§33): confirm the kickoff-gap fix (`cf02c41`, deployed) on the next kickoff API-Football
   is slow to flag live** - journal should show 5s `live match sync tick complete` lines continuing
   past kickoff+60s instead of a one-hour gap. Kick-off/half-time pushes should now fire on time.
@@ -529,6 +545,8 @@ still in effect:
   transcript** (Postgres password, JWT signing key, SMTP password, API-Football/Highlightly/the-odds-api
   keys) by a careless `systemctl cat`. Owner told; rotation is their call (JWT rotation logs
   everyone out). Never `systemctl cat`/`show` the unit's Environment without filtering to one key.
+  (§35: an old local notes file also held the paid the-odds-api key in plain text - file deleted at
+  the owner's request, rotation suggested, their call. the-odds-api isn't in active use.)
 - **New (§32): Nations League follow-ups** - (a) Table link hidden because `GetStandingsAsync`
   only returns group [0] (~14 groups exist); needs a multi-group Table page. (b) the old-client
   Boost suppression (§32.3) was deployed but **not visually confirmed** (a test ad covered the
@@ -3654,4 +3672,136 @@ deploy this session.
   `CLAUDE.md`).
 - The Debug `-t:Run` build hit APT2258 too - same obj/bin clean fixes it.
 - The emulator's header showed "The Brownes £0.00" after the top-up - either it's signed in as Tom
-  (also £0) or the balance hadn't refreshed. Not checked.
+  (also £0) or the balance hadn't refreshed. Not checked. (§35: it's signed in as **Dad**, showing
+  £573.99 - resolved.)
+
+---
+
+## 35. 2026-09-28 session — settlement crash, VAR alert, early payout, promos (carousel + admin page), network-error handling
+
+Opened with `/load` (state matched §34). Nine code commits, all pushed: `e7930dd`, `09d0d2b`,
+`c030341`, `671c770`, `61e3892`, `335a742`, `be5bff9`, `9f90a98`, `3fb5ff0`. API deployed to Oracle
+several times (last deploy carries everything through `9f90a98`; `3fb5ff0` is app-only). Two
+additive migrations applied to prod via idempotent `psql -f`: `AddPromos`, `AddEarlyPayout`.
+
+### 35.1 "First Team to Score legs not settling" - root cause confirmed, fixed (`e7930dd`)
+
+- **Evidence:** `ApiFootballSettlementSupportBackgroundService` logged `NullReferenceException` in
+  `MapEventType` on every tick (183 in ~16h). England v Spain (fixture `1528891`, 2026-09-26) has a
+  `Var` event with `"detail": null`; `detail.Contains(...)` threw, and because the whole batch saves
+  once at the end, **no finished match got events / `FirstGoalScorerSide` / player stats** - 13
+  matches backed up. Only 2 picks were actually stuck (Denmark v Wales, Austria v Kosovo FTTS).
+- **Fix:** `FixtureEventDto.Detail` nullable; `MapEventType` returns the raw type when detail is null
+  (a bare null guard would have moved the crash to the save, `MatchEvent.Type` is non-null). Also
+  excluded `Goal`/"Missed Penalty" from the first-goal lookup (would have settled FTTS wrong).
+- **Verified after deploy:** "Resolved match events for 13 match(es)", both picks Correct, Denmark
+  bet Won. API-Football credits an own goal to the *benefiting* team (confirmed on Denmark v Wales).
+- **Still true / not fixed:** one bad fixture can still stall the whole batch for any *other*
+  exception type (no per-match isolation), and `EventsFinalizedAt` is set even when the events fetch
+  failed (then never retried). Neither seen causing harm yet.
+
+### 35.2 Goal-disallowed push (`09d0d2b`, deployed, never observed live)
+
+- New `MatchAlertType.GoalDisallowed` (appended; no migration, stored as int), sent to users with the
+  existing **Goal** preference (no new setting). Trigger: a side's score *drops* between live polls,
+  both scores non-null, match InProgress on both ticks.
+- `MatchAlertService.ReopenGoalSequenceAsync` deletes the retracted goal's `SentMatchAlert` row -
+  Goal's dedup `Sequence` is the running score, so without it the team's next real goal (same score)
+  would be silently deduped.
+- Accepted limitations: a goal VAR cancels before API-Football ever counts it sends nothing (the
+  score never rose); a flickering score would send GOAL / disallowed / GOAL.
+
+### 35.3 HTML-encoded player names (`c030341`, deployed)
+
+- API-Football's `fixtures/players` and `fixtures/lineups` send `O&apos;Reilly`; `fixtures/events`
+  sends the same player plain. Showed as `&apos;` in Lineups/Player Stats **and** broke shots/fouls
+  settlement's surname match. `HtmlDecodedStringConverter` now decodes every player/coach `name` in
+  `ApiFootballDtos.cs`. 57 old `MatchPlayerStats` rows still hold `&apos;` - deliberately left (all
+  already settled, no picks on apostrophe names existed, Player Stats tab reads live, not from DB).
+
+### 35.4 2 Goals Ahead Early Payout (`61e3892` API, deployed; `335a742` app tag, unreleased)
+
+- Owner's choices: applies **inside Bet Builder legs too**; the 2-goal lead must **hold 3 minutes**
+  (`Betting:EarlyPayoutHoldMinutes`) to ride out VAR; push + My Bets label.
+- `SettlementService.ApplyEarlyPayoutsAsync` runs each sweep (30s): records
+  `Match.HomeTwoGoalLeadSince`/`AwayTwoGoalLeadSince` (cleared when the lead drops below 2, persisted
+  so a restart doesn't reset), then marks pending `MatchResult` Home/Away picks Correct with
+  `BetLegPick.PaidOutEarlyAt`. Existing leg/bet settlement then pays a single bet mid-match. Only
+  bets still Pending qualify (a dead acca is skipped). The final-result pass only touches Pending
+  picks, so a comeback never reverses an early payout.
+- Pushes: "Bet Won - early payout ⚡" if it completed the bet, else "Early payout! ⚡ …".
+- Verified only with a throwaway EF-InMemory harness (15 checks, in the session scratchpad, not
+  committed - there is no test project in this repo). **Not yet seen on a real match.**
+
+### 35.5 Promos: table, API, carousel (`671c770`, `335a742`)
+
+- `Promos` table (Title, Subtitle, Icon emoji-or-https, Theme `accent|gold|blue`, Link, StartsAt,
+  EndsAt, Priority, IsActive), with DB defaults so a bare SQL insert works. `GET api/promos/active`
+  (auth'd) filters dates/IsActive and **drops any Link that isn't an in-app route**
+  (`Promo.IsInAppLink`) - no external/bookmaker URLs, by design.
+- App: `PromoCarousel.razor` replaces the stacked `FreeSpinBanner`/`BetBuilderBoostBanner` on
+  `Matches.razor` (both now display-only). Slides: Spin, Boost, then promos by priority; auto-rotate
+  5s, swipe, dots. **Owner changed the rule: Spin and Boost now both show (rotating)** - the old
+  "Spin hides Boost" single-slot rule is gone. All slides share one CSS grid cell so the page never
+  jumps. Verified on the emulator (rotation, swipe wrap, dots, link tap, no-link slide).
+- Live row: "2 GOALS AHEAD = EARLY PAYOUT" (gold, no link; owner has since changed its icon to ⚽ via
+  the admin page). Plus the owner's "Test promo" (see §7).
+
+### 35.6 Admin page for promos (`be5bff9`, `9f90a98`, deployed)
+
+- `https://api.jtmtechnology.co.uk/admin/promos.html` - static page in the API's own `wwwroot`
+  (same origin, no CORS; owner chose this over the marketing site). Sign in with the normal app
+  login; token kept in sessionStorage. List with Live/Scheduled/Ended/Off badges, add/edit/delete,
+  live preview, link and icon dropdowns (Custom… for anything else).
+- Security is server-side: `AdminPromosController` (`api/admin/promos`) has
+  `[Authorize(Policy = "Admin")]`, which checks the JWT's signed `email` claim against
+  `Admin:Emails` in `appsettings.json` (currently only `alan@jtmtechnology.co.uk` - the owner, who
+  is "Dad" in The Brownes).
+- Gotcha fixed: `IsActive` has DB default `true`, so EF omitted `false` on insert and an inactive
+  promo would have gone live - now `.ValueGeneratedNever()` (no migration needed).
+- Tested against a Node mock API via headless Edge + CDP (24 checks); the owner has since used it
+  for real (icon change, test promo), so the real endpoints work too.
+
+### 35.7 Network failures no longer crash the app (`3fb5ff0`, app-only, unreleased)
+
+- `ApiNetworkErrorHandler` (Shared; registered on `ApiClient`'s HttpClient in both heads) turns
+  connection/DNS/refused/dropped-body/30s-timeout failures into `ApiException`, which every page
+  already catches. It buffers the body inside its own try, since HttpClient otherwise buffers after
+  the handler returns.
+- `ErrorBoundary` around `@Body` (inside the `@key="Nav.Uri"` div, so a tab switch resets it) and
+  around the sheets. Unhandled component exceptions are fatal in BlazorWebView.
+- Verified on the emulator with airplane mode: My Bets / Leaderboard / Matches show "Can't reach
+  FullTime right now…", the app stays up, and it recovers once back online.
+
+### 35.8 iPhone "crash straight after the ad" - resolved, cause was an old build
+
+- The owner's ad-hoc build showed "connection refused 34.23.16.148" - the retired GCP IP. The app
+  hardcoded that until `f5de4a0` (2026-09-21); current source only uses `api.jtmtechnology.co.uk`.
+  So the installed IPA was built from pre-21-Sep code (**why** Codemagic built that is unknown -
+  check the commit hash on the next Codemagic run). A fresh ad-hoc build from `main` works.
+- Leading (unconfirmed) crash explanation: that old build's unreachable-API `HttpRequestException`
+  escaped a page's `catch (ApiException)` - exactly what §35.7 now prevents.
+- Ruled out along the way: the ad service (unchanged since 2026-09-08), the post-ad
+  win-celebration code (try/catch-all, trivial overlay), JSON source-gen/trimming (none configured).
+  No known `Plugin.MauiMTAdmob` crash-on-close bug found.
+- For future iOS crash logs: Settings → Privacy & Security → Analytics & Improvements only shows
+  **Analytics Data** once **Share iPhone Analytics** is switched on (then reproduce the crash).
+
+### 35.9 Environment notes
+
+- The permission classifier blocked a prod migration and a deploy as "[Production Deploy]" even
+  after "yes"; they went through once the owner named the actions verbatim (e.g. "run the Promos
+  migration on prod, deploy the API to Oracle, and add then remove two test promos").
+- `dotnet ef migrations remove` needs a DB connection ("ConnectionString property has not been
+  initialized") - to redo an uncommitted migration, delete its two files and `git checkout`
+  `AppDbContextModelSnapshot.cs`.
+- An EF-InMemory harness referencing `FullTime.Api` needs an explicit
+  `Microsoft.EntityFrameworkCore.Relational` 10.0.10 package ref (Npgsql pulls an older one).
+- After a fresh emulator boot, `-t:Run` failed with `XA0129` fast-deployment errors; adding
+  `-p:EmbedAssembliesIntoApk=true` worked. `adb shell cmd connectivity airplane-mode enable|disable`
+  is a quick offline test.
+- No `python` locally (Store stub); write test scripts in Node (`node` is on PATH). Headless Edge
+  over CDP: open the WebSocket and await `onopen` in the same step (attaching it later hangs).
+- Long heredocs in the Bash tool sometimes fail to parse ("unexpected EOF while looking for
+  matching `'`") - write the file with the Write/Edit tool instead.
+- Deleted at the owner's request: `ODDS_API_PLAYER_PROPS_INVESTIGATION.md`, `emulator.log`.
