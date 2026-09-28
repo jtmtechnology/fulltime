@@ -62,7 +62,8 @@ public class ApiFootballSettlementSupportService(
             if (match.FirstGoalScorerSide is null)
             {
                 var firstGoal = events
-                    .Where(e => e.Type == "Goal")
+                    // API-Football files a missed penalty under type "Goal" too.
+                    .Where(e => e.Type == "Goal" && e.Detail != "Missed Penalty")
                     .OrderBy(e => e.Time.Elapsed)
                     .ThenBy(e => e.Time.Extra ?? 0)
                     .FirstOrDefault();
@@ -119,8 +120,9 @@ public class ApiFootballSettlementSupportService(
     // anything genuinely unrecognized falls through to Detail raw, which the client already renders
     // as a generic bullet + raw text rather than crashing (same tolerant pattern as
     // BetBuilderSyncService.ParseOutcome).
-    private static string MapEventType(string type, string detail) => (type, detail) switch
+    private static string MapEventType(string type, string? detail) => (type, detail) switch
     {
+        (_, null) => type,
         ("Goal", "Normal Goal") => "Goal",
         ("Goal", "Penalty") => "Penalty",
         ("Goal", "Missed Penalty") => "Missed Penalty",

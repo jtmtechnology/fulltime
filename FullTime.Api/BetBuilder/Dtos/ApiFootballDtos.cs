@@ -181,8 +181,10 @@ public class FixtureEventDto
     [JsonPropertyName("type")]
     public required string Type { get; set; }
 
+    // Not always present - England v Spain (fixture 1528891, 2026-09-26) had a "Var" event with
+    // "detail": null, which crashed every settlement-support tick for two days.
     [JsonPropertyName("detail")]
-    public required string Detail { get; set; }
+    public string? Detail { get; set; }
 }
 
 public class EventPlayerInfo
