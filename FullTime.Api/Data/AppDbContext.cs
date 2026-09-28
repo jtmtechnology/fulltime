@@ -23,6 +23,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<FavouriteLeague> FavouriteLeagues => Set<FavouriteLeague>();
     public DbSet<MatchAlertSubscription> MatchAlertSubscriptions => Set<MatchAlertSubscription>();
     public DbSet<SentMatchAlert> SentMatchAlerts => Set<SentMatchAlert>();
+    public DbSet<Promo> Promos => Set<Promo>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -158,6 +159,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<BetBuilderBoost>()
             .HasIndex(b => b.Date)
             .IsUnique();
+
+        // DB-side defaults because promos are inserted by hand in psql, not through EF - a bare
+        // INSERT (Title) VALUES (...) should produce a live, sensibly-styled row.
+        modelBuilder.Entity<Promo>(e =>
+        {
+            e.Property(p => p.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(p => p.Theme).HasDefaultValue("accent");
+            e.Property(p => p.Priority).HasDefaultValue(0);
+            e.Property(p => p.IsActive).HasDefaultValue(true);
+            e.Property(p => p.CreatedAt).HasDefaultValueSql("now()");
+        });
 
         modelBuilder.Entity<UserAlertPreferences>()
             .HasOne(p => p.User)
