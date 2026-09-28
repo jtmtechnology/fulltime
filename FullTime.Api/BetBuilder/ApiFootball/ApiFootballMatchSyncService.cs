@@ -467,6 +467,34 @@ public class ApiFootballMatchSyncService(
                 $"{match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
                 sequence: 1000 + (match.AwayScore ?? 0), ct: ct);
         }
+
+        // A VAR-overturned goal shows up as that side's score going back down on a later tick.
+        // Scores must be non-null on both sides so a missing "goals" block in one response can't
+        // read as a drop to 0.
+        if (previousStatus == MatchStatus.InProgress && newStatus == MatchStatus.InProgress)
+        {
+            await NotifyGoalDisallowedAsync(match, match.HomeTeam, previousHomeScore, match.HomeScore, sequenceOffset: 0, ct);
+            await NotifyGoalDisallowedAsync(match, match.AwayTeam, previousAwayScore, match.AwayScore, sequenceOffset: 1000, ct);
+        }
+    }
+
+    private async Task NotifyGoalDisallowedAsync(
+        Match match, string team, int? previousScore, int? newScore, int sequenceOffset, CancellationToken ct)
+    {
+        if (previousScore is not { } previous || newScore is not { } current || current >= previous)
+        {
+            return;
+        }
+
+        await matchAlerts.NotifyAsync(
+            match, MatchAlertType.GoalDisallowed, $"Goal disallowed ({team})",
+            $"{match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
+            sequence: sequenceOffset + previous, ct: ct);
+
+        for (var retracted = current + 1; retracted <= previous; retracted++)
+        {
+            await matchAlerts.ReopenGoalSequenceAsync(match, sequenceOffset + retracted, ct);
+        }
     }
 
     // API-Football's short status codes. Confirmed live: NS, 1H, HT, 2H, FT. The rest (ET, P, PEN,

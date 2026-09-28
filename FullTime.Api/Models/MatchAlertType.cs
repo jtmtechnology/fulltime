@@ -12,5 +12,9 @@ public enum MatchAlertType
     Goal,
     RedCard,
     FullTime,
-    YellowCard
+    YellowCard,
+
+    // No preference column of its own - sent to whoever has Goal on, since they're the ones who got
+    // the GOAL push this retracts.
+    GoalDisallowed
 }

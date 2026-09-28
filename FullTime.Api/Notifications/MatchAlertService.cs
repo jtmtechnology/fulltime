@@ -41,7 +41,7 @@ public class MatchAlertService(AppDbContext db, PushNotificationService push, IL
             MatchAlertType.LineupsOut => scoped.Where(id => db.UserAlertPreferences.Any(p => p.UserId == id && p.LineupsOut)),
             MatchAlertType.Kickoff => scoped.Where(id => db.UserAlertPreferences.Any(p => p.UserId == id && p.Kickoff)),
             MatchAlertType.HalfTime => scoped.Where(id => db.UserAlertPreferences.Any(p => p.UserId == id && p.HalfTime)),
-            MatchAlertType.Goal => scoped.Where(id => db.UserAlertPreferences.Any(p => p.UserId == id && p.Goal)),
+            MatchAlertType.Goal or MatchAlertType.GoalDisallowed => scoped.Where(id => db.UserAlertPreferences.Any(p => p.UserId == id && p.Goal)),
             MatchAlertType.RedCard => scoped.Where(id => db.UserAlertPreferences.Any(p => p.UserId == id && p.RedCard)),
             MatchAlertType.FullTime => scoped.Where(id => db.UserAlertPreferences.Any(p => p.UserId == id && p.FullTime)),
             MatchAlertType.YellowCard => scoped.Where(id => db.UserAlertPreferences.Any(p => p.UserId == id && p.YellowCard)),
@@ -76,4 +76,11 @@ public class MatchAlertService(AppDbContext db, PushNotificationService push, IL
             "Sent {AlertType} alert (seq {Sequence}) for match {MatchId} ({Home} v {Away}) to {Count} user(s)",
             type, sequence, match.Id, match.HomeTeam, match.AwayTeam, interestedUserIds.Count);
     }
+
+    // A goal's Sequence is the scorer's running score, so after a disallowed 1-0 the next real goal
+    // is also "1" and would be deduped against the retracted one without this.
+    public Task ReopenGoalSequenceAsync(Match match, int sequence, CancellationToken ct = default) =>
+        db.SentMatchAlerts
+            .Where(s => s.MatchId == match.Id && s.AlertType == MatchAlertType.Goal && s.Sequence == sequence)
+            .ExecuteDeleteAsync(ct);
 }
