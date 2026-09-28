@@ -1,4 +1,5 @@
 using FullTime.Api.Data;
+using FullTime.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -24,9 +25,7 @@ public class PromosController(AppDbContext db) : ControllerBase
 
         // Links are dropped rather than passed through unless they're an in-app route - an external
         // URL (a bookmaker, say) would undercut the app's no-real-money scoping and App Review.
-        // "//host" is a protocol-relative external URL, so it doesn't count as in-app.
         return Ok(promos.Select(p => new PromoDto(
-            p.Id, p.Title, p.Subtitle, p.Icon, p.Theme,
-            p.Link is { } link && link.StartsWith('/') && !link.StartsWith("//") ? link : null)).ToList());
+            p.Id, p.Title, p.Subtitle, p.Icon, p.Theme, Promo.IsInAppLink(p.Link) ? p.Link : null)).ToList());
     }
 }

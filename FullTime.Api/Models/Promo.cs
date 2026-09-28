@@ -27,4 +27,9 @@ public class Promo
     public int Priority { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
+
+    public static readonly string[] Themes = ["accent", "gold", "blue"];
+
+    // "//host" is a protocol-relative external URL, so a leading "/" alone isn't enough.
+    public static bool IsInAppLink(string? link) => link is not null && link.StartsWith('/') && !link.StartsWith("//");
 }

@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>FullTime — Promos</title>
+<link rel="icon" type="image/png" href="../favicon.png">
+<link rel="stylesheet" href="../auth-pages.css">
+<style>
+  .card { max-width: 640px; margin-bottom: 1.25rem; }
+  .row { display: flex; gap: 0.75rem; }
+  .row > * { flex: 1; min-width: 0; }
+  select, textarea {
+    width: 100%; margin-top: 0.35rem; padding: 0.7rem 0.8rem; font: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  }
+  textarea { resize: vertical; min-height: 3.5rem; }
+  select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(57,255,136,0.2); }
+  .hint { font-size: 0.75rem; color: var(--text-muted); font-weight: 400; margin-top: 0.25rem; }
+  .check { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; color: var(--text); font-size: 0.9rem; }
+  .check input { width: auto; margin: 0; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+  .toolbar h1 { margin: 0; }
+  .btn-inline { width: auto; margin: 0; padding: 0.5rem 0.9rem; font-size: 0.85rem; }
+  .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+  .actions { display: flex; gap: 0.5rem; margin-top: 1.5rem; }
+  .actions button { margin: 0; }
+  .promo-item { border-top: 1px solid var(--border); padding: 0.9rem 0; }
+  .promo-item:first-of-type { border-top: none; }
+  .promo-meta { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.4rem; line-height: 1.5; }
+  .promo-item-actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 999px; margin-right: 0.4rem; }
+  .badge-live { background: rgba(57,255,136,0.15); color: var(--accent); }
+  .badge-scheduled { background: rgba(77,163,255,0.15); color: #4da3ff; }
+  .badge-ended, .badge-off { background: rgba(154,164,178,0.15); color: var(--text-muted); }
+  .empty { color: var(--text-muted); padding: 0.5rem 0; }
+  .user-line { font-size: 0.8rem; color: var(--text-muted); }
+
+  /* Mirrors .promo-banner in FullTime.App.Shared's app.css so the preview matches the app. */
+  .promo-banner {
+    --promo-color: var(--accent); --promo-glow: rgba(57,255,136,0.1);
+    display: flex; align-items: center; gap: 0.75rem; width: 100%; min-height: 64px;
+    background: linear-gradient(135deg, var(--bg-elevated) 40%, var(--promo-glow));
+    border: 1px solid var(--promo-color); border-radius: 999px; padding: 0.4rem 1.1rem;
+  }
+  .promo-theme-gold { --promo-color: #ffc940; --promo-glow: rgba(255,201,64,0.12); }
+  .promo-theme-blue { --promo-color: #4da3ff; --promo-glow: rgba(77,163,255,0.12); }
+  .promo-banner-icon { flex-shrink: 0; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; font-size: 2.2rem; }
+  .promo-banner-icon img { width: 100%; height: 100%; object-fit: contain; }
+  .promo-banner-text { flex: 1; min-width: 0; margin-left: 0.4rem; }
+  .promo-banner-title { font-weight: 800; font-size: 0.9rem; letter-spacing: 0.03em; }
+  .promo-banner-subtitle { color: var(--text-muted); font-size: 0.72rem; margin-top: 0.15rem; line-height: 1.3; }
+  .promo-banner-arrow {
+    width: 30px; height: 30px; flex-shrink: 0; border-radius: 50%; background: var(--promo-color); color: var(--accent-ink);
+    display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700; line-height: 1; padding-bottom: 3px;
+  }
+  .preview-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin: 1.25rem 0 0.5rem; }
+</style>
+</head>
+<body>
+  <div class="brand">
+    <img class="brand-crest" src="../logo.png" alt="">
+    <span class="wordmark"><span class="full">FULL</span><span class="dot">&bull;</span><span class="time">TIME</span></span>
+  </div>
+
+  <main class="card" id="login-card" hidden>
+    <h1>Promos admin</h1>
+    <p class="muted">Sign in with your FullTime app account.</p>
+    <form id="login-form">
+      <label for="email">Email</label>
+      <input type="email" id="email" autocomplete="username" required>
+      <label for="password">Password</label>
+      <input type="password" id="password" autocomplete="current-password" required>
+      <button type="submit">Sign in</button>
+    </form>
+    <div id="login-status" class="status"></div>
+  </main>
+
+  <main class="card" id="list-card" hidden>
+    <div class="toolbar">
+      <h1>Promos</h1>
+      <button type="button" class="btn-inline" id="new-btn">+ New promo</button>
+    </div>
+    <div class="user-line"><span id="user-name"></span> · <a href="#" id="sign-out">Sign out</a></div>
+    <div id="list-status" class="status"></div>
+    <div id="promo-list"></div>
+  </main>
+
+  <main class="card" id="edit-card" hidden>
+    <h1 id="edit-heading">New promo</h1>
+    <form id="edit-form">
+      <label for="f-title">Title</label>
+      <input id="f-title" maxlength="80" required>
+
+      <label for="f-subtitle">Subtitle</label>
+      <textarea id="f-subtitle" maxlength="200"></textarea>
+
+      <div class="row">
+        <div>
+          <label for="f-icon">Icon</label>
+          <input id="f-icon" placeholder="⚡">
+          <div class="hint">An emoji, or an https:// image URL.</div>
+        </div>
+        <div>
+          <label for="f-theme">Colour</label>
+          <select id="f-theme">
+            <option value="accent">Green</option>
+            <option value="gold">Gold</option>
+            <option value="blue">Blue</option>
+          </select>
+        </div>
+      </div>
+
+      <label for="f-link">Link (optional)</label>
+      <select id="f-link-preset">
+        <option value="">No link</option>
+        <option value="/daily-spinner">Daily Spinner</option>
+        <option value="/leaderboard">Leaderboard</option>
+        <option value="/mybets">My Bets</option>
+        <option value="/match-alerts">Match Alerts</option>
+        <option value="/profile">Settings</option>
+        <option value="custom">Custom route…</option>
+      </select>
+      <input id="f-link" placeholder="/some-page" hidden>
+      <div class="hint">In-app pages only - external links aren't allowed.</div>
+
+      <div class="row">
+        <div>
+          <label for="f-starts">Starts</label>
+          <input type="datetime-local" id="f-starts">
+          <div class="hint">Blank = straight away.</div>
+        </div>
+        <div>
+          <label for="f-ends">Ends</label>
+          <input type="datetime-local" id="f-ends">
+          <div class="hint">Blank = never.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="f-priority">Priority</label>
+          <input type="number" id="f-priority" value="0" step="1">
+          <div class="hint">Higher shows first (after Free Spin and Boost).</div>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="f-active" checked> Active</label>
+          <div class="hint">Untick to hide it without deleting.</div>
+        </div>
+      </div>
+
+      <div class="preview-label">Preview</div>
+      <div id="preview"></div>
+
+      <div class="actions">
+        <button type="submit" id="save-btn">Save</button>
+        <button type="button" class="btn-secondary" id="cancel-btn">Cancel</button>
+      </div>
+    </form>
+    <div id="edit-status" class="status"></div>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 JTM Technology. Not a real-money gambling product.</p>
+  </footer>
+
+<script>
+const API = '/api';
+const TOKEN_KEY = 'fulltime-admin-token';
+const NAME_KEY = 'fulltime-admin-name';
+const PRESET_LINKS = ['/daily-spinner', '/leaderboard', '/mybets', '/match-alerts', '/profile'];
+
+const $ = (id) => document.getElementById(id);
+let promos = [];
+let editingId = null;
+
+// sessionStorage, not localStorage: closing the tab signs you out of the admin page.
+function token() { try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; } }
+function setSession(t, name) {
+  try { sessionStorage.setItem(TOKEN_KEY, t); sessionStorage.setItem(NAME_KEY, name); } catch {}
+}
+function clearSession() { try { sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(NAME_KEY); } catch {} }
+
+function setStatus(el, text, kind) { el.textContent = text || ''; el.className = 'status' + (kind ? ' ' + kind : ''); }
+
+function show(card) {
+  for (const id of ['login-card', 'list-card', 'edit-card']) $(id).hidden = id !== card;
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(API + path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token(), ...(options.headers || {}) },
+  });
+  if (res.status === 401) { clearSession(); show('login-card'); throw new Error('Your session has expired - sign in again.'); }
+  if (res.status === 403) throw new Error("This account isn't an admin.");
+  if (!res.ok) {
+    let msg = 'Request failed (' + res.status + ').';
+    try { const body = await res.json(); if (body.error) msg = body.error; } catch {}
+    throw new Error(msg);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+// --- sign in ---------------------------------------------------------------
+$('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const status = $('login-status');
+  setStatus(status, 'Signing in…', 'muted');
+  try {
+    const res = await fetch(API + '/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('email').value, password: $('password').value }),
+    });
+    if (!res.ok) {
+      setStatus(status, res.status === 403 ? 'Verify your email address first.' : 'Wrong email or password.', 'error');
+      return;
+    }
+    const body = await res.json();
+    setSession(body.token, body.name);
+    $('password').value = '';
+    setStatus(status, '');
+    await loadList();
+  } catch {
+    setStatus(status, "Couldn't reach the server.", 'error');
+  }
+});
+
+$('sign-out').addEventListener('click', (e) => { e.preventDefault(); clearSession(); show('login-card'); });
+
+// --- list ------------------------------------------------------------------
+function statusOf(p) {
+  const now = Date.now();
+  if (!p.isActive) return ['off', 'Off'];
+  if (p.startsAt && Date.parse(p.startsAt) > now) return ['scheduled', 'Scheduled'];
+  if (p.endsAt && Date.parse(p.endsAt) <= now) return ['ended', 'Ended'];
+  return ['live', 'Live'];
+}
+
+function fmt(iso) {
+  return new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+async function loadList() {
+  show('list-card');
+  let name = '';
+  try { name = sessionStorage.getItem(NAME_KEY) || ''; } catch {}
+  $('user-name').textContent = name ? 'Signed in as ' + name : 'Signed in';
+  const status = $('list-status');
+  setStatus(status, 'Loading…', 'muted');
+  try {
+    promos = await api('/admin/promos');
+    setStatus(status, '');
+    renderList();
+  } catch (err) {
+    setStatus(status, err.message, 'error');
+    $('promo-list').replaceChildren();
+  }
+}
+
+function renderList() {
+  const list = $('promo-list');
+  list.replaceChildren();
+  if (promos.length === 0) {
+    list.append(el('div', 'empty', 'No promos yet.'));
+    return;
+  }
+  for (const p of promos) {
+    const item = el('div', 'promo-item');
+    item.append(bannerPreview(p));
+
+    const [cls, label] = statusOf(p);
+    const meta = el('div', 'promo-meta');
+    meta.append(el('span', 'badge badge-' + cls, label));
+    const bits = [];
+    bits.push(p.startsAt ? 'from ' + fmt(p.startsAt) : 'from now');
+    bits.push(p.endsAt ? 'until ' + fmt(p.endsAt) : 'no end');
+    bits.push('priority ' + p.priority);
+    bits.push(p.link ? 'links to ' + p.link : 'no link');
+    meta.append(document.createTextNode(bits.join(' · ')));
+    item.append(meta);
+
+    const actions = el('div', 'promo-item-actions');
+    const edit = el('button', 'btn-inline btn-secondary', 'Edit');
+    edit.type = 'button';
+    edit.addEventListener('click', () => openEditor(p));
+    const del = el('button', 'btn-inline btn-danger', 'Delete');
+    del.type = 'button';
+    del.addEventListener('click', () => deletePromo(p));
+    actions.append(edit, del);
+    item.append(actions);
+    list.append(item);
+  }
+}
+
+async function deletePromo(p) {
+  if (!confirm('Delete "' + p.title + '"? This can\'t be undone.\n\n(To just hide it, Edit and untick Active instead.)')) return;
+  const status = $('list-status');
+  try {
+    await api('/admin/promos/' + p.id, { method: 'DELETE' });
+    await loadList();
+    setStatus(status, 'Deleted.', 'success');
+  } catch (err) {
+    setStatus(status, err.message, 'error');
+  }
+}
+
+// --- preview (textContent only - promo text is never parsed as HTML) --------
+function bannerPreview(p) {
+  const theme = ['accent', 'gold', 'blue'].includes(p.theme) ? p.theme : 'accent';
+  const banner = el('div', 'promo-banner promo-theme-' + theme);
+  if (p.icon) {
+    const icon = el('div', 'promo-banner-icon');
+    if (/^https:\/\//i.test(p.icon)) {
+      const img = document.createElement('img');
+      img.src = p.icon; img.alt = '';
+      icon.append(img);
+    } else {
+      icon.textContent = p.icon;
+    }
+    banner.append(icon);
+  }
+  const text = el('div', 'promo-banner-text');
+  text.append(el('div', 'promo-banner-title', p.title || 'Title'));
+  if (p.subtitle) text.append(el('div', 'promo-banner-subtitle', p.subtitle));
+  banner.append(text);
+  if (p.link) banner.append(el('div', 'promo-banner-arrow', '›'));
+  return banner;
+}
+
+// --- editor ----------------------------------------------------------------
+// datetime-local works in the browser's local time; the API stores UTC.
+function toLocalInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+function fromLocalInput(value) { return value ? new Date(value).toISOString() : null; }
+
+function currentLink() {
+  const preset = $('f-link-preset').value;
+  if (preset === 'custom') return $('f-link').value.trim() || null;
+  return preset || null;
+}
+
+function formValue() {
+  return {
+    title: $('f-title').value.trim(),
+    subtitle: $('f-subtitle').value.trim() || null,
+    icon: $('f-icon').value.trim() || null,
+    theme: $('f-theme').value,
+    link: currentLink(),
+    startsAt: fromLocalInput($('f-starts').value),
+    endsAt: fromLocalInput($('f-ends').value),
+    priority: parseInt($('f-priority').value, 10) || 0,
+    isActive: $('f-active').checked,
+  };
+}
+
+function refreshPreview() { $('preview').replaceChildren(bannerPreview(formValue())); }
+
+function openEditor(p) {
+  editingId = p ? p.id : null;
+  $('edit-heading').textContent = p ? 'Edit promo' : 'New promo';
+  $('f-title').value = p?.title ?? '';
+  $('f-subtitle').value = p?.subtitle ?? '';
+  $('f-icon').value = p?.icon ?? '';
+  $('f-theme').value = p?.theme ?? 'gold';
+  const link = p?.link ?? '';
+  const isPreset = link === '' || PRESET_LINKS.includes(link);
+  $('f-link-preset').value = isPreset ? link : 'custom';
+  $('f-link').value = isPreset ? '' : link;
+  $('f-link').hidden = isPreset;
+  $('f-starts').value = toLocalInput(p?.startsAt);
+  $('f-ends').value = toLocalInput(p?.endsAt);
+  $('f-priority').value = p?.priority ?? 0;
+  $('f-active').checked = p?.isActive ?? true;
+  setStatus($('edit-status'), '');
+  refreshPreview();
+  show('edit-card');
+  $('f-title').focus();
+}
+
+$('f-link-preset').addEventListener('change', () => {
+  $('f-link').hidden = $('f-link-preset').value !== 'custom';
+  refreshPreview();
+});
+$('edit-form').addEventListener('input', refreshPreview);
+$('new-btn').addEventListener('click', () => openEditor(null));
+$('cancel-btn').addEventListener('click', () => show('list-card'));
+
+$('edit-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const status = $('edit-status');
+  const body = formValue();
+  if (body.startsAt && body.endsAt && Date.parse(body.endsAt) <= Date.parse(body.startsAt)) {
+    setStatus(status, 'End time must be after the start time.', 'error');
+    return;
+  }
+  $('save-btn').disabled = true;
+  setStatus(status, 'Saving…', 'muted');
+  try {
+    await api(editingId ? '/admin/promos/' + editingId : '/admin/promos', {
+      method: editingId ? 'PUT' : 'POST', body: JSON.stringify(body),
+    });
+    await loadList();
+    setStatus($('list-status'), 'Saved. The app picks it up next time the Matches page opens.', 'success');
+  } catch (err) {
+    setStatus(status, err.message, 'error');
+  } finally {
+    $('save-btn').disabled = false;
+  }
+});
+
+// --- start -----------------------------------------------------------------
+if (token()) loadList(); else show('login-card');
+</script>
+</body>
+</html>

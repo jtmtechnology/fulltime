@@ -167,7 +167,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(p => p.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(p => p.Theme).HasDefaultValue("accent");
             e.Property(p => p.Priority).HasDefaultValue(0);
-            e.Property(p => p.IsActive).HasDefaultValue(true);
+            // ValueGeneratedNever: otherwise EF treats false as "unset" and omits it from the
+            // INSERT, so the DB default silently turned an admin-page "inactive" promo active.
+            e.Property(p => p.IsActive).HasDefaultValue(true).ValueGeneratedNever();
             e.Property(p => p.CreatedAt).HasDefaultValueSql("now()");
         });
 

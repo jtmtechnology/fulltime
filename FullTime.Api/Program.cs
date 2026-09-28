@@ -49,7 +49,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ClockSkew = TimeSpan.FromSeconds(30),
         };
     });
-builder.Services.AddAuthorization();
+// Admin-only endpoints (currently just promo management, for wwwroot/admin/promos.html). The JWT's
+// email claim is signed, so it can be trusted without a DB lookup.
+var adminEmails = builder.Configuration.GetSection("Admin:Emails").Get<string[]>() ?? [];
+builder.Services.AddAuthorization(options => options.AddPolicy("Admin", policy => policy
+    .RequireAuthenticatedUser()
+    .RequireAssertion(ctx => ctx.User.FindFirst("email")?.Value is { } email
+        && adminEmails.Contains(email, StringComparer.OrdinalIgnoreCase))));
 
 builder.Services.Configure<BettingOptions>(builder.Configuration.GetSection(BettingOptions.SectionName));
 
