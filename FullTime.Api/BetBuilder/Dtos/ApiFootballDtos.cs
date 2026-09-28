@@ -19,6 +19,19 @@ public class FlexibleStringConverter : JsonConverter<string>
         writer.WriteStringValue(value);
 }
 
+// fixtures/players and fixtures/lineups send names HTML-encoded ("N. O&apos;Reilly") while
+// fixtures/events sends the same player plain - confirmed 2026-09-28 on fixture 1528891. Left
+// encoded, the app showed "&apos;" and shots/fouls settlement's surname match could never find
+// the player.
+public class HtmlDecodedStringConverter : JsonConverter<string>
+{
+    public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        System.Net.WebUtility.HtmlDecode(reader.GetString() ?? "");
+
+    public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value);
+}
+
 // Shapes confirmed against real responses from v3.football.api-sports.io — ported from
 // FullTime.Api.Sandbox/Dtos/ApiFootballDtos.cs, which validated these against the real API during
 // evaluation. Only the fields the sync/settlement code actually uses are mapped.
@@ -156,6 +169,7 @@ public class SquadDto
 public class SquadPlayerDto
 {
     [JsonPropertyName("name")]
+    [JsonConverter(typeof(HtmlDecodedStringConverter))]
     public required string Name { get; set; }
 }
 
@@ -193,6 +207,7 @@ public class EventPlayerInfo
     public long? Id { get; set; }
 
     [JsonPropertyName("name")]
+    [JsonConverter(typeof(HtmlDecodedStringConverter))]
     public string? Name { get; set; }
 }
 
@@ -232,6 +247,7 @@ public class PlayerInfo
     public long Id { get; set; }
 
     [JsonPropertyName("name")]
+    [JsonConverter(typeof(HtmlDecodedStringConverter))]
     public required string Name { get; set; }
 
     // Only populated by /fixtures/players - /fixtures/squads (SquadPlayerDto) has no photo field,
@@ -389,6 +405,7 @@ public class LineupPlayerInfo
     public long Id { get; set; }
 
     [JsonPropertyName("name")]
+    [JsonConverter(typeof(HtmlDecodedStringConverter))]
     public required string Name { get; set; }
 
     [JsonPropertyName("number")]
@@ -401,6 +418,7 @@ public class LineupPlayerInfo
 public class CoachInfo
 {
     [JsonPropertyName("name")]
+    [JsonConverter(typeof(HtmlDecodedStringConverter))]
     public string? Name { get; set; }
 }
 
