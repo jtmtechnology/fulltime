@@ -1,0 +1,192 @@
+@implements IDisposable
+@inject ApiClient Api
+@inject BetSlipState Slip
+@inject MatchLeaguePreferences Prefs
+
+@{
+    var slides = CurrentSlides();
+    if (_index >= slides.Count)
+    {
+        _index = 0;
+    }
+}
+
+@if (slides.Count > 0)
+{
+    @* Every slide sits in the same grid cell and only the current one is visible, so the carousel
+       is always as tall as its tallest slide - swapping slides never shifts the match list below. *@
+    <div class="promo-carousel" @ontouchstart="OnTouchStart" @ontouchend="OnTouchEnd" @ontouchcancel="OnTouchCancel">
+        <div class="promo-carousel-track">
+            @for (var i = 0; i < slides.Count; i++)
+            {
+                var active = i == _index;
+                <div @key="slides[i].Key" class="promo-carousel-slide @(active ? "active" : "")" aria-hidden="@(active ? "false" : "true")" inert="@(!active)">
+                    @slides[i].Content
+                </div>
+            }
+        </div>
+        @if (slides.Count > 1)
+        {
+            <div class="promo-carousel-dots">
+                @for (var i = 0; i < slides.Count; i++)
+                {
+                    var target = i;
+                    <button type="button" class="promo-carousel-dot @(i == _index ? "active" : "")"
+                            aria-label="Show promotion @(i + 1)" @onclick="() => GoTo(target)"></button>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private static readonly TimeSpan RotateInterval = TimeSpan.FromSeconds(5);
+    private const double SwipeThresholdPx = 40;
+
+    private bool _canSpin;
+    private BetBuilderBoostStatusDto? _boost;
+    private List<PromoDto> _promos = [];
+
+    private int _index;
+    private bool _touching;
+    private bool _skipNextTick;
+    private double _touchStartX;
+    private readonly CancellationTokenSource _cts = new();
+
+    private record Slide(string Key, RenderFragment Content);
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Placing a bet always clears the slip - re-checking here means a boost used without ever
+        // navigating away from this page (the slip sheet is a same-page overlay) still drops out of
+        // the rotation immediately, instead of only on a full page remount.
+        Slip.Changed += OnSlipChanged;
+        // Matches.razor loads Prefs asynchronously, so the boost's league visibility is checked at
+        // render time and re-rendered once Prefs arrive rather than decided once here.
+        Prefs.Changed += OnPrefsChanged;
+
+        // Independent sources, each best-effort - one failing just drops its own slide.
+        await Task.WhenAll(LoadSpinAsync(), LoadBoostAsync(), LoadPromosAsync());
+        _ = RotateLoopAsync();
+    }
+
+    private async Task LoadSpinAsync()
+    {
+        try { _canSpin = (await Api.GetSpinStatusAsync()).CanSpin; }
+        catch (ApiException) { _canSpin = false; }
+    }
+
+    private async Task LoadBoostAsync()
+    {
+        try
+        {
+            var status = await Api.GetBetBuilderBoostStatusAsync();
+            _boost = status.Available && status.MatchId is not null ? status : null;
+        }
+        catch (ApiException) { _boost = null; }
+    }
+
+    private async Task LoadPromosAsync()
+    {
+        try { _promos = await Api.GetActivePromosAsync(); }
+        catch (ApiException) { _promos = []; }
+    }
+
+    private List<Slide> CurrentSlides()
+    {
+        var slides = new List<Slide>();
+        if (_canSpin)
+        {
+            slides.Add(new Slide("spin", @<FreeSpinBanner />));
+        }
+
+        // Hidden when the featured match is in a league this user hasn't opted into (e.g. a Nations
+        // League fallback pick) - it'd be promoting a match their own Matches list hides.
+        if (_boost is { } boost && Prefs.IsVisible(boost.LeagueId ?? 0))
+        {
+            slides.Add(new Slide("boost", @<BetBuilderBoostBanner Status="boost" />));
+        }
+
+        foreach (var promo in _promos)
+        {
+            slides.Add(new Slide($"promo-{promo.Id}", @<PromoBanner Promo="promo" />));
+        }
+        return slides;
+    }
+
+    private async Task RotateLoopAsync()
+    {
+        var ct = _cts.Token;
+        using var timer = new PeriodicTimer(RotateInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                // A tap/swipe just happened - give the slide the user chose a full interval.
+                if (_skipNextTick)
+                {
+                    _skipNextTick = false;
+                    continue;
+                }
+                if (_touching)
+                {
+                    continue;
+                }
+                await InvokeAsync(() =>
+                {
+                    var count = CurrentSlides().Count;
+                    if (count > 1)
+                    {
+                        _index = (_index + 1) % count;
+                        StateHasChanged();
+                    }
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void GoTo(int index)
+    {
+        _index = index;
+        _skipNextTick = true;
+    }
+
+    private void OnTouchStart(TouchEventArgs e)
+    {
+        _touching = true;
+        _touchStartX = e.Touches.FirstOrDefault()?.ClientX ?? 0;
+    }
+
+    private void OnTouchEnd(TouchEventArgs e)
+    {
+        _touching = false;
+        var endX = e.ChangedTouches.FirstOrDefault()?.ClientX ?? _touchStartX;
+        var dx = endX - _touchStartX;
+        var count = CurrentSlides().Count;
+        if (count > 1 && Math.Abs(dx) >= SwipeThresholdPx)
+        {
+            GoTo(((_index + (dx < 0 ? 1 : -1)) % count + count) % count);
+        }
+    }
+
+    private void OnTouchCancel() => _touching = false;
+
+    private void OnSlipChanged() => _ = InvokeAsync(async () =>
+    {
+        await LoadBoostAsync();
+        StateHasChanged();
+    });
+
+    private void OnPrefsChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Slip.Changed -= OnSlipChanged;
+        Prefs.Changed -= OnPrefsChanged;
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

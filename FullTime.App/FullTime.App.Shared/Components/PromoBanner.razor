@@ -1,0 +1,53 @@
+@inject NavigationManager Nav
+
+@* A plain div when there's no link, not a disabled button - WebView's default disabled-button
+   styling greys the text out. *@
+@if (SafeLink is not null)
+{
+    <button type="button" class="promo-banner promo-theme-@ThemeClass" @onclick="() => Nav.NavigateTo(SafeLink)">
+        @Content
+        <div class="promo-banner-arrow">›</div>
+    </button>
+}
+else
+{
+    <div class="promo-banner promo-theme-@ThemeClass">
+        @Content
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public PromoDto Promo { get; set; } = default!;
+
+    private static readonly string[] KnownThemes = ["accent", "gold", "blue"];
+
+    private string ThemeClass => KnownThemes.Contains(Promo.Theme) ? Promo.Theme : "accent";
+
+    // The API already strips anything that isn't an in-app route; re-checked here so an older or
+    // misbehaving API can't make this navigate off-app.
+    private string? SafeLink =>
+        Promo.Link is { } link && link.StartsWith('/') && !link.StartsWith("//") ? link : null;
+
+    private RenderFragment Content => @<text>
+        @if (!string.IsNullOrEmpty(Promo.Icon))
+        {
+            <div class="promo-banner-icon">
+                @if (Promo.Icon.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    <img src="@Promo.Icon" alt="" />
+                }
+                else
+                {
+                    @Promo.Icon
+                }
+            </div>
+        }
+        <div class="promo-banner-text">
+            <div class="promo-banner-title">@Promo.Title</div>
+            @if (!string.IsNullOrEmpty(Promo.Subtitle))
+            {
+                <div class="promo-banner-subtitle">@Promo.Subtitle</div>
+            }
+        </div>
+    </text>;
+}

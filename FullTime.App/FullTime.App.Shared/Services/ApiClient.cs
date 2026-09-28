@@ -180,6 +180,14 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         return (await res.Content.ReadFromJsonAsync<BetBuilderBoostStatusDto>())!;
     }
 
+    public async Task<List<PromoDto>> GetActivePromosAsync()
+    {
+        Authorize();
+        var res = await httpClient.GetAsync("api/promos/active");
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+        return (await res.Content.ReadFromJsonAsync<List<PromoDto>>())!;
+    }
+
     public async Task<BetBuilderMarketsResponse> GetBetBuilderMarketsAsync(Guid matchId)
     {
         var res = await httpClient.GetAsync($"api/matches/{matchId}/bet-builder-markets");

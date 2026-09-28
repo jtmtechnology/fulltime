@@ -67,7 +67,7 @@ public record PlaceBetRequest(decimal Stake, List<LegRequest> Legs, Guid? League
 
 public record BetLegPickDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore,
-    decimal OddsAtPlacement, string Outcome, string? PlayerName = null, string? Team = null);
+    decimal OddsAtPlacement, string Outcome, string? PlayerName = null, string? Team = null, bool PaidOutEarly = false);
 public record BetLegDto(
     Guid MatchId, string HomeTeam, string AwayTeam, string? HomeLogoUrl, string? AwayLogoUrl,
     DateTime KickoffTime, decimal OddsAtPlacement, string Outcome, List<BetLegPickDto> Picks);
@@ -78,6 +78,8 @@ public record PendingBetDto(Guid BetId, string UserName, decimal Stake);
 
 public record SpinStatusDto(bool CanSpin, int Streak, decimal? PendingBoostMultiplier, string? PendingBoostLabel);
 public record SpinResultDto(int WinningIndex, int Streak, decimal? MysteryCashAmount, decimal? StreakBonusAmount, string? BoostLabel);
+
+public record PromoDto(Guid Id, string Title, string? Subtitle, string? Icon, string Theme, string? Link);
 
 public record BetBuilderBoostStatusDto(
     bool Available, Guid? MatchId, string? HomeTeam, string? AwayTeam, decimal Percent, int MinSelections,

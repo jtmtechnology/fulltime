@@ -1,108 +1,26 @@
-@implements IDisposable
-@inject ApiClient Api
 @inject NavigationManager Nav
-@inject BetSlipState Slip
-@inject MatchLeaguePreferences Prefs
 
-@* Hidden when the featured match is in a league this user hasn't opted into (e.g. a Nations League
-   fallback pick) - it'd be promoting a match their own Matches list deliberately hides. Checked at
-   render time, not in RefreshAsync, because Matches.razor loads Prefs asynchronously and may not be
-   done by the time this first fetches the boost status. *@
-@if (_available && Prefs.IsVisible(_leagueId))
-{
-    <button type="button" class="bbboost-banner" @onclick="Go">
-        <div class="bbboost-banner-icon">🚀</div>
-        <div class="bbboost-banner-text">
-            <div class="bbboost-banner-title">BET BUILDER BOOST</div>
-            <div class="bbboost-banner-match">@_homeTeam v @_awayTeam</div>
-            <div class="bbboost-banner-pct">+@_percent.ToString("0.##")% Odds Boost</div>
-            <div class="bbboost-banner-terms">@_minSelections+ selections, combined odds Evens or above</div>
-        </div>
-        <div class="bbboost-banner-arrow">›</div>
-    </button>
-}
+@* Display-only - PromoCarousel fetches the status and decides whether this slide applies
+   (available, and the match's league is one this user has opted into). *@
+<button type="button" class="bbboost-banner" @onclick="Go">
+    <div class="bbboost-banner-icon">🚀</div>
+    <div class="bbboost-banner-text">
+        <div class="bbboost-banner-title">BET BUILDER BOOST</div>
+        <div class="bbboost-banner-match">@Status.HomeTeam v @Status.AwayTeam</div>
+        <div class="bbboost-banner-pct">+@Status.Percent.ToString("0.##")% Odds Boost</div>
+        <div class="bbboost-banner-terms">@Status.MinSelections+ selections, combined odds Evens or above</div>
+    </div>
+    <div class="bbboost-banner-arrow">›</div>
+</button>
 
 @code {
-    private bool _available;
-    private Guid _matchId;
-    private string _homeTeam = "";
-    private string _awayTeam = "";
-    private decimal _percent;
-    private int _minSelections;
-    private DateTime _kickoffTime;
-    private string? _homeLogoUrl;
-    private string? _awayLogoUrl;
-    private long _leagueId;
-
-    protected override async Task OnInitializedAsync()
-    {
-        // Placing a bet always clears the slip - re-checking here means a bet placed without ever
-        // navigating away from this page (the slip sheet is a same-page overlay, not a navigation)
-        // still hides this banner immediately once today's boost has been used, instead of only
-        // refreshing on a full page remount.
-        Slip.Changed += OnSlipChanged;
-        Prefs.Changed += OnPrefsChanged;
-        await RefreshAsync();
-    }
-
-    private void OnSlipChanged() => _ = InvokeAsync(RefreshAsync);
-
-    private void OnPrefsChanged() => _ = InvokeAsync(StateHasChanged);
-
-    private async Task RefreshAsync()
-    {
-        try
-        {
-            // Only ever shown alongside (never instead of) the Daily Spinner's own banner — if that
-            // one is still available, it takes the single promo slot on this page and this banner
-            // stays hidden, per the owner's explicit ask.
-            var spinStatus = await Api.GetSpinStatusAsync();
-            if (spinStatus.CanSpin)
-            {
-                _available = false;
-                return;
-            }
-
-            var boostStatus = await Api.GetBetBuilderBoostStatusAsync();
-            if (!boostStatus.Available || boostStatus.MatchId is not { } matchId)
-            {
-                _available = false;
-                return;
-            }
-
-            _matchId = matchId;
-            _homeTeam = boostStatus.HomeTeam ?? "";
-            _awayTeam = boostStatus.AwayTeam ?? "";
-            _percent = boostStatus.Percent;
-            _minSelections = boostStatus.MinSelections;
-            _kickoffTime = boostStatus.KickoffTime ?? DateTime.UtcNow;
-            _homeLogoUrl = boostStatus.HomeLogoUrl;
-            _awayLogoUrl = boostStatus.AwayLogoUrl;
-            _leagueId = boostStatus.LeagueId ?? 0;
-            _available = true;
-        }
-        catch (ApiException)
-        {
-            // best-effort - banner just stays hidden if either status check fails
-            _available = false;
-        }
-        finally
-        {
-            await InvokeAsync(StateHasChanged);
-        }
-    }
+    [Parameter, EditorRequired] public BetBuilderBoostStatusDto Status { get; set; } = default!;
 
     // Same query params MatchCard.BetBuilderHref() sends for a normal match tap, plus boost=1 - the
     // owner reported blank team names/wrong kickoff/no crests on Bet Builder when reached from this
     // banner because it originally sent none of these, unlike every other entry point.
     private void Go() => Nav.NavigateTo(
-        $"/bet-builder/{_matchId}?boost=1&home={Uri.EscapeDataString(_homeTeam)}&away={Uri.EscapeDataString(_awayTeam)}" +
-        $"&kickoff={Uri.EscapeDataString(_kickoffTime.ToString("O"))}&league={Uri.EscapeDataString(LeagueCatalog.Name(_leagueId))}" +
-        $"&homeLogo={Uri.EscapeDataString(_homeLogoUrl ?? "")}&awayLogo={Uri.EscapeDataString(_awayLogoUrl ?? "")}");
-
-    public void Dispose()
-    {
-        Slip.Changed -= OnSlipChanged;
-        Prefs.Changed -= OnPrefsChanged;
-    }
+        $"/bet-builder/{Status.MatchId}?boost=1&home={Uri.EscapeDataString(Status.HomeTeam ?? "")}&away={Uri.EscapeDataString(Status.AwayTeam ?? "")}" +
+        $"&kickoff={Uri.EscapeDataString((Status.KickoffTime ?? DateTime.UtcNow).ToString("O"))}&league={Uri.EscapeDataString(LeagueCatalog.Name(Status.LeagueId ?? 0))}" +
+        $"&homeLogo={Uri.EscapeDataString(Status.HomeLogoUrl ?? "")}&awayLogo={Uri.EscapeDataString(Status.AwayLogoUrl ?? "")}");
 }
