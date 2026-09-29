@@ -34,6 +34,11 @@ pushes for matches never seen live. **§29's "stuck InProgress" was a misread - 
 (§36.5). **The owner says Highlightly is no longer used at all** - new competitions get
 API-Football IDs only (§32.2).
 
+**Latest (2026-09-29 session 2, §37): iOS CI fixed - Xcode 27.0 (`8fa009d`) + `MauiVersion`
+pinned to 10.0.20 (`e801545`), both pushed.** Codemagic build #37 built and signed; the App Store
+Connect upload hit two Apple-side 500s after `UPLOAD SUCCEEDED`, so **whether 1.0.0 (37) reached
+TestFlight is unconfirmed**. Codemagic free minutes are exhausted (506/500) until **1 October**.
+
 **§1 below is a 2026-09-09 snapshot (GCP-era) and is historical** - trust this banner, §7's top
 priorities and the newest numbered sections instead.
 
@@ -521,7 +526,13 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-29, see §36 for the latest):**
+**Top priorities for whoever picks this up next (updated end of 2026-09-29 session 2, see §37):**
+- **New (§37): ask the owner whether iOS 1.0.0 (37) appeared in TestFlight.** Codemagic reported
+  the upload failed (Apple 500s at "change upload state to complete") even though altool said
+  `UPLOAD SUCCEEDED`. If it never appeared, re-run the TestFlight workflow **on/after 1 Oct** (free
+  macOS minutes reset on the 1st; the owner is at 506/500 and billing is off - don't push them to
+  enable it). If 37 is there, it's the first Xcode 27 / MAUI 10.0.20 iOS build - have the owner
+  check the splash screen and a general smoke test on the iPhone.
 - **New (§36): after the next matchday, check the journal for the per-match settlement change
   (`db68b90`)** - expect `Resolved match events for N match(es)`, occasionally `Events not available
   yet for match ... retrying in 15 min`, and no `resolution failed`. Deployed, first tick clean, never
@@ -536,6 +547,8 @@ still in effect:
   matchday with bets on it.
 - **Optional (§36.5): add `.gitattributes` `*.sh text eol=lf`** - git warned `scripts/apifootball-get.sh`
   may get CRLF on a future checkout, which breaks bash. Offered, owner hasn't decided.
+- **PARTLY ADDRESSED (§37): the risk below actually bit on 2026-09-29** - MAUI version is now
+  pinned, but the SDK/workload install still floats (next break: a .NET for iOS needing Xcode 27.1+).
 - **New (§35): Codemagic installs the *latest* .NET 10 SDK + `maui-ios` workload on every run** (not
   pinned). Not proven to have caused anything, but it means two iOS builds of near-identical code can
   differ. Also: before trusting an iOS build, check which commit Codemagic actually built - the
@@ -3890,3 +3903,49 @@ switched off, 1.11/18 released, **1.12/19 uploaded**.
 - `git add -p` hunk order follows file order - check with `git diff --cached` before committing.
 - A regex replacing `continue;` → `return false;` when extracting a loop body also hit inner loops -
   re-check nested `continue`s after that kind of refactor.
+
+---
+
+## 37. 2026-09-29 session 2 — iOS Codemagic build broken by floating toolchain, fixed; upload outcome unconfirmed
+
+Opened with `/load` (state matched §36). Two commits, both pushed: `8fa009d`, `e801545`. No API or
+DB changes, nothing deployed to the VM.
+
+### 37.1 Failure 1: .NET for iOS 27 needs Xcode 27 (`8fa009d`)
+
+- Build #35/36 (`FullTime iOS TestFlight`): `This version of .NET for iOS (27.0.10722) requires
+  Xcode 27.0. The current version of Xcode is 26.6.` Cause: the workflows `workload install maui-ios`
+  unpinned (§35's warning), and the newest workload jumped a major iOS SDK.
+- Fix: `xcode: 26.6` → `xcode: 27.0` in both iOS workflows of `codemagic.yaml`, and the same in the
+  duplicate `codemagic-ios.yaml` (Codemagic only reads `codemagic.yaml`; the duplicate was kept in
+  sync, not deleted). Codemagic lists Xcode 27.0 (27A266a) as its `edge` image - it worked.
+
+### 37.2 Failure 2: MAUI 10.0.110 Resizetizer crashes on splash text (`e801545`)
+
+- Next error: `MAUIR0005 ... MissingMethodException: SKTypeface.Clone(ReadOnlySpan<SKFontVariationPositionCoordinate>)`
+  in `Svg.Skia.SkiaModel.ApplyVariableFontWeight`, from `GenerateSplashStoryboard`. Triggered by the
+  two `<text font-weight="800">` elements ("FULL"/"TIME") in `Resources/Splash/splash.svg`.
+- The project never set `MauiVersion`, so CI took **10.0.110** from the new workload; local builds
+  (and every Android release AAB) resolve **10.0.20** (confirmed in `obj/project.assets.json`).
+- Fix: `<MauiVersion>10.0.20</MauiVersion>` in `FullTime.App.csproj`. Local Android-only restore
+  still resolves Controls/Resizetizer 10.0.20 - no Android change. Build #37 (`e801545`) then built
+  and signed in ~5 min on Xcode 27.0 with MAUI 10.0.20 + iOS SDK 27.
+- Fallback if the pin ever causes trouble: convert the splash text to paths so the Resizetizer text
+  path isn't hit. Not needed so far.
+- When eventually upgrading MAUI past 10.0.20, re-check that the splash rasterizes (on Android
+  locally first - same Resizetizer).
+
+### 37.3 Upload: ambiguous, Apple-side
+
+- altool: `UPLOAD SUCCEEDED`, delivery UUID `8cb30703-03a4-47eb-b950-24ddd89c7800`, 54 MB, version
+  1.0.0 build 37 - but two `CHANGE UPLOAD STATE TO COMPLETE ... status code 500` errors, so
+  Codemagic marked publishing failed. Not a repo problem. The IPA is still an artifact on build #37,
+  but uploading it manually needs a Mac (Transporter/altool), so not possible here.
+- iOS 1.0 was also in App Review (§30.4) - a new TestFlight build doesn't replace the reviewed one
+  unless the owner selects it.
+
+### 37.4 Codemagic minutes
+
+- Personal account: **506/500 free macOS M2 minutes used**; builds blocked. Free minutes reset on the
+  **1st of each month** (Codemagic pricing docs). Owner hasn't enabled billing; treat spend as their
+  call, don't recommend it. Each failed run costs 1.5-7.5 min - don't trigger speculative builds.
