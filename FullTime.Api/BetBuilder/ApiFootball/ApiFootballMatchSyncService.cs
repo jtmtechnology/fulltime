@@ -452,7 +452,13 @@ public class ApiFootballMatchSyncService(
         // 1-1 -> 2-2 between polls: newHome+oldAway == oldHome+newAway), so home and away goals get
         // disjoint numeric ranges instead - the new home score itself for a home goal, offset by
         // 1000 for an away goal. No real match reaches 1000 goals, so these ranges never overlap.
-        if ((match.HomeScore ?? 0) > (previousHomeScore ?? 0))
+        // A match API-Football never showed as live (low-coverage fixtures - confirmed 2026-09-22,
+        // 13 FA Cup qualifiers) jumps straight to Finished hours late, which used to send every goal
+        // at once alongside Full-time. The Full-time push already carries the final score.
+        var neverSeenLive = previousStatus is MatchStatus.Upcoming or MatchStatus.Postponed
+            && newStatus == MatchStatus.Finished;
+
+        if (!neverSeenLive && (match.HomeScore ?? 0) > (previousHomeScore ?? 0))
         {
             await matchAlerts.NotifyAsync(
                 match, MatchAlertType.Goal, $"GOAL ({match.HomeTeam})",
@@ -460,7 +466,7 @@ public class ApiFootballMatchSyncService(
                 sequence: match.HomeScore ?? 0, ct: ct);
         }
 
-        if ((match.AwayScore ?? 0) > (previousAwayScore ?? 0))
+        if (!neverSeenLive && (match.AwayScore ?? 0) > (previousAwayScore ?? 0))
         {
             await matchAlerts.NotifyAsync(
                 match, MatchAlertType.Goal, $"GOAL ({match.AwayTeam})",
