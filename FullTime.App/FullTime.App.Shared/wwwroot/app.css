@@ -978,7 +978,7 @@ button[type="submit"] {
 .promo-carousel { margin: 0 0 1rem; }
 .promo-carousel-track { display: grid; }
 .promo-carousel-slide {
-    grid-area: 1 / 1; display: flex; align-items: center;
+    grid-area: 1 / 1; display: flex; align-items: stretch;
     opacity: 0; visibility: hidden; transition: opacity 0.35s ease, visibility 0s linear 0.35s;
 }
 .promo-carousel-slide.active { opacity: 1; visibility: visible; transition: opacity 0.35s ease; }
@@ -993,12 +993,14 @@ button[type="submit"] {
     .promo-carousel-slide, .promo-carousel-slide.active, .promo-carousel-dot { transition: none; }
 }
 
-/* Same pill shape as .bbboost-banner; the theme only swaps the colour. */
+/* Same pill shape as .bbboost-banner; the theme only swaps the colour. The carousel stretches every
+   slide to the tallest one, but min-height covers the promo-only case (no spin or boost that day) -
+   90px is .spin-banner's height (72px wheel + padding + border). */
 .promo-banner {
     --promo-color: var(--accent);
     --promo-glow: rgba(57,255,136,0.1);
     position: relative; overflow: hidden;
-    display: flex; align-items: center; gap: 0.75rem; width: 100%; min-height: 64px; text-align: left;
+    display: flex; align-items: center; gap: 0.75rem; width: 100%; min-height: 90px; text-align: left;
     background: linear-gradient(135deg, var(--bg-elevated) 40%, var(--promo-glow));
     border: 1px solid var(--promo-color); border-radius: 999px;
     padding: 0.4rem 1.1rem; color: var(--text); font: inherit;
