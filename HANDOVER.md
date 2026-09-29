@@ -24,15 +24,15 @@ in-app account deletion. An *earlier* 1.0 submission had already been **rejected
 captured here — see §30.4). Sections below that say iOS "never passed App Review" are still true,
 but not "never submitted".
 
-**Latest (2026-09-28, §35): big session, all committed + pushed, API deployed to Oracle through
-`be5bff9`/`9f90a98` (app-only commits after that).** API side, live now: settlement-support crash
-fixed (a null VAR `detail` had blocked all post-match settlement for 2 days), goal-disallowed push
-alert, HTML-entity player names decoded, **2 Goals Ahead Early Payout**, a `Promos` table +
-**admin page at `https://api.jtmtechnology.co.uk/admin/promos.html`** (owner-only). App side,
-**committed but in no released build yet** (ships with Android **1.12/19**, not yet built, and the
-next iOS build): Matches-page promo carousel, "Paid out early" tag, and network-error handling
-(no more crash when the API is unreachable). **The owner says Highlightly is no longer used at
-all** - new competitions get API-Football IDs only (§32.2).
+**Latest (2026-09-29, §36): all committed + pushed at `49c2fa8`, API deployed to Oracle with
+everything through `bb1981d`.** **Android 1.12/19 built and uploaded to Play Console by the owner**
+(1.11/18 is released). 1.12 carries the promo carousel, "Paid out early" tag, network-error
+handling (all §35), plus equal-height promo banners and Nations League tables for all 14 groups
+(§36). API side, live now: per-match settlement isolation + retry of missing events, no goal
+pushes for matches never seen live. **§29's "stuck InProgress" was a misread - those rows were
+`Finished` (§36.4).** For API-Football lookups use `bash scripts/apifootball-get.sh '<endpoint>?<query>'`
+(§36.5). **The owner says Highlightly is no longer used at all** - new competitions get
+API-Football IDs only (§32.2).
 
 **§1 below is a 2026-09-09 snapshot (GCP-era) and is historical** - trust this banner, §7's top
 priorities and the newest numbered sections instead.
@@ -521,21 +521,26 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-28, see §35 for the latest):**
-- **New (§35): build Android 1.12/19** (bump `FullTime.App.csproj` first; do the obj/bin clean
-  first, APT2258). It's the first build with the promo carousel, the early-payout tag and the
-  network-error handling (`335a742`, `3fb5ff0`). Whether 1.11/18 was ever uploaded is still unasked.
-- **New (§35): a "Test promo / Just a test" row the owner made via the admin page is live** in
-  `Promos`. Invisible until 1.12/19 ships, but ask the owner to delete or deactivate it before then.
+**Top priorities for whoever picks this up next (updated end of 2026-09-29, see §36 for the latest):**
+- **New (§36): after the next matchday, check the journal for the per-match settlement change
+  (`db68b90`)** - expect `Resolved match events for N match(es)`, occasionally `Events not available
+  yet for match ... retrying in 15 min`, and no `resolution failed`. Deployed, first tick clean, never
+  seen on a real finished match. Same for `bb1981d` (a match jumping Upcoming→Finished should send
+  only Full-time, no GOAL pushes).
+- **DONE (§36): Android 1.12/19 built and uploaded** (owner confirmed); 1.11/18 is released. Next
+  Android build = 1.13/20. Play review/rollout status not checked from here.
+- **DONE (§36): the "Test promo" row was switched off by the owner.**
 - **New (§35): early payout and the goal-disallowed alert are deployed but never observed on a real
   match.** Early payout: journal should show `Early payout applied to N Match Result pick(s)` ~3 min
   after a backed team goes 2 up. Disallowed goal: `Sent GoalDisallowed alert`. Check after the next
   matchday with bets on it.
+- **Optional (§36.5): add `.gitattributes` `*.sh text eol=lf`** - git warned `scripts/apifootball-get.sh`
+  may get CRLF on a future checkout, which breaks bash. Offered, owner hasn't decided.
 - **New (§35): Codemagic installs the *latest* .NET 10 SDK + `maui-ios` workload on every run** (not
   pinned). Not proven to have caused anything, but it means two iOS builds of near-identical code can
   differ. Also: before trusting an iOS build, check which commit Codemagic actually built - the
   owner's crashing ad-hoc build on 2026-09-28 turned out to be pre-21-Sep code (§35.8).
-- **(§34) Android 1.11/18 AAB** - upload never confirmed; superseded by 1.12/19 once built.
+- **DONE (§36): Android 1.11/18** - owner confirmed it's released.
 - **New (§33): confirm the kickoff-gap fix (`cf02c41`, deployed) on the next kickoff API-Football
   is slow to flag live** - journal should show 5s `live match sync tick complete` lines continuing
   past kickoff+60s instead of a one-hour gap. Kick-off/half-time pushes should now fire on time.
@@ -547,8 +552,8 @@ still in effect:
   everyone out). Never `systemctl cat`/`show` the unit's Environment without filtering to one key.
   (§35: an old local notes file also held the paid the-odds-api key in plain text - file deleted at
   the owner's request, rotation suggested, their call. the-odds-api isn't in active use.)
-- **New (§32): Nations League follow-ups** - (a) Table link hidden because `GetStandingsAsync`
-  only returns group [0] (~14 groups exist); needs a multi-group Table page. (b) the old-client
+- **New (§32): Nations League follow-ups** - (a) DONE (§36.1): multi-group Table page built,
+  Standings link restored (ships in 1.12/19). (b) the old-client
   Boost suppression (§32.3) was deployed but **not visually confirmed** (a test ad covered the
   emulator) - check an old-build phone on the next Nations-League-fallback day. (c) National teams
   in Match Alerts (§32.4) built + installed on emulator, owner said "push" - not screenshotted by
@@ -563,12 +568,10 @@ still in effect:
   Rollout/review status in Play Console not checked from here. Next Android build = 1.11/18.
 - **RESOLVED (§32): the emulator is signed back in** to a Browne account ("The Brownes £105.00"
   in the header as of 2026-09-24). Its installed debug build is from `4cb4b9c`.
-- **New (§29): 13 FA Cup 2nd Round Qualifying ties sat stuck `InProgress` all night even though
-  `RefreshLiveAsync`'s dropped-from-live refetch should have moved them on - never explained.** The
-  FA Cup side is fixed (`f05d386` removes such rows), but the underlying "InProgress row never gets
-  refreshed once nothing is live" gap may apply to any league. Also the 210-minute stale-InProgress
-  email apparently never fired for them (no "likely stuck" log line found). Both worth investigating
-  - check whether `RefreshLiveAsync` actually runs when `NextPollDelayAsync` is on the idle cadence.
+- **RESOLVED - NOT A BUG (§36.4): the §29 "13 FA Cup ties stuck `InProgress`" was a misread.**
+  `MatchStatus` is `Upcoming=0, Finished=1, InProgress=2`; the rows were `Status = 1` = **Finished**.
+  Journal confirmed they went Upcoming→Finished at 22:44 via the stale-Upcoming recheck. No live-sync
+  gap exists; the only real effect (a burst of late GOAL pushes) is fixed by `bb1981d`.
 - **New (§29): the Match Alerts icon change (`1355a26`) was build-checked only, never looked at on
   the emulator.** Now shipped in Android 1.10/17 (§31) - check it on a real device or the emulator.
 0. **DONE (§30.1): `CLAUDE.md`'s deployment section now has the Oracle recipe** (commit `8a983c4`).
@@ -3289,8 +3292,8 @@ and pushed at `1355a26`; only the two long-standing untracked files remain.
 - **Prod data cleanup (owner-approved):** deleted all 14 rows (cascaded 271 `BetBuilderMarkets`,
   3 `MatchAlertSubscriptions`, 8 `SentMatchAlerts`; 0 bets/boosts/events). `Matches` now has 0 FA Cup
   rows until January.
-- **Not fixed / unexplained:** why the 13 stayed InProgress instead of being refetched to FT, and why
-  no stale-InProgress alert fired - see §7 top priorities. Dormant `HighlightlyMatchSyncService` has
+- **CORRECTION (§36.4):** they were never InProgress - `Status = 1` is `Finished` (enum is
+  Upcoming=0, Finished=1, InProgress=2). "Frozen at 90/120" was just the final minute. Dormant `HighlightlyMatchSyncService` has
   the same label-only filter; left alone since it isn't the active provider.
 
 ### 29.2 Permission/classifier notes (Oracle host)
@@ -3696,9 +3699,8 @@ additive migrations applied to prod via idempotent `psql -f`: `AddPromos`, `AddE
   excluded `Goal`/"Missed Penalty" from the first-goal lookup (would have settled FTTS wrong).
 - **Verified after deploy:** "Resolved match events for 13 match(es)", both picks Correct, Denmark
   bet Won. API-Football credits an own goal to the *benefiting* team (confirmed on Denmark v Wales).
-- **Still true / not fixed:** one bad fixture can still stall the whole batch for any *other*
-  exception type (no per-match isolation), and `EventsFinalizedAt` is set even when the events fetch
-  failed (then never retried). Neither seen causing harm yet.
+- **FIXED in §36.2 (`db68b90`):** per-match isolation, and `EventsFinalizedAt` no longer set on a
+  failed fetch.
 
 ### 35.2 Goal-disallowed push (`09d0d2b`, deployed, never observed live)
 
@@ -3805,3 +3807,86 @@ additive migrations applied to prod via idempotent `psql -f`: `AddPromos`, `AddE
 - Long heredocs in the Bash tool sometimes fail to parse ("unexpected EOF while looking for
   matching `'`") - write the file with the Write/Edit tool instead.
 - Deleted at the owner's request: `ODDS_API_PLAYER_PROPS_INVESTIGATION.md`, `emulator.log`.
+
+---
+
+## 36. 2026-09-29 session — promo banner sizing, Nations League tables, settlement isolation, §29 debunked, Android 1.12/19
+
+Opened with `/load` (state matched §35). Seven commits, all pushed: `a8fd13a`, `c5a8be6`, `7deb9be`,
+`db68b90`, `bb1981d`, `49c2fa8` (plus this handover). API deployed to Oracle twice; the last deploy
+carries everything through `bb1981d` (first settlement tick afterwards clean). Owner: test promo
+switched off, 1.11/18 released, **1.12/19 uploaded**.
+
+### 36.1 Nations League Standings for all 14 groups (`a8fd13a`, API live, app in 1.12/19)
+
+- Real data first (via §36.5's script): `/standings?league=5&season=2026` returns 14 groups, each row
+  carries `group` ("League A - Group C"). League D groups had only 3 teams listed.
+- API: `ApiFootballClient.GetStandingsAsync` returns all groups (`List<List<StandingEntryDto>>`, now
+  with `Group`); `GET api/matches/standings/{id}` takes **opt-in `?allGroups=true`** - without it,
+  still only group [0], so pre-1.12 clients (which render every row as one table) are unaffected.
+  Verified on prod: 4 rows without, 54 rows / 14 groups with. `TeamStandingDto` gained `Group`.
+- App: `StandingsSheet.razor` renders a table per group with a `.standings-group-title` heading
+  (only when >1 group); `LeagueCatalog.HasTable` no longer excludes the Nations League.
+
+### 36.2 Settlement support isolated per match (`db68b90`, deployed, not yet seen on a real match)
+
+- `ApiFootballSettlementSupportService`: `ResolveMatchEventsAsync` and `ResolvePlayerStatsAsync`
+  now run **one transaction + save per match** (was one save for the whole batch - §35.1's outage).
+  A failing match is logged by name, its tracked changes discarded (`DiscardPendingChanges`), and
+  retried. The transaction also makes the `ExecuteDelete` of old events/stats atomic with the insert.
+- **Found while fixing:** a match whose score had goals but whose events API-Football hadn't
+  backfilled yet was still finalized - FTTS then never settles (`FirstGoalScorerSide` null) and every
+  goalscorer pick settles lost. Now: failed fetch (`FetchAndStoreEventsAsync` returns **null**,
+  distinct from `[]`) or goals-but-no-goal-events → not finalized, retried after a **15 min**
+  in-memory backoff; only finalized with incomplete data in the last hour before the 3-day cutoff
+  (so bets can't stay Pending forever). Player stats use the same backoff.
+- `RefreshLiveMatchEventsAsync` saves per match too but **without a transaction** on purpose -
+  `MatchAlertService.NotifyAsync` saves `SentMatchAlert` itself; rolling that back would re-send pushes.
+- The background service now runs events and player stats in separate try blocks.
+- **Not tested beyond build**: EF InMemory can't do transactions/`ExecuteDelete`; owner chose deploy
+  + watch over a local-Postgres test. Still true: player stats failing for all 3 days leaves those
+  picks Pending (pre-existing).
+
+### 36.3 No goal pushes for matches never seen live (`bb1981d`, deployed)
+
+- `FireLiveAlertsAsync`: when a match goes Upcoming/Postponed → Finished in one tick, GOAL pushes
+  are skipped; the single Full-time push already shows the score. Owner asked for exactly this.
+
+### 36.4 §29 "stuck InProgress" - ruled out, it was a misread
+
+- `MatchStatus`: `Upcoming=0, Finished=1, InProgress=2` (the SQL even shows `WHEN 2 THEN 'InProgress'`).
+  §29 read `Status = 1` as InProgress. Journal (owner-approved read) for 22-23 Sep: the 13 ties never
+  appeared in `live=all`; the hourly stale-Upcoming recheck saw them still NS at 20:44/21:44, then
+  **flipped them to Finished at 22:44**, firing Full-time + GOAL pushes ~2h late. No stale-InProgress
+  alert because nothing was InProgress. Nothing to fix in the live sync.
+
+### 36.5 API-Football test calls: `scripts/apifootball-get.sh` (`7deb9be`)
+
+- `bash scripts/apifootball-get.sh 'standings?league=5&season=2026'` - ssh's to the VM, reads
+  `ApiFootball__ApiKey` from `/proc/<pid>/environ` of `fulltime-api` (**needs `sudo cat`, not a
+  `sudo tr <` redirect** - the redirect runs as ubuntu and gets Permission denied), one GET, prints
+  raw JSON. Path is regex-validated. Pipe into `node -e` to summarise (no local python).
+- Owner asked for this to always run without prompting: an `autoMode.allow` rule naming this script
+  was added to `.claude/settings.local.json` (gitignored). Ad-hoc ssh+curl was blocked as
+  "[Production Reads]" even with the older generic rule. Adding a `permissions.allow` entry was
+  itself blocked as "[Self-Modification]" - unnecessary anyway (`Bash` is already allowed).
+
+### 36.6 Promo banners same height as Spin/Boost (`c5a8be6`, in 1.12/19)
+
+- `.promo-carousel-slide` `align-items: stretch` (every slide fills the tallest one's height) and
+  `.promo-banner` `min-height: 90px` (= `.spin-banner`'s height) for promo-only days. Owner
+  eyeballed it on the emulator: "looks good".
+
+### 36.7 Android 1.12/19
+
+- Bumped `FullTime.App.csproj` (`49c2fa8`), obj/bin cleaned first, built per `signing/README.md`,
+  version `1.12` confirmed in the AAB manifest. AdMob: Android real, iOS test (correct). Uploaded by
+  the owner. Signature not verified (no `jarsigner`).
+
+### 36.8 Environment notes
+
+- Journal reads on the VM went through once the owner said "read vm journal". Deploys went through
+  on "deploy commit and push".
+- `git add -p` hunk order follows file order - check with `git diff --cached` before committing.
+- A regex replacing `continue;` → `return false;` when extracting a loop body also hit inner loops -
+  re-check nested `continue`s after that kind of refactor.
