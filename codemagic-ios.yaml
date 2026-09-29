@@ -6,7 +6,7 @@ workflows:
     integrations:
       app_store_connect: FullTime
     environment:
-      xcode: 26.6
+      xcode: 27.0
       ios_signing:
         distribution_type: ad_hoc
         bundle_identifier: com.jtmtechnology.fulltime.app
@@ -57,7 +57,7 @@ workflows:
     integrations:
       app_store_connect: FullTime
     environment:
-      xcode: 26.6
+      xcode: 27.0
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.jtmtechnology.fulltime.app
