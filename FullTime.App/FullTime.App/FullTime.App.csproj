@@ -41,6 +41,11 @@
            <MauiXaml Update="MyPage.xaml" Inflator="Runtime" /> (force runtime inflation) -->
     <MauiXamlInflator>SourceGen</MauiXamlInflator>
 
+    <!-- Pinned because CI installs the newest MAUI workload on every run, and MAUI 10.0.110's
+         Resizetizer crashes (MissingMethodException in SKTypeface.Clone) rasterizing the text in
+         splash.svg. 10.0.20 is what local Android release builds have always used. -->
+    <MauiVersion>10.0.20</MauiVersion>
+
     <!-- Display name -->
     <ApplicationTitle>FullTime</ApplicationTitle>
 
