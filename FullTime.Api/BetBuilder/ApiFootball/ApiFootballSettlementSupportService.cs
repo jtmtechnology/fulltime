@@ -35,54 +35,131 @@ public class ApiFootballSettlementSupportService(
     // at all, so this ages out after 3 days rather than re-querying forever for no benefit.
     public async Task ResolveMatchEventsAsync(CancellationToken ct)
     {
-        var cutoff = DateTime.UtcNow.AddDays(-3);
+        var now = DateTime.UtcNow;
+        var cutoff = now.AddDays(-3);
         var candidates = await db.Matches
             .Where(m => m.Status == MatchStatus.Finished && m.EventsFinalizedAt == null && m.KickoffTime >= cutoff)
             .ToListAsync(ct);
 
-        if (candidates.Count == 0)
-        {
-            return;
-        }
-
         var resolvedCount = 0;
 
-        foreach (var match in candidates)
+        // One transaction and save per match: this used to save the whole batch once at the end, so
+        // a single fixture that threw (2026-09-26: a VAR event with a null detail) blocked every
+        // other finished match's settlement for two days.
+        foreach (var match in candidates.Where(m => !IsBackingOff(_eventsRetryAfter, m.Id, now)))
         {
-            match.EventsFetchedAt = DateTime.UtcNow;
-            match.EventsFinalizedAt = DateTime.UtcNow;
-
-            if (match.HomeScore == 0 && match.AwayScore == 0)
+            try
             {
-                match.FirstGoalScorerSide = SelectionSide.None;
-            }
+                await using var tx = await db.Database.BeginTransactionAsync(ct);
+                var finalized = await ResolveEventsForMatchAsync(match, isLastChance: match.KickoffTime < cutoff + 2 * EventsRetryBackoff, ct);
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
 
-            var events = await FetchAndStoreEventsAsync(match, ct);
-
-            if (match.FirstGoalScorerSide is null)
-            {
-                var firstGoal = events
-                    // API-Football files a missed penalty under type "Goal" too.
-                    .Where(e => e.Type == "Goal" && e.Detail != "Missed Penalty")
-                    .OrderBy(e => e.Time.Elapsed)
-                    .ThenBy(e => e.Time.Extra ?? 0)
-                    .FirstOrDefault();
-
-                if (firstGoal is not null)
+                if (finalized)
                 {
-                    match.FirstGoalScorerSide = firstGoal.Team.Id == match.HomeTeamId
-                        ? SelectionSide.Home
-                        : firstGoal.Team.Id == match.AwayTeamId
-                            ? SelectionSide.Away
-                            : null;
+                    _eventsRetryAfter.Remove(match.Id);
+                    resolvedCount++;
+                }
+                else
+                {
+                    _eventsRetryAfter[match.Id] = now + EventsRetryBackoff;
                 }
             }
-
-            resolvedCount++;
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Failed to resolve events for match {MatchId} ({HomeTeam} v {AwayTeam}) - will retry",
+                    match.Id, match.HomeTeam, match.AwayTeam);
+                DiscardPendingChanges();
+                _eventsRetryAfter[match.Id] = now + EventsRetryBackoff;
+            }
         }
 
-        await db.SaveChangesAsync(ct);
-        logger.LogInformation("Resolved match events for {Count} match(es)", resolvedCount);
+        if (resolvedCount > 0)
+        {
+            logger.LogInformation("Resolved match events for {Count} match(es)", resolvedCount);
+        }
+    }
+
+    // A failed fetch, or a match with goals but no goal events yet (API-Football backfills events
+    // after full time, sometimes late), is left unfinalized to retry - finalizing then would lock in
+    // "no first goalscorer" (FTTS never settles) and "nobody scored" (every scorer pick loses).
+    // Only on the last attempt before the 3-day cutoff does it finalize with whatever it has, since
+    // an unfinalized match would otherwise hold its bets Pending forever.
+    private async Task<bool> ResolveEventsForMatchAsync(Match match, bool isLastChance, CancellationToken ct)
+    {
+        var events = await FetchAndStoreEventsAsync(match, ct);
+        var goals = (events ?? [])
+            // API-Football files a missed penalty under type "Goal" too.
+            .Where(e => e.Type == "Goal" && e.Detail != "Missed Penalty")
+            .ToList();
+        var scoreHasGoals = (match.HomeScore ?? 0) + (match.AwayScore ?? 0) > 0;
+
+        if ((events is null || (scoreHasGoals && goals.Count == 0)) && !isLastChance)
+        {
+            logger.LogWarning(
+                "Events not available yet for match {MatchId} ({HomeTeam} {HomeScore}-{AwayScore} {AwayTeam}) - retrying in {Minutes} min",
+                match.Id, match.HomeTeam, match.HomeScore, match.AwayScore, match.AwayTeam, EventsRetryBackoff.TotalMinutes);
+            return false;
+        }
+
+        if (events is null || (scoreHasGoals && goals.Count == 0))
+        {
+            logger.LogWarning("Finalizing match {MatchId} ({HomeTeam} v {AwayTeam}) without complete events - out of retries",
+                match.Id, match.HomeTeam, match.AwayTeam);
+        }
+
+        match.EventsFetchedAt = DateTime.UtcNow;
+        match.EventsFinalizedAt = DateTime.UtcNow;
+
+        if (!scoreHasGoals)
+        {
+            match.FirstGoalScorerSide = SelectionSide.None;
+        }
+        else if (match.FirstGoalScorerSide is null)
+        {
+            var firstGoal = goals
+                .OrderBy(e => e.Time.Elapsed)
+                .ThenBy(e => e.Time.Extra ?? 0)
+                .FirstOrDefault();
+
+            if (firstGoal is not null)
+            {
+                match.FirstGoalScorerSide = firstGoal.Team.Id == match.HomeTeamId
+                    ? SelectionSide.Home
+                    : firstGoal.Team.Id == match.AwayTeamId
+                        ? SelectionSide.Away
+                        : null;
+            }
+        }
+
+        return true;
+    }
+
+    // In-memory (resets on deploy), same as the stale-InProgress alert dates - worst case a restart
+    // retries a few matches early. Only the one background loop touches these, so no locking.
+    private static readonly TimeSpan EventsRetryBackoff = TimeSpan.FromMinutes(15);
+    private static readonly Dictionary<Guid, DateTime> _eventsRetryAfter = [];
+    private static readonly Dictionary<Guid, DateTime> _playerStatsRetryAfter = [];
+
+    private static bool IsBackingOff(Dictionary<Guid, DateTime> retryAfter, Guid matchId, DateTime now) =>
+        retryAfter.TryGetValue(matchId, out var at) && now < at;
+
+    // After a per-match failure the tracker still holds that match's half-applied changes, which the
+    // next match's SaveChangesAsync would otherwise try (and fail) to write again.
+    private void DiscardPendingChanges()
+    {
+        foreach (var entry in db.ChangeTracker.Entries().Where(e => e.State != EntityState.Unchanged).ToList())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.State = EntityState.Detached;
+            }
+            else
+            {
+                entry.CurrentValues.SetValues(entry.OriginalValues);
+                entry.State = EntityState.Unchanged;
+            }
+        }
     }
 
     // Powers Match Summary's live display while a match is in progress - a display-freshness
@@ -101,14 +178,28 @@ public class ApiFootballSettlementSupportService(
             return;
         }
 
+        // Saved per match for the same reason as ResolveMatchEventsAsync. No transaction here:
+        // MatchAlertService.NotifyAsync saves its SentMatchAlert row itself once the push has gone,
+        // and rolling that back would re-send the same card alert on the next tick.
+        var refreshedCount = 0;
         foreach (var match in candidates)
         {
-            match.EventsFetchedAt = DateTime.UtcNow;
-            await FetchAndStoreEventsAsync(match, ct);
+            try
+            {
+                match.EventsFetchedAt = DateTime.UtcNow;
+                await FetchAndStoreEventsAsync(match, ct);
+                await db.SaveChangesAsync(ct);
+                refreshedCount++;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Failed to refresh live events for match {MatchId} ({HomeTeam} v {AwayTeam})",
+                    match.Id, match.HomeTeam, match.AwayTeam);
+                DiscardPendingChanges();
+            }
         }
 
-        await db.SaveChangesAsync(ct);
-        logger.LogInformation("Refreshed live match events for {Count} match(es)", candidates.Count);
+        logger.LogInformation("Refreshed live match events for {Count} match(es)", refreshedCount);
     }
 
     // Confirmed live 2026-09-10 against a real finished fixture: type/detail pairs seen were
@@ -137,7 +228,9 @@ public class ApiFootballSettlementSupportService(
         _ => detail,
     };
 
-    private async Task<List<Dtos.FixtureEventDto>> FetchAndStoreEventsAsync(Match match, CancellationToken ct)
+    // Null means the fetch itself failed and nothing was touched - distinct from an empty list,
+    // which is a successful fetch of a fixture that genuinely has no events (yet).
+    private async Task<List<Dtos.FixtureEventDto>?> FetchAndStoreEventsAsync(Match match, CancellationToken ct)
     {
         List<Dtos.FixtureEventDto> events;
         try
@@ -147,7 +240,7 @@ public class ApiFootballSettlementSupportService(
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Failed to fetch events for match {MatchId}", match.Id);
-            return [];
+            return null;
         }
 
         // Captured before the delete-and-replace below so a genuinely new event (this fetch's whole
@@ -253,100 +346,128 @@ public class ApiFootballSettlementSupportService(
 
         var resolvedCount = 0;
 
-        foreach (var match in candidates)
+        var now = DateTime.UtcNow;
+        foreach (var match in candidates.Where(m => !IsBackingOff(_playerStatsRetryAfter, m.Id, now)))
         {
-            // Never trust match.ExternalId directly as an API-Football fixture ID - while
-            // Highlightly is the live-score provider it's Highlightly's own match ID, a real ID
-            // collision risk (both are just numeric IDs), not merely a missing lookup. Resolving by
-            // team name + kickoff date instead works correctly either way (confirmed 2026-09-07,
-            // same fix already applied to squad lookups - see ApiFootballEplTeamMap), at the cost of
-            // one extra /fixtures call per finished match, negligible next to API-Football's PRO
-            // tier 7,500/day quota.
-            var fixture = await ResolveFixtureAsync(match, ct);
-            if (fixture is null)
-            {
-                logger.LogWarning("Could not resolve an API-Football fixture for match {MatchId}", match.Id);
-                continue;
-            }
-
-            var fixtureId = fixture.Fixture.Id;
-
-            List<Dtos.FixturePlayersResponseTeam> teams;
-            List<Dtos.FixtureStatisticsTeam> statistics;
             try
             {
-                teams = await client.GetFixturePlayerStatsAsync(fixtureId, ct);
-                statistics = await client.GetFixtureStatisticsAsync(fixtureId, ct);
+                await using var tx = await db.Database.BeginTransactionAsync(ct);
+                var resolved = await ResolvePlayerStatsForMatchAsync(match, ct);
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+
+                if (resolved)
+                {
+                    _playerStatsRetryAfter.Remove(match.Id);
+                    resolvedCount++;
+                }
+                else
+                {
+                    _playerStatsRetryAfter[match.Id] = now + EventsRetryBackoff;
+                }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger.LogWarning(ex, "Failed to fetch player stats for match {MatchId} (fixture {FixtureId})", match.Id, fixtureId);
+                logger.LogError(ex, "Failed to resolve player stats for match {MatchId} ({HomeTeam} v {AwayTeam}) - will retry",
+                    match.Id, match.HomeTeam, match.AwayTeam);
+                DiscardPendingChanges();
+                _playerStatsRetryAfter[match.Id] = now + EventsRetryBackoff;
+            }
+        }
+
+        if (resolvedCount > 0)
+        {
+            logger.LogInformation("Resolved player stats for {Count} match(es)", resolvedCount);
+        }
+    }
+
+    // False means "try again later" (fixture not resolvable or stats fetch failed) - nothing about
+    // the match is marked resolved, so the next attempt starts clean.
+    private async Task<bool> ResolvePlayerStatsForMatchAsync(Match match, CancellationToken ct)
+    {
+        // Never trust match.ExternalId directly as an API-Football fixture ID - while
+        // Highlightly is the live-score provider it's Highlightly's own match ID, a real ID
+        // collision risk (both are just numeric IDs), not merely a missing lookup. Resolving by
+        // team name + kickoff date instead works correctly either way (confirmed 2026-09-07,
+        // same fix already applied to squad lookups - see ApiFootballEplTeamMap), at the cost of
+        // one extra /fixtures call per finished match, negligible next to API-Football's PRO
+        // tier 7,500/day quota.
+        var fixture = await ResolveFixtureAsync(match, ct);
+        if (fixture is null)
+        {
+            logger.LogWarning("Could not resolve an API-Football fixture for match {MatchId}", match.Id);
+            return false;
+        }
+
+        var fixtureId = fixture.Fixture.Id;
+
+        List<Dtos.FixturePlayersResponseTeam> teams;
+        List<Dtos.FixtureStatisticsTeam> statistics;
+        try
+        {
+            teams = await client.GetFixturePlayerStatsAsync(fixtureId, ct);
+            statistics = await client.GetFixtureStatisticsAsync(fixtureId, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to fetch player stats for match {MatchId} (fixture {FixtureId})", match.Id, fixtureId);
+            return false;
+        }
+
+        await db.MatchPlayerStats.Where(s => s.MatchId == match.Id).ExecuteDeleteAsync(ct);
+
+        foreach (var team in teams)
+        {
+            // Compared against the resolved fixture's own team IDs (API-Football's), not
+            // match.HomeTeamId/AwayTeamId (Highlightly's) - same reasoning as the fixture
+            // resolution above.
+            var side = team.Team.Id == fixture.Teams.Home.Id ? SelectionSide.Home
+                : team.Team.Id == fixture.Teams.Away.Id ? SelectionSide.Away
+                : (SelectionSide?)null;
+            if (side is null)
+            {
                 continue;
             }
 
-            await db.MatchPlayerStats.Where(s => s.MatchId == match.Id).ExecuteDeleteAsync(ct);
-
-            foreach (var team in teams)
+            foreach (var entry in team.Players)
             {
-                // Compared against the resolved fixture's own team IDs (API-Football's), not
-                // match.HomeTeamId/AwayTeamId (Highlightly's) - same reasoning as the fixture
-                // resolution above.
-                var side = team.Team.Id == fixture.Teams.Home.Id ? SelectionSide.Home
-                    : team.Team.Id == fixture.Teams.Away.Id ? SelectionSide.Away
-                    : (SelectionSide?)null;
-                if (side is null)
+                var stat = entry.Statistics.FirstOrDefault();
+                if (stat is null)
                 {
                     continue;
                 }
 
-                foreach (var entry in team.Players)
+                db.MatchPlayerStats.Add(new MatchPlayerStat
                 {
-                    var stat = entry.Statistics.FirstOrDefault();
-                    if (stat is null)
-                    {
-                        continue;
-                    }
-
-                    db.MatchPlayerStats.Add(new MatchPlayerStat
-                    {
-                        Id = Guid.NewGuid(),
-                        MatchId = match.Id,
-                        PlayerName = entry.Player.Name,
-                        Team = side.Value,
-                        Goals = stat.Goals?.Total ?? 0,
-                        Assists = stat.Goals?.Assists ?? 0,
-                        ShotsOnTarget = stat.Shots?.On ?? 0,
-                        TotalShots = stat.Shots?.Total ?? 0,
-                        YellowCards = stat.Cards?.Yellow ?? 0,
-                        FoulsCommitted = stat.Fouls?.Committed ?? 0,
-                    });
-                }
+                    Id = Guid.NewGuid(),
+                    MatchId = match.Id,
+                    PlayerName = entry.Player.Name,
+                    Team = side.Value,
+                    Goals = stat.Goals?.Total ?? 0,
+                    Assists = stat.Goals?.Assists ?? 0,
+                    ShotsOnTarget = stat.Shots?.On ?? 0,
+                    TotalShots = stat.Shots?.Total ?? 0,
+                    YellowCards = stat.Cards?.Yellow ?? 0,
+                    FoulsCommitted = stat.Fouls?.Committed ?? 0,
+                });
             }
-
-            // Split by team (compared against the resolved fixture's own team IDs, same reasoning
-            // as the player-stats loop above) rather than just summed, so TeamCorners/TeamCards
-            // (Phase 2 odds) can settle per side - TotalCorners keeps its existing summed value for
-            // the markets that already depend on it.
-            var homeStats = statistics.FirstOrDefault(t => t.Team.Id == fixture.Teams.Home.Id);
-            var awayStats = statistics.FirstOrDefault(t => t.Team.Id == fixture.Teams.Away.Id);
-            match.HomeCorners = ExtractStat(homeStats, "Corner Kicks");
-            match.AwayCorners = ExtractStat(awayStats, "Corner Kicks");
-            match.HomeCards = SumCards(homeStats);
-            match.AwayCards = SumCards(awayStats);
-            match.TotalCorners = match.HomeCorners is null && match.AwayCorners is null
-                ? null
-                : (match.HomeCorners ?? 0) + (match.AwayCorners ?? 0);
-            match.PlayerStatsResolvedAt = DateTime.UtcNow;
-            resolvedCount++;
         }
 
-        if (resolvedCount == 0)
-        {
-            return;
-        }
-
-        await db.SaveChangesAsync(ct);
-        logger.LogInformation("Resolved player stats for {Count} match(es)", resolvedCount);
+        // Split by team (compared against the resolved fixture's own team IDs, same reasoning
+        // as the player-stats loop above) rather than just summed, so TeamCorners/TeamCards
+        // (Phase 2 odds) can settle per side - TotalCorners keeps its existing summed value for
+        // the markets that already depend on it.
+        var homeStats = statistics.FirstOrDefault(t => t.Team.Id == fixture.Teams.Home.Id);
+        var awayStats = statistics.FirstOrDefault(t => t.Team.Id == fixture.Teams.Away.Id);
+        match.HomeCorners = ExtractStat(homeStats, "Corner Kicks");
+        match.AwayCorners = ExtractStat(awayStats, "Corner Kicks");
+        match.HomeCards = SumCards(homeStats);
+        match.AwayCards = SumCards(awayStats);
+        match.TotalCorners = match.HomeCorners is null && match.AwayCorners is null
+            ? null
+            : (match.HomeCorners ?? 0) + (match.AwayCorners ?? 0);
+        match.PlayerStatsResolvedAt = DateTime.UtcNow;
+        return true;
     }
 
     // Looks up the real API-Football fixture for a match by league + kickoff date, then picks the

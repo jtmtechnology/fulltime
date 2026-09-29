@@ -14,16 +14,26 @@ public class ApiFootballSettlementSupportBackgroundService(
             using var scope = scopeFactory.CreateScope();
             var service = scope.ServiceProvider.GetRequiredService<ApiFootballSettlementSupportService>();
 
+            // Separate so a failure in one (e.g. the candidate query) can't also skip the other.
             try
             {
                 await service.ResolveMatchEventsAsync(stoppingToken);
-                await service.ResolvePlayerStatsAsync(stoppingToken);
-                logger.LogInformation("API-Football settlement support tick complete");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger.LogError(ex, "Background API-Football settlement support tick failed");
+                logger.LogError(ex, "Background API-Football match events resolution failed");
             }
+
+            try
+            {
+                await service.ResolvePlayerStatsAsync(stoppingToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Background API-Football player stats resolution failed");
+            }
+
+            logger.LogInformation("API-Football settlement support tick complete");
 
             try
             {
