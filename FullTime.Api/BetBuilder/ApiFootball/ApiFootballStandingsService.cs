@@ -18,9 +18,9 @@ public class ApiFootballStandingsService(ApiFootballClient client, ILogger<ApiFo
     private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(6);
     private static readonly TimeSpan FreshCacheTtl = TimeSpan.FromMinutes(2);
     private static readonly SemaphoreSlim CacheLock = new(1, 1);
-    private static readonly Dictionary<long, (List<StandingEntryDto> Standings, DateTime FetchedAt)> Cache = new();
+    private static readonly Dictionary<long, (List<List<StandingEntryDto>> Standings, DateTime FetchedAt)> Cache = new();
 
-    public async Task<List<StandingEntryDto>> GetStandingsAsync(long apiFootballLeagueId, bool preferFresh, CancellationToken ct = default)
+    public async Task<List<List<StandingEntryDto>>> GetStandingsAsync(long apiFootballLeagueId, bool preferFresh, CancellationToken ct = default)
     {
         var ttl = preferFresh ? FreshCacheTtl : CacheTtl;
         await CacheLock.WaitAsync(ct);
@@ -36,7 +36,7 @@ public class ApiFootballStandingsService(ApiFootballClient client, ILogger<ApiFo
             CacheLock.Release();
         }
 
-        List<StandingEntryDto> standings;
+        List<List<StandingEntryDto>> standings;
         try
         {
             standings = await client.GetStandingsAsync((int)apiFootballLeagueId, SeasonFor(DateTime.UtcNow), ct);

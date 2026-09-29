@@ -101,12 +101,13 @@ public class ApiFootballClient(
 
     // /standings?league=&season= — response is an array with (at most) one league entry; the actual
     // team rows are nested at .League.Standings, itself an array of groups (see StandingsLeagueInfo).
-    // [0] on both is safe for the single-table competitions this app tracks (no multi-group league
-    // phase in use here); anything with no table at all just yields an empty list.
-    public async Task<List<StandingEntryDto>> GetStandingsAsync(int leagueId, int season, CancellationToken ct = default)
+    // Every group is returned - single-table leagues have exactly one, the Nations League 14 (each
+    // row carries its group name, e.g. "League A - Group C"). Anything with no table at all just
+    // yields an empty list.
+    public async Task<List<List<StandingEntryDto>>> GetStandingsAsync(int leagueId, int season, CancellationToken ct = default)
     {
         var leagues = await GetListAsync<StandingsResponseLeague>($"standings?league={leagueId}&season={season}", ct);
-        return leagues.FirstOrDefault()?.League.Standings?.FirstOrDefault() ?? [];
+        return leagues.FirstOrDefault()?.League.Standings ?? [];
     }
 
     private async Task<List<T>> GetListAsync<T>(string requestUri, CancellationToken ct)

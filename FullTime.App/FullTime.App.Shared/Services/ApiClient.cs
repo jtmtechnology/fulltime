@@ -204,7 +204,7 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
 
     public async Task<List<TeamStandingDto>> GetStandingsAsync(long leagueId)
     {
-        var res = await httpClient.GetAsync($"api/matches/standings/{leagueId}");
+        var res = await httpClient.GetAsync($"api/matches/standings/{leagueId}?allGroups=true");
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
         return await res.Content.ReadFromJsonAsync<List<TeamStandingDto>>() ?? [];
     }

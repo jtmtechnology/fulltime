@@ -96,10 +96,7 @@ public static class LeagueCatalog
     // rather than linking to a page that could only ever say "no table available".
     private static readonly HashSet<long> KnockoutOnly = [39079, 41632, 450112]; // FA Cup, EFL Cup, Community Shield
 
-    // The Nations League does have tables, but ~14 small groups of them - the API's standings
-    // endpoint only returns the first group, which would show League A Group 1 for every match.
-    // Hidden until the Table page supports multiple groups.
-    public static bool HasTable(long leagueId) => !KnockoutOnly.Contains(leagueId) && leagueId != NationsLeague;
+    public static bool HasTable(long leagueId) => !KnockoutOnly.Contains(leagueId);
 
     // Nations League rounds come back as "League A - 1" (tier, then matchday) - the tier is the only
     // grouping the fixture data carries (the groups within a tier only exist in standings). Null for

@@ -390,6 +390,10 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 .standings-team-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .standings-stat { text-align: center; font-variant-numeric: tabular-nums; }
 .standings-points { font-weight: 700; }
+.standings-group-title {
+    font-size: 0.85rem; font-weight: 700; color: var(--text-muted); letter-spacing: 0.03em;
+    margin: 1.1rem 0 0; text-transform: uppercase;
+}
 
 .bet-builder-bookmaker-row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.3rem; }
 

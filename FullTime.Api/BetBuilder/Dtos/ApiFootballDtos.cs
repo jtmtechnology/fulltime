@@ -487,6 +487,9 @@ public class StandingEntryDto
     [JsonPropertyName("points")]
     public int Points { get; set; }
 
+    [JsonPropertyName("group")]
+    public string? Group { get; set; }
+
     [JsonPropertyName("goalsDiff")]
     public int GoalsDiff { get; set; }
 

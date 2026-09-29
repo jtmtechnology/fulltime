@@ -54,7 +54,7 @@ public record BetBuilderMarketsResponse(
 public record MatchEventDto(
     string Team, string Minute, string Type, string? PlayerName, string? AssistPlayerName, string? SubstitutedPlayerName);
 
-public record TeamStandingDto(int Position, string TeamName, string? CrestUrl, int Played, int GoalDifference, int Points);
+public record TeamStandingDto(int Position, string TeamName, string? CrestUrl, int Played, int GoalDifference, int Points, string? Group = null);
 
 public record MatchStatRowDto(string Label, string HomeDisplay, string AwayDisplay, double HomeValue, double AwayValue);
 public record MatchStatsResponse(bool Available, List<MatchStatRowDto> Rows);
@@ -330,7 +330,9 @@ public class MatchesController(
     // any provider miss both just return an empty list - the client renders that as "no table
     // available" rather than an error.
     [HttpGet("standings/{leagueId:long}")]
-    public async Task<ActionResult<List<TeamStandingDto>>> GetStandings(long leagueId, CancellationToken ct)
+    // allGroups is opt-in because clients before 1.12 render every row as one table - for them a
+    // league whose standings split into several groups must keep returning only the first group.
+    public async Task<ActionResult<List<TeamStandingDto>>> GetStandings(long leagueId, [FromQuery] bool allGroups, CancellationToken ct)
     {
         if (!HighlightlyToApiFootballLeagueMap.LeagueIds.TryGetValue(leagueId, out var apiFootballLeagueId))
         {
@@ -346,9 +348,10 @@ public class MatchesController(
         var preferFresh = await db.Matches.AnyAsync(m => m.LeagueId == leagueId
             && (m.Status == MatchStatus.InProgress || (m.Status == MatchStatus.Finished && m.KickoffTime > recentCutoff)), ct);
 
-        var standings = await standingsService.GetStandingsAsync(apiFootballLeagueId, preferFresh, ct);
-        return Ok(standings
-            .Select(s => new TeamStandingDto(s.Rank, s.Team.Name, s.Team.Logo, s.All.Played, s.GoalsDiff, s.Points))
+        var groups = await standingsService.GetStandingsAsync(apiFootballLeagueId, preferFresh, ct);
+        return Ok((allGroups ? groups : groups.Take(1))
+            .SelectMany(g => g)
+            .Select(s => new TeamStandingDto(s.Rank, s.Team.Name, s.Team.Logo, s.All.Played, s.GoalsDiff, s.Points, s.Group))
             .ToList());
     }
 

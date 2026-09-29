@@ -24,28 +24,36 @@
         }
         else
         {
-            <div class="standings-table">
-                <div class="standings-row standings-header">
-                    <span class="standings-pos">#</span>
-                    <span class="standings-team">Team</span>
-                    <span class="standings-stat">P</span>
-                    <span class="standings-stat">GD</span>
-                    <span class="standings-stat">Pts</span>
-                </div>
-                @foreach (var s in _standings)
+            var groups = _standings.GroupBy(s => s.Group).ToList();
+            @foreach (var group in groups)
+            {
+                @if (groups.Count > 1)
                 {
-                    <div class="standings-row">
-                        <span class="standings-pos">@s.Position</span>
-                        <span class="standings-team">
-                            <LogoImg Src="@s.CrestUrl" Alt="@s.TeamName" CssClass="standings-crest" />
-                            <span class="standings-team-name">@s.TeamName</span>
-                        </span>
-                        <span class="standings-stat">@s.Played</span>
-                        <span class="standings-stat">@(s.GoalDifference > 0 ? $"+{s.GoalDifference}" : s.GoalDifference.ToString())</span>
-                        <span class="standings-stat standings-points">@s.Points</span>
-                    </div>
+                    <h2 class="standings-group-title">@group.Key</h2>
                 }
-            </div>
+                <div class="standings-table">
+                    <div class="standings-row standings-header">
+                        <span class="standings-pos">#</span>
+                        <span class="standings-team">Team</span>
+                        <span class="standings-stat">P</span>
+                        <span class="standings-stat">GD</span>
+                        <span class="standings-stat">Pts</span>
+                    </div>
+                    @foreach (var s in group)
+                    {
+                        <div class="standings-row">
+                            <span class="standings-pos">@s.Position</span>
+                            <span class="standings-team">
+                                <LogoImg Src="@s.CrestUrl" Alt="@s.TeamName" CssClass="standings-crest" />
+                                <span class="standings-team-name">@s.TeamName</span>
+                            </span>
+                            <span class="standings-stat">@s.Played</span>
+                            <span class="standings-stat">@(s.GoalDifference > 0 ? $"+{s.GoalDifference}" : s.GoalDifference.ToString())</span>
+                            <span class="standings-stat standings-points">@s.Points</span>
+                        </div>
+                    }
+                </div>
+            }
         }
     </div>
 }
