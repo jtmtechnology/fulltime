@@ -64,7 +64,7 @@ workflows:
     integrations:
       app_store_connect: FullTime
     environment:
-      xcode: 27.0
+      xcode: 26.6
       ios_signing:
         distribution_type: ad_hoc
         bundle_identifier: com.jtmtechnology.fulltime.app
@@ -76,11 +76,14 @@ workflows:
         script: |
           wget https://dot.net/v1/dotnet-install.sh
           chmod +x dotnet-install.sh
-          ./dotnet-install.sh --channel 10.0 --install-dir $DOTNET_PATH
+          ./dotnet-install.sh --version 10.0.401 --install-dir $DOTNET_PATH
 
       - name: Install MAUI iOS workload
         script: |
-          $DOTNET workload install maui-ios
+          # Pinned: unpinned, 2026-09-29 pulled workload set 10.0.401.1 (.NET for iOS 27 + MAUI
+          # 10.0.110), which needed Xcode 27 and gave a build that crashed on launch. 10.0.401
+          # (iOS 26.5.10318, MAUI 10.0.20) on Xcode 26.6 is the last set known to launch.
+          $DOTNET workload install maui-ios --version 10.0.401
 
       - name: Build and sign the ad-hoc IPA
         script: |
@@ -115,7 +118,7 @@ workflows:
     integrations:
       app_store_connect: FullTime
     environment:
-      xcode: 27.0
+      xcode: 26.6
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.jtmtechnology.fulltime.app
@@ -127,11 +130,14 @@ workflows:
         script: |
           wget https://dot.net/v1/dotnet-install.sh
           chmod +x dotnet-install.sh
-          ./dotnet-install.sh --channel 10.0 --install-dir $DOTNET_PATH
+          ./dotnet-install.sh --version 10.0.401 --install-dir $DOTNET_PATH
 
       - name: Install MAUI iOS workload
         script: |
-          $DOTNET workload install maui-ios
+          # Pinned: unpinned, 2026-09-29 pulled workload set 10.0.401.1 (.NET for iOS 27 + MAUI
+          # 10.0.110), which needed Xcode 27 and gave a build that crashed on launch. 10.0.401
+          # (iOS 26.5.10318, MAUI 10.0.20) on Xcode 26.6 is the last set known to launch.
+          $DOTNET workload install maui-ios --version 10.0.401
 
       - name: Build and sign for App Store
         script: |
