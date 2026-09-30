@@ -223,8 +223,13 @@ public class ApiFootballSettlementSupportService(
         ("Card", "Second Yellow card") => "Red Card",
         ("subst", _) => "Substitution",
         ("Var", _) when detail.Contains("Penalty", StringComparison.OrdinalIgnoreCase) => "VAR Penalty",
-        ("Var", _) when detail.Contains("cancel", StringComparison.OrdinalIgnoreCase) => "VAR Goal Cancelled",
-        ("Var", _) when detail.Contains("confirm", StringComparison.OrdinalIgnoreCase) => "VAR Goal Confirmed",
+        // Czechia v England (fixture 1528910, 2026-09-29) had Var/"Card upgrade confirmed" - matching
+        // on "confirm" alone showed it as a VAR-confirmed goal that never happened.
+        ("Var", _) when detail.Contains("Card", StringComparison.OrdinalIgnoreCase) => "VAR Card",
+        ("Var", _) when detail.Contains("Goal", StringComparison.OrdinalIgnoreCase)
+            && detail.Contains("cancel", StringComparison.OrdinalIgnoreCase) => "VAR Goal Cancelled",
+        ("Var", _) when detail.Contains("Goal", StringComparison.OrdinalIgnoreCase)
+            && detail.Contains("confirm", StringComparison.OrdinalIgnoreCase) => "VAR Goal Confirmed",
         _ => detail,
     };
 

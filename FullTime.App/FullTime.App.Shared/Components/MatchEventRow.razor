@@ -21,7 +21,7 @@
         "Goal" or "Penalty" or "Own Goal" or "VAR Goal Confirmed" => "⚽",
         "Missed Penalty" => "❌",
         "VAR Goal Cancelled" => "🚫",
-        "VAR Penalty" => "📺",
+        "VAR Penalty" or "VAR Card" => "📺",
         "Yellow Card" => "🟨",
         "Red Card" => "🟥",
         "Substitution" => "⇄",
@@ -43,6 +43,7 @@
         // side Event.Team puts it on, with no indication the named player put it into their own net.
         "Own Goal" => $"{Event.PlayerName} (Own Goal)",
         "VAR Goal Cancelled" => $"{Event.PlayerName} (Disallowed)",
+        "VAR Card" => $"{Event.PlayerName} (VAR card review)",
         _ => Event.PlayerName ?? Event.Type,
     };
 }
