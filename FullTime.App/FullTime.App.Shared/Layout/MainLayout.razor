@@ -7,6 +7,7 @@
 @inject IInterstitialAdService InterstitialAds
 @inject ILocaleProvider LocaleProvider
 @inject ICelebratedWinStore CelebratedWinStore
+@inject IAppLifecycle AppLifecycle
 @inject ActiveContextState ContextState
 @inject ApiClient Api
 @inject NavigationManager Nav
@@ -76,6 +77,7 @@
 
 @code {
     private BetDto? _celebrationBet;
+    private bool _celebrationRunning;
     private ErrorBoundary? _pageErrorBoundary;
     private ErrorBoundary? _overlayErrorBoundary;
     private bool _showAppSplash = true;
@@ -93,6 +95,7 @@
         // initialization completes, so awaiting push registration/ads-removal/an ad network round
         // trip here was delaying the very first paint by however long those happened to take.
         AuthState.Changed += OnAuthChanged;
+        AppLifecycle.Resumed += OnAppResumed;
         if (AuthState.IsLoggedIn)
         {
             _ = PushRegistrar.RegisterAsync();
@@ -141,11 +144,22 @@
         await _splashDismissed.Task;
 
         await InterstitialAds.ShowOnStartupAsync();
+        await CelebrateNewWinsAsync();
+    }
 
-        if (!AuthState.IsLoggedIn)
+    // Wins settled while the app sat in the background get their card on return, not only on the
+    // next cold start.
+    private void OnAppResumed() => _ = InvokeAsync(CelebrateNewWinsAsync);
+
+    private async Task CelebrateNewWinsAsync()
+    {
+        // Resumed also fires when the startup interstitial closes, so both paths can arrive
+        // together - one run at a time, or the same win would be queued twice.
+        if (_celebrationRunning || !AuthState.IsLoggedIn)
         {
             return;
         }
+        _celebrationRunning = true;
 
         try
         {
@@ -199,6 +213,10 @@
             // Best-effort, same reasoning as SetCountryFromLocaleIfUnsetAsync below - a missed
             // celebration on this particular launch isn't worth surfacing an error for.
         }
+        finally
+        {
+            _celebrationRunning = false;
+        }
     }
 
     private void DismissCelebration()
@@ -242,5 +260,9 @@
         }
     }
 
-    public void Dispose() => AuthState.Changed -= OnAuthChanged;
+    public void Dispose()
+    {
+        AuthState.Changed -= OnAuthChanged;
+        AppLifecycle.Resumed -= OnAppResumed;
+    }
 }
