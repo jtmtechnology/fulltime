@@ -39,6 +39,15 @@ pinned to 10.0.20 (`e801545`), both pushed.** Codemagic build #37 built and sign
 Connect upload hit two Apple-side 500s after `UPLOAD SUCCEEDED`, so **whether 1.0.0 (37) reached
 TestFlight is unconfirmed**. Codemagic free minutes are exhausted (506/500) until **1 October**.
 
+**Latest (2026-09-30, §38): all committed + pushed at `177b97a` (plus this handover), API deployed
+to Oracle with everything through `8109e06`.** The owner's iPhone install of Codemagic build #37
+(Xcode 27 / .NET for iOS 27 / MAUI 10.0.20) **crashed on launch**; the build was deleted before any
+crash log was taken. The iOS workflows are now pinned to the last toolchain known to launch (SDK
+10.0.401, workload set 10.0.401, Xcode 26.6, `1a5a5f4`) - **not yet built; Codemagic minutes reset 1
+Oct.** Android **1.13/20** AAB built (VAR card rows, "Early payout" tag, win card on app focus) -
+upload is the owner's. VAR card reviews no longer show as goals (8 prod rows fixed); early payouts no
+longer send their own push.
+
 **§1 below is a 2026-09-09 snapshot (GCP-era) and is historical** - trust this banner, §7's top
 priorities and the newest numbered sections instead.
 
@@ -526,29 +535,36 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-29 session 2, see §37):**
-- **New (§37): ask the owner whether iOS 1.0.0 (37) appeared in TestFlight.** Codemagic reported
-  the upload failed (Apple 500s at "change upload state to complete") even though altool said
-  `UPLOAD SUCCEEDED`. If it never appeared, re-run the TestFlight workflow **on/after 1 Oct** (free
-  macOS minutes reset on the 1st; the owner is at 506/500 and billing is off - don't push them to
-  enable it). If 37 is there, it's the first Xcode 27 / MAUI 10.0.20 iOS build - have the owner
-  check the splash screen and a general smoke test on the iPhone.
+**Top priorities for whoever picks this up next (updated end of 2026-09-30, see §38):**
+- **New (§38): run ONE iOS Codemagic build on/after 1 Oct with the pinned toolchain (`1a5a5f4`)
+  and have the owner install it.** Build #37 crashed on launch (§38.3). Check the build log's
+  workload step says `Installing workload version 10.0.401.` and `microsoft.net.sdk.ios version
+  26.5.10318` - not `10.0.401.1`/`27.0.10722`. If it still crashes, get the crash log (Settings →
+  Privacy & Security → Analytics & Improvements → Share iPhone Analytics on → Analytics Data)
+  **before** the build is deleted. If Codemagic has dropped Xcode 26.6, it fails early at the Xcode
+  step. Minutes: 506/500 until the 1 Oct reset, billing off - don't recommend enabling it.
+- **New (§38): Android 1.13/20 AAB built** - owner to upload. Next Android build = 1.14/21.
+- **New (§38.5): a broad `Bash(ssh -i ~/.ssh/oracle_fulltime ubuntu@89.168.59.239 *)` allow rule is
+  in `.claude/settings.local.json`** (owner added it to get a DB write through). It permits any
+  command on the prod VM - suggest narrowing/removing it.
 - **New (§36): after the next matchday, check the journal for the per-match settlement change
   (`db68b90`)** - expect `Resolved match events for N match(es)`, occasionally `Events not available
   yet for match ... retrying in 15 min`, and no `resolution failed`. Deployed, first tick clean, never
   seen on a real finished match. Same for `bb1981d` (a match jumping Upcoming→Finished should send
   only Full-time, no GOAL pushes).
-- **DONE (§36): Android 1.12/19 built and uploaded** (owner confirmed); 1.11/18 is released. Next
-  Android build = 1.13/20. Play review/rollout status not checked from here.
+- **DONE (§36): Android 1.12/19 built and uploaded** (owner confirmed); 1.11/18 is released. Play
+  review/rollout status not checked from here.
 - **DONE (§36): the "Test promo" row was switched off by the owner.**
 - **New (§35): early payout and the goal-disallowed alert are deployed but never observed on a real
   match.** Early payout: journal should show `Early payout applied to N Match Result pick(s)` ~3 min
-  after a backed team goes 2 up. Disallowed goal: `Sent GoalDisallowed alert`. Check after the next
+  after a backed team goes 2 up (since §38.2 there is no separate "Early payout!" push - only the
+  Bet Won push if it completes the bet). Disallowed goal: `Sent GoalDisallowed alert`. Check after the next
   matchday with bets on it.
 - **Optional (§36.5): add `.gitattributes` `*.sh text eol=lf`** - git warned `scripts/apifootball-get.sh`
   may get CRLF on a future checkout, which breaks bash. Offered, owner hasn't decided.
-- **PARTLY ADDRESSED (§37): the risk below actually bit on 2026-09-29** - MAUI version is now
-  pinned, but the SDK/workload install still floats (next break: a .NET for iOS needing Xcode 27.1+).
+- **ADDRESSED (§38.3): the iOS SDK, workload set and Xcode are now all pinned** in both iOS
+  workflows. Upgrading any of them is now a deliberate change - move SDK, workload set, Xcode and
+  `MauiVersion` together, and test the splash rasterization on Android locally first (§37.2).
 - **New (§35): Codemagic installs the *latest* .NET 10 SDK + `maui-ios` workload on every run** (not
   pinned). Not proven to have caused anything, but it means two iOS builds of near-identical code can
   differ. Also: before trusting an iOS build, check which commit Codemagic actually built - the
@@ -3949,3 +3965,77 @@ DB changes, nothing deployed to the VM.
 - Personal account: **506/500 free macOS M2 minutes used**; builds blocked. Free minutes reset on the
   **1st of each month** (Codemagic pricing docs). Owner hasn't enabled billing; treat spend as their
   call, don't recommend it. Each failed run costs 1.5-7.5 min - don't trigger speculative builds.
+
+---
+
+## 38. 2026-09-30 session — VAR card "goals", early payout push dropped, win card on focus, iOS launch crash + toolchain pin, Android 1.13/20
+
+Opened with `/load` (state matched §37). Five commits, all pushed: `84a052e`, `8109e06`, `4d43f57`,
+`1a5a5f4`, `177b97a` (plus this handover). API deployed to Oracle twice; the last deploy carries
+everything through `8109e06` (verified `active` + `/api/config`).
+
+### 38.1 VAR card reviews showed as goals (`84a052e`, API live, app in 1.13/20)
+
+- Owner: Czechia v England (fixture 1528910, 29 Sep) showed a ⚽ at 24' with no goal. API-Football
+  sent `Var`/`"Card upgrade confirmed"` (Šulc's card → the 25' red). `MapEventType` matched any Var
+  detail containing "confirm" → `VAR Goal Confirmed` → ⚽. Display only: score tallies exclude that
+  type and settlement doesn't read it.
+- Fix: Var + "Card" → new type **`VAR Card`**; the goal cancelled/confirmed mappings now also need
+  "Goal" in the detail. `MatchEventRow.razor`: 📺 + "(VAR card review)". Pre-1.13 clients render
+  `VAR Card` via the fallback ("• name").
+- Seen live: API-Football details `"Card upgrade"` and `"Card upgrade confirmed"` (card), and
+  `"Goal confirmed"` (goal).
+- **Prod data fix:** of 14 stored `VAR Goal Confirmed` rows, each was checked against API-Football's
+  events; 8 were card reviews and are now `VAR Card` (Czechia v England, Slavia v Lens, Racing v
+  Alavés, Deportivo v Sevilla, Espanyol v Elche, Atlético v Real Madrid ×2, Türkiye v France). 6
+  real goal confirmations were left alone. Finished matches aren't re-fetched, so fixing old rows
+  needs SQL, not a redeploy.
+
+### 38.2 Early payout: no standalone push, tag renamed (`8109e06`, API live, app in 1.13/20)
+
+- Owner doesn't want a push for an early payout on its own: the "Early payout! ⚡" heads-up in
+  `SettlementService.SweepAsync` is gone. The Bet Won push is unchanged ("Bet Won - early payout ⚡"
+  when the payout completes the bet). `ApplyEarlyPayoutsAsync` now returns just the bet IDs, and
+  `SettleBetsAsync` returns nothing.
+- My Bets tag: "⚡ Paid out early" → **"⚡ Early payout"** (`BetList.razor`).
+
+### 38.3 iOS build #37 crashed on launch → toolchain pinned (`1a5a5f4`, not yet built)
+
+- Owner installed §37's build #37 on the iPhone: **crash on launch**. They deleted the build before
+  any crash log was taken, so **the cause is unconfirmed**.
+- Evidence from the owner's Codemagic logs:
+  - #37 (broken): SDK 10.0.401, workload set **10.0.401.1**, `microsoft.net.sdk.ios` **27.0.10722**,
+    maui manifest **10.0.110**, Xcode 27.0, app pinned to MAUI 10.0.20 (§37.2).
+  - Last working build: SDK 10.0.401, workload set **10.0.401**, iOS **26.5.10318**, maui **10.0.20**,
+    Xcode 26.6.
+- Leading hypothesis: MAUI 10.0.20 packages (built against Microsoft.iOS 26.x) running on the .NET
+  for iOS 27 runtime → a runtime missing-member failure at startup. It fits "crash before any UI",
+  but it's a guess until a pinned build launches.
+- Fix: both iOS workflows in `codemagic.yaml` + the duplicate `codemagic-ios.yaml` now use
+  `dotnet-install.sh --version 10.0.401`, `workload install maui-ios --version 10.0.401` and
+  `xcode: 26.6` (this reverts §37.1's `8fa009d`). `MauiVersion` 10.0.20 stays in the csproj (matches
+  the workload now). The Android workflow is untouched.
+
+### 38.4 Win celebration on app focus (`4d43f57`, app in 1.13/20)
+
+- New per-host `IAppLifecycle` (`Resumed` event): `MauiAppLifecycle` is raised from `Window.Resumed`
+  in `App.xaml.cs` (singleton, injected into `App`). `WebAppLifecycle` is a no-op (web head unused).
+- `MainLayout`: the startup ad path and `OnAppResumed` both call `CelebrateNewWinsAsync`, guarded by
+  `_celebrationRunning`. `Window.Resumed` also fires when the startup interstitial closes, so both
+  can arrive together. Background→foreground on the emulator: no crash. **Not tested with a real
+  win settling while backgrounded.**
+
+### 38.5 Environment / permissions
+
+- Prod DB reads via `ssh ... 'sudo -u postgres psql -d friendsacca' <<'SQL' ... SQL` work after the
+  `autoMode.allow` rule was widened (heredoc/`-f`, reads + owner-requested row writes). **Writes were
+  still refused by the classifier** three times even with an explicit owner go-ahead and a broad
+  `Bash(ssh ... *)` allow rule; the UPDATE only ran once the owner left auto mode. By then the 8 rows
+  were **already** `VAR Card` (`UPDATE 0`) - either the owner ran it, or an attempt reported as denied
+  actually executed. Unexplained; don't assume a classifier denial means nothing ran.
+- `MatchSummarySheet` doesn't re-fetch events when the same match is reopened in one app session
+  (`_eventsLoadedForMatchId`) - force-stop the app to see DB fixes.
+- The Android app's package is `com.jtmtechnology.fulltime.app` (for `am force-stop` / `monkey`).
+- Signed AAB for 1.13/20: manifest confirmed `1.13` (read via .NET `ZipFile`; the AAB uses data
+  descriptors, so naive local-header parsing fails). MAUI resolved to 10.0.20. The signing password
+  was read from `signing/README.md` into a shell variable, not echoed.
