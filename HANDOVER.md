@@ -48,6 +48,14 @@ Oct.** Android **1.13/20** AAB built (VAR card rows, "Early payout" tag, win car
 upload is the owner's. VAR card reviews no longer show as goals (8 prod rows fixed); early payouts no
 longer send their own push.
 
+**Latest (2026-10-01, §39): no code changes.** The pinned iOS toolchain (`1a5a5f4`) **works**: a
+Codemagic TestFlight build of `4b18a06` built, uploaded, and **launches on the owner's iPhone**.
+Android **1.13/20 is published**. **iOS 1.0 App Review rejected** it as a simulated-gambling app from
+a *personal* account. The developer membership already says Organization (JTM Technology Ltd), but
+**App Store Connect → Business still lists the legal entity as "Alan Browne" at an old personal
+address**. The owner phoned Apple Developer Support, who are fixing it. A Resolution Center reply is
+pending.
+
 **§1 below is a 2026-09-09 snapshot (GCP-era) and is historical** - trust this banner, §7's top
 priorities and the newest numbered sections instead.
 
@@ -535,15 +543,19 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-09-30, see §38):**
-- **New (§38): run ONE iOS Codemagic build on/after 1 Oct with the pinned toolchain (`1a5a5f4`)
-  and have the owner install it.** Build #37 crashed on launch (§38.3). Check the build log's
-  workload step says `Installing workload version 10.0.401.` and `microsoft.net.sdk.ios version
-  26.5.10318` - not `10.0.401.1`/`27.0.10722`. If it still crashes, get the crash log (Settings →
-  Privacy & Security → Analytics & Improvements → Share iPhone Analytics on → Analytics Data)
-  **before** the build is deleted. If Codemagic has dropped Xcode 26.6, it fails early at the Xcode
-  step. Minutes: 506/500 until the 1 Oct reset, billing off - don't recommend enabling it.
-- **New (§38): Android 1.13/20 AAB built** - owner to upload. Next Android build = 1.14/21.
+**Top priorities for whoever picks this up next (updated end of 2026-10-01, see §39):**
+- **New (§39): iOS App Review is blocked on Apple fixing the App Store Connect legal entity.**
+  Ask the owner whether Apple Support has finished. Two checks: App Store Connect → Business shows
+  **JTM Technology Ltd** (34 Milesmere, MK8 8DP), and the top-right account menu's second line says
+  JTM Technology Ltd, not "Alan Browne". Once both show the company, the owner replies in Resolution
+  Center. If App Review rejects again, get Apple's message verbatim. Free Apps Agreement is Active;
+  the Paid Apps / bank / tax prompts are irrelevant to a free app. If they're ever filled in, do it
+  after the entity fix so they land under the company.
+- **DONE (§39): the iOS build with the pinned toolchain launches** (TestFlight build of `4b18a06`).
+  §38.3's crash was toolchain-caused. Leading cause (still unproven, no #37 crash log): MAUI 10.0.20
+  running on the .NET for iOS 27 runtime. Keep the pin set (SDK/workload 10.0.401, Xcode 26.6,
+  `MauiVersion` 10.0.20) and only upgrade all of it together.
+- **DONE (§39): Android 1.13/20 published.** Next Android build = 1.14/21.
 - **New (§38.5): a broad `Bash(ssh -i ~/.ssh/oracle_fulltime ubuntu@89.168.59.239 *)` allow rule is
   in `.claude/settings.local.json`** (owner added it to get a DB write through). It permits any
   command on the prod VM - suggest narrowing/removing it.
@@ -4039,3 +4051,39 @@ everything through `8109e06` (verified `active` + `/api/config`).
 - Signed AAB for 1.13/20: manifest confirmed `1.13` (read via .NET `ZipFile`; the AAB uses data
   descriptors, so naive local-header parsing fails). MAUI resolved to 10.0.20. The signing password
   was read from `signing/README.md` into a shell variable, not echoed.
+
+---
+
+## 39. 2026-10-01 session — pinned iOS build launches, App Review rejection traced to App Store Connect legal entity
+
+Opened with `/load` (state matched §38). No code changes, no commits besides this handover, nothing
+deployed. Prod journal not read.
+
+### 39.1 iOS toolchain pin confirmed (`1a5a5f4`)
+
+- Codemagic minutes reset on 1 Oct. The owner ran the TestFlight workflow on `4b18a06`, which
+  includes `1a5a5f4`. It built, reached TestFlight, and **runs on the iPhone**. That settles §38.3:
+  build #37's launch crash came from the toolchain (Xcode 27 / iOS SDK 27.0.10722 / workload set
+  10.0.401.1), not from app code. The exact mechanism is still unproven.
+- I didn't see the build log myself, so the workload/SDK versions it printed weren't checked here.
+  The result on the device is what confirms it.
+
+### 39.2 App Review rejection: personal account vs organisation
+
+- Rejection reason (owner's paraphrase; Apple's exact wording wasn't captured): a simulated gambling
+  app submitted from a personal account. The owner replied in Resolution Center saying the account is
+  now an organisation, and is waiting.
+- Evidence from the owner's screenshots:
+  - developer.apple.com → Membership details: Entity name **JTM Technology Ltd**, Enrolled as
+    **Organization**, Team ID **TP83HF2TR7**, 34 Milesmere, Two Mile Ash, MK8 8DP. Renewal 17 Aug
+    2027, **auto-renew off** (mentioned to the owner, who hasn't decided).
+  - App Store Connect top-right menu: "Alan Browne / Alan Browne". The second line would normally
+    show the team/provider name.
+  - App Store Connect → Business: legal entity **Alan Browne, 6 Penhale Close, Tattenhoe, MK4 3DZ**.
+    Free Apps Agreement Active; Paid Apps Agreement "Pending User Info"; no bank account; tax-form
+    banner.
+- Conclusion: the membership converted but App Store Connect's contract/seller entity didn't, and
+  that's what App Review sees. The owner phoned Apple Developer Support (Membership and Account →
+  Agreements and Contracts → Call), who said they'd fix it. No case number recorded here.
+- Also raised with the owner, no action taken: the app name "FullTime Football **Betting**" may draw
+  extra gambling scrutiny.
