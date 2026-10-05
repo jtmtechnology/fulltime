@@ -2,12 +2,14 @@
 @inject ApiClient Api
 @inject BetSlipState Slip
 @inject MatchLeaguePreferences Prefs
+@inject IAdsRemovalService AdsRemoval
 
 @{
     var slides = CurrentSlides();
     if (_index >= slides.Count)
     {
         _index = 0;
+        _leavingIndex = -1;
     }
 }
 
@@ -20,7 +22,7 @@
             @for (var i = 0; i < slides.Count; i++)
             {
                 var active = i == _index;
-                <div @key="slides[i].Key" class="promo-carousel-slide @(active ? "active" : "")" aria-hidden="@(active ? "false" : "true")" inert="@(!active)">
+                <div @key="slides[i].Key" class="promo-carousel-slide @SlideClass(i)" aria-hidden="@(active ? "false" : "true")" inert="@(!active)">
                     @slides[i].Content
                 </div>
             }
@@ -48,12 +50,20 @@
     private List<PromoDto> _promos = [];
 
     private int _index;
+    // -1 until the first change, so the slide shown on page load doesn't play an entrance animation.
+    private int _leavingIndex = -1;
+    private bool _forward = true;
     private bool _touching;
     private bool _skipNextTick;
     private double _touchStartX;
     private readonly CancellationTokenSource _cts = new();
 
     private record Slide(string Key, RenderFragment Content);
+
+    // The purchase itself stays on Settings (alongside Restore purchase), so the banner just links there.
+    private static readonly PromoDto RemoveAdsPromo = new(
+        Guid.Empty, "Remove ads", "One-off purchase - no more ads on startup or after placing a bet",
+        "🚫", "blue", "/profile");
 
     protected override async Task OnInitializedAsync()
     {
@@ -64,6 +74,7 @@
         // Matches.razor loads Prefs asynchronously, so the boost's league visibility is checked at
         // render time and re-rendered once Prefs arrive rather than decided once here.
         Prefs.Changed += OnPrefsChanged;
+        AdsRemoval.Changed += OnAdsRemovalChanged;
 
         // Independent sources, each best-effort - one failing just drops its own slide.
         await Task.WhenAll(LoadSpinAsync(), LoadBoostAsync(), LoadPromosAsync());
@@ -111,6 +122,11 @@
         {
             slides.Add(new Slide($"promo-{promo.Id}", @<PromoBanner Promo="promo" />));
         }
+
+        if (!AdsRemoval.AdsRemoved)
+        {
+            slides.Add(new Slide("remove-ads", @<PromoBanner Promo="RemoveAdsPromo" />));
+        }
         return slides;
     }
 
@@ -137,7 +153,7 @@
                     var count = CurrentSlides().Count;
                     if (count > 1)
                     {
-                        _index = (_index + 1) % count;
+                        Show((_index + 1) % count, forward: true);
                         StateHasChanged();
                     }
                 });
@@ -148,10 +164,34 @@
         }
     }
 
-    private void GoTo(int index)
+    private void GoTo(int index, bool? forward = null)
     {
-        _index = index;
+        Show(index, forward ?? index > _index);
         _skipNextTick = true;
+    }
+
+    private void Show(int index, bool forward)
+    {
+        if (index == _index)
+        {
+            return;
+        }
+        _leavingIndex = _index;
+        _index = index;
+        _forward = forward;
+    }
+
+    private string SlideClass(int i)
+    {
+        if (i == _index)
+        {
+            return _leavingIndex < 0 ? "active" : _forward ? "active from-next" : "active from-prev";
+        }
+        if (i == _leavingIndex)
+        {
+            return _forward ? "leaving to-next" : "leaving to-prev";
+        }
+        return "";
     }
 
     private void OnTouchStart(TouchEventArgs e)
@@ -168,7 +208,7 @@
         var count = CurrentSlides().Count;
         if (count > 1 && Math.Abs(dx) >= SwipeThresholdPx)
         {
-            GoTo(((_index + (dx < 0 ? 1 : -1)) % count + count) % count);
+            GoTo(((_index + (dx < 0 ? 1 : -1)) % count + count) % count, forward: dx < 0);
         }
     }
 
@@ -182,10 +222,13 @@
 
     private void OnPrefsChanged() => _ = InvokeAsync(StateHasChanged);
 
+    private void OnAdsRemovalChanged() => _ = InvokeAsync(StateHasChanged);
+
     public void Dispose()
     {
         Slip.Changed -= OnSlipChanged;
         Prefs.Changed -= OnPrefsChanged;
+        AdsRemoval.Changed -= OnAdsRemovalChanged;
         _cts.Cancel();
         _cts.Dispose();
     }

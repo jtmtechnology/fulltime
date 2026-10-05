@@ -976,12 +976,24 @@ button[type="submit"] {
    All slides share one grid cell so the slot is always the tallest slide's height - the match list
    below never jumps as slides change. */
 .promo-carousel { margin: 0 0 1rem; }
-.promo-carousel-track { display: grid; }
+/* Sliding slides would otherwise widen the page and let it scroll sideways mid-animation. The track
+   reaches out into .content's 1rem gutter before clipping, so the banners' glow isn't cut off at
+   the edges. */
+.promo-carousel-track { display: grid; margin: 0 -1rem; padding: 0 1rem; overflow-x: clip; }
 .promo-carousel-slide {
     grid-area: 1 / 1; display: flex; align-items: stretch;
-    opacity: 0; visibility: hidden; transition: opacity 0.35s ease, visibility 0s linear 0.35s;
+    opacity: 0; visibility: hidden; pointer-events: none;
 }
-.promo-carousel-slide.active { opacity: 1; visibility: visible; transition: opacity 0.35s ease; }
+.promo-carousel-slide.active { opacity: 1; visibility: visible; pointer-events: auto; z-index: 1; }
+.promo-carousel-slide.leaving { visibility: visible; }
+.promo-carousel-slide.from-next { animation: promo-enter-next 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+.promo-carousel-slide.from-prev { animation: promo-enter-prev 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+.promo-carousel-slide.to-next { animation: promo-leave-next 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+.promo-carousel-slide.to-prev { animation: promo-leave-prev 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+@keyframes promo-enter-next { from { opacity: 0; transform: translateX(32px); } to { opacity: 1; transform: none; } }
+@keyframes promo-enter-prev { from { opacity: 0; transform: translateX(-32px); } to { opacity: 1; transform: none; } }
+@keyframes promo-leave-next { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(-32px); } }
+@keyframes promo-leave-prev { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(32px); } }
 .promo-carousel-slide > * { margin: 0; }
 .promo-carousel-dots { display: flex; justify-content: center; gap: 0.4rem; margin-top: 0.5rem; }
 .promo-carousel-dot {
@@ -990,7 +1002,8 @@ button[type="submit"] {
 }
 .promo-carousel-dot.active { width: 18px; border-radius: 999px; background: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
-    .promo-carousel-slide, .promo-carousel-slide.active, .promo-carousel-dot { transition: none; }
+    .promo-carousel-slide { animation: none !important; }
+    .promo-carousel-dot { transition: none; }
 }
 
 /* Same pill shape as .bbboost-banner; the theme only swaps the colour. The carousel stretches every
