@@ -56,6 +56,14 @@ a *personal* account. The developer membership already says Organization (JTM Te
 address**. The owner phoned Apple Developer Support, who are fixing it. A Resolution Center reply is
 pending.
 
+**Latest (2026-10-05, §40): all committed + pushed at `2692834` (plus this handover), API deployed to
+Oracle with everything through `2692834`.** Goal / goal-disallowed / red / yellow push titles now
+carry the minute (live, not yet seen on a real push). App-only, unreleased (goes in Android
+1.14/21): smoother slide animation on the Matches promo carousel, plus a "Remove ads" slide for users
+who haven't bought ad removal. France 1-1 Italy (2 Oct) checked in the prod DB on the owner's
+request: events and settlement correct. **The owner gave standing approval for read-only prod DB
+queries** (§40.4).
+
 **§1 below is a 2026-09-09 snapshot (GCP-era) and is historical** - trust this banner, §7's top
 priorities and the newest numbered sections instead.
 
@@ -543,8 +551,15 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-10-01, see §39):**
-- **New (§39): iOS App Review is blocked on Apple fixing the App Store Connect legal entity.**
+**Top priorities for whoever picks this up next (updated end of 2026-10-05, see §40):**
+- **New (§40): check the first real pushes with minutes** (`2692834`, deployed) - titles should read
+  e.g. `GOAL (Italy) 23'`, `Red card! 85'`, `Yellow card 90+2'`. Italy v Türkiye (5 Oct 18:45 UTC) was
+  the first candidate. Journal `Sent Goal alert` lines don't include the title; ask the owner what
+  their phone showed.
+- **New (§40): next Android build = 1.14/21** and carries the carousel animation + Remove ads slide
+  (`302a928`). Both were eyeballed by the owner on the emulator ("looks good" for the animation; the
+  Remove ads slide was deployed to the emulator but not explicitly confirmed).
+- **Still open (§39): iOS App Review is blocked on Apple fixing the App Store Connect legal entity.**
   Ask the owner whether Apple Support has finished. Two checks: App Store Connect → Business shows
   **JTM Technology Ltd** (34 Milesmere, MK8 8DP), and the top-right account menu's second line says
   JTM Technology Ltd, not "Alan Browne". Once both show the company, the owner replies in Resolution
@@ -4087,3 +4102,73 @@ deployed. Prod journal not read.
   Agreements and Contracts → Call), who said they'd fix it. No case number recorded here.
 - Also raised with the owner, no action taken: the app name "FullTime Football **Betting**" may draw
   extra gambling scrutiny.
+
+---
+
+## 40. 2026-10-05 session — Italy match check, carousel animation, Remove ads slide, push minutes
+
+Opened with `/load` (state matched §39). Two commits, both pushed: `302a928` (app), `2692834` (API),
+plus this handover. API deployed to Oracle with everything through `2692834` (`active`,
+`/api/config` OK, no errors in the first 2 min of journal). Emulator: `FullTime_Pixel8_API35` has a
+debug build of `302a928`'s app code.
+
+### 40.1 France 1-1 Italy (2 Oct, fixture `1528924`) - checked, nothing wrong
+
+- Owner asked to "check italy goal over the weekend". Prod DB: 55' Olise (France, assist Cherki),
+  68' Bastoni (Italy); `FirstGoalScorerSide = 0` (Home = France), events finalized 20:43 UTC. One bet
+  leg (Match Result, France @1.45) settled Incorrect - correct for a draw. Only checked against our DB,
+  not API-Football's raw events. The owner never said what (if anything) looked wrong to them.
+- Enum reminders: `SelectionSide` Home=0, Draw=1, Away=2...; `SelectionOutcome` Pending=0,
+  Correct=1, Incorrect=2. `Users` has no `DisplayName` column (query failed on it).
+
+### 40.2 Promo carousel slide animation (`302a928`, app-only, unreleased)
+
+- Was a 0.35s opacity crossfade. Now direction-aware keyframe animations (0.6s, 32px slide + fade):
+  `.from-next/.from-prev` on the incoming slide, `.leaving.to-next/.to-prev` on the outgoing one.
+  `PromoCarousel.razor` tracks `_leavingIndex` (-1 until the first change, so the slide on page load
+  doesn't animate) and `_forward` (auto-rotate/swipe-left/later dot = forward).
+- Keyframes, not transitions, because an inactive slide's resting position can't be both the "enter
+  from" and the "leave to" side - animations always start from their `from` frame.
+- `.promo-carousel-track` uses `margin: 0 -1rem; padding: 0 1rem; overflow-x: clip` so sliding slides
+  can't widen the page, while the clip box reaches into `.content`'s 1rem gutter so the banner glow
+  isn't cut. `prefers-reduced-motion` turns the animations off.
+- Owner tested on the emulator: "looks good".
+
+### 40.3 "Remove ads" carousel slide (`302a928`, app-only, unreleased)
+
+- Shown last in the rotation when `!IAdsRemovalService.AdsRemoved`; reuses `PromoBanner` with a static
+  `PromoDto` (blue theme, 🚫, "One-off purchase - no more ads on startup or after placing a bet"),
+  linking to `/profile` (Settings), where the purchase + Restore buttons already are. Subscribes to
+  `AdsRemoval.Changed`, so it disappears straight after a purchase.
+- On a day with no spin/boost/promo it's the only slide (no rotation). Web head: `AdsRemoved` is always
+  true there, so it never shows.
+
+### 40.4 Prod DB reads: standing approval
+
+- Owner: "read prod db for any future requests i have". Saved as memory
+  `feedback_prod_db_reads.md`; the classifier blocked adding its line to `MEMORY.md` ("[Instruction
+  Poisoning]"), so the owner was asked to add the index line themselves - may not be there.
+- The first read attempt (and `scripts/apifootball-get.sh`) were blocked as "[Production Reads]"
+  until the owner said this; after it, `ssh ... 'sudo -u postgres psql -d friendsacca' <<'SQL'` reads
+  ran fine. Writes still need explicit per-change approval.
+
+### 40.5 Minute in push titles (`2692834`, API, deployed)
+
+- Goal / Goal disallowed: `MinuteSuffix(match)` in `ApiFootballMatchSyncService` appends the live clock
+  (`Minute`, `+AddedTimeMinutes` if > 0) at detection, since those pushes are triggered by a score
+  change, not an event row. Empty if `Minute` is null.
+- Red / Yellow card: the event's own `Minute` string (`"90+2"`) in `ApiFootballSettlementSupportService`.
+- Kick-off / HT / FT / lineups: unchanged.
+- **Decided, don't revisit:** a disallowed goal shows the minute the VAR check *ended* (score drop
+  detected), not the goal's minute. Offered to use the VAR "Goal cancelled" event's minute instead;
+  the owner said "var check minute is good".
+- Other VAR events (penalty, card review, goal confirmed) still send no push - only shown in the
+  Events tab. A new alert type was mentioned, not requested.
+
+### 40.6 Environment notes
+
+- Emulator screenshots via `adb exec-out screencap -p > <scratchpad>/x.png` failed because the
+  session scratchpad dir didn't exist yet - create it first (or write elsewhere).
+- Starting the AVD: `Start-Process emulator.exe -ArgumentList "-avd","FullTime_Pixel8_API35"`, then
+  `adb wait-for-device` + poll `getprop sys.boot_completed` (PowerShell).
+- Deploy ran from Bash per CLAUDE.md's recipe on the owner's "deploy" - no classifier block.
