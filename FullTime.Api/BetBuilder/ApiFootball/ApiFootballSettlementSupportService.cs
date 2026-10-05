@@ -303,7 +303,7 @@ public class ApiFootballSettlementSupportService(
             {
                 var teamName = redCard.Team == SelectionSide.Home ? match.HomeTeam : match.AwayTeam;
                 await matchAlerts.NotifyAsync(
-                    match, MatchAlertType.RedCard, "Red card!",
+                    match, MatchAlertType.RedCard, $"Red card! {redCard.Minute}'",
                     $"{redCard.PlayerName} ({teamName}) - {match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
                     sequence: ParseMinuteForSequence(redCard.Minute), ct: ct);
             }
@@ -317,7 +317,7 @@ public class ApiFootballSettlementSupportService(
             {
                 var teamName = yellowCard.Team == SelectionSide.Home ? match.HomeTeam : match.AwayTeam;
                 await matchAlerts.NotifyAsync(
-                    match, MatchAlertType.YellowCard, "Yellow card",
+                    match, MatchAlertType.YellowCard, $"Yellow card {yellowCard.Minute}'",
                     $"{yellowCard.PlayerName} ({teamName}) - {match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
                     sequence: ParseMinuteForSequence(yellowCard.Minute), ct: ct);
             }

@@ -461,7 +461,7 @@ public class ApiFootballMatchSyncService(
         if (!neverSeenLive && (match.HomeScore ?? 0) > (previousHomeScore ?? 0))
         {
             await matchAlerts.NotifyAsync(
-                match, MatchAlertType.Goal, $"GOAL ({match.HomeTeam})",
+                match, MatchAlertType.Goal, $"GOAL ({match.HomeTeam}){MinuteSuffix(match)}",
                 $"{match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
                 sequence: match.HomeScore ?? 0, ct: ct);
         }
@@ -469,7 +469,7 @@ public class ApiFootballMatchSyncService(
         if (!neverSeenLive && (match.AwayScore ?? 0) > (previousAwayScore ?? 0))
         {
             await matchAlerts.NotifyAsync(
-                match, MatchAlertType.Goal, $"GOAL ({match.AwayTeam})",
+                match, MatchAlertType.Goal, $"GOAL ({match.AwayTeam}){MinuteSuffix(match)}",
                 $"{match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
                 sequence: 1000 + (match.AwayScore ?? 0), ct: ct);
         }
@@ -484,6 +484,15 @@ public class ApiFootballMatchSyncService(
         }
     }
 
+    // Goal pushes come from a score change, not an event row, so the live clock at detection is the
+    // closest thing to the goal minute - a 5s poll keeps it within the same minute in practice.
+    private static string MinuteSuffix(Match match) => match.Minute switch
+    {
+        null => "",
+        var minute when match.AddedTimeMinutes is { } added && added > 0 => $" {minute}+{added}'",
+        var minute => $" {minute}'",
+    };
+
     private async Task NotifyGoalDisallowedAsync(
         Match match, string team, int? previousScore, int? newScore, int sequenceOffset, CancellationToken ct)
     {
@@ -493,7 +502,7 @@ public class ApiFootballMatchSyncService(
         }
 
         await matchAlerts.NotifyAsync(
-            match, MatchAlertType.GoalDisallowed, $"Goal disallowed ({team})",
+            match, MatchAlertType.GoalDisallowed, $"Goal disallowed ({team}){MinuteSuffix(match)}",
             $"{match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
             sequence: sequenceOffset + previous, ct: ct);
 
