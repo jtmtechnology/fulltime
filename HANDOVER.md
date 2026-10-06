@@ -4237,7 +4237,7 @@ Opened with `/load` (state matched §40). Three commits, all pushed: `a51231e`, 
   `VYBPRG9238`, `22CR5F5JZ4`, `7S6HYA5Q5H`, `D8W88C22Z2` → 401 (also tried `sub: user` for
   `VYBPRG9238`: 401).
 - **Ruled out:** a bad key or missing app record - the key works locally and the app record exists.
-  Build 43 still 401'd after the owner pointed the `FullTime` integration at `TR9V9M799N`, so whatever
+  Build 43 still 401'd after the owner was told to point the `FullTime` integration at `TR9V9M799N` (not confirmed they did, or on which Codemagic account), so whatever
   Codemagic sends isn't that key. Untested suspects: integration on the wrong Codemagic account
   (personal vs team), the edit not saving, or leftover `APP_STORE_CONNECT_*` env vars.
 - `2d7414e`: `ios-testflight` imports variable group `app_store_credentials` and publishes with
