@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.jtmtechnology.fulltime.app</string>
+	<string>co.uk.jtmtechnology.fulltime.app</string>
 	<key>PROJECT_ID</key>
 	<string>fulltime-98cc9</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:866381189312:ios:9fffcd32a33a97fb139d25</string>
+	<string>1:866381189312:ios:8097bf1f2a76b944139d25</string>
 </dict>
 </plist>
