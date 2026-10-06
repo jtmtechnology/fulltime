@@ -64,6 +64,10 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: co.uk.jtmtechnology.fulltime.app
+      # Upload auth comes from this group, not the FullTime integration: on 2026-10-06 the
+      # integration kept sending a key Apple rejected (401) while the same key worked locally.
+      groups:
+        - app_store_credentials
       vars:
         DOTNET_PATH: $CM_BUILD_DIR/dotnet
         DOTNET: $CM_BUILD_DIR/dotnet/dotnet
@@ -104,5 +108,7 @@ workflows:
 
     publishing:
       app_store_connect:
-        auth: integration
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
