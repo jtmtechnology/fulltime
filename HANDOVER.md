@@ -64,6 +64,15 @@ who haven't bought ad removal. France 1-1 Italy (2 Oct) checked in the prod DB o
 request: events and settlement correct. **The owner gave standing approval for read-only prod DB
 queries** (§40.4).
 
+**Latest (2026-10-06, §41): iOS moved to the JTM Technology Ltd Apple account under a new iOS-only
+bundle ID, `co.uk.jtmtechnology.fulltime.app`** (Android unchanged at `com.jtmtechnology.fulltime.app`).
+Committed + pushed through `2d7414e`; no API deploy. A new-bundle build runs on the owner's iPhone and
+**a test push reached it** (owner: "all good"). **TestFlight upload from Codemagic is still failing
+with 401** (builds 41-43); `2d7414e` switches the upload to a Codemagic variable group
+`app_store_credentials`, which **the owner still has to create** - not yet run. The correct App Store
+Connect API key is **`TR9V9M799N`** (verified locally), not `VYBPRG9238`. App Store Connect app
+record exists: "FullTime Betting League", Apple ID `6819653798`.
+
 **§1 below is a 2026-09-09 snapshot (GCP-era) and is historical** - trust this banner, §7's top
 priorities and the newest numbered sections instead.
 
@@ -551,7 +560,19 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-10-05, see §40):**
+**Top priorities for whoever picks this up next (updated end of 2026-10-06, see §41):**
+- **New (§41): get the first TestFlight upload of the new bundle ID through.** Owner creates Codemagic
+  variable group `app_store_credentials` (`APP_STORE_CONNECT_PRIVATE_KEY` = full contents of
+  `AuthKey_TR9V9M799N.p8`, `APP_STORE_CONNECT_KEY_IDENTIFIER` = `TR9V9M799N`,
+  `APP_STORE_CONNECT_ISSUER_ID` = `69a6de7e-d84f-47e3-e053-5b8c7c11a4d1`), then reruns
+  `ios-testflight`. If it still 401s, the key itself is not the problem (§41.3) - look at what
+  Codemagic actually injects.
+- **New (§41): App Store submission under the new account.** Listing text drafted (§41.5), 6.3"
+  screenshots made, review account `test@jtmtechnology.co.uk` password reset (owner has it). Still to do:
+  iPad screenshots (app declares iPad support), age rating (Simulated Gambling: Frequent/Intense),
+  App Privacy, `remove_ads` IAP, then submit. Check Business shows JTM Technology Ltd first.
+- **Superseded (§41): the §39 "App Store Connect legal entity" item below** - the owner moved iOS to a
+  fresh app record under the JTM Technology Ltd account rather than waiting on Apple Support.
 - **New (§40): check the first real pushes with minutes** (`2692834`, deployed) - titles should read
   e.g. `GOAL (Italy) 23'`, `Red card! 85'`, `Yellow card 90+2'`. Italy v Türkiye (5 Oct 18:45 UTC) was
   the first candidate. Journal `Sent Goal alert` lines don't include the title; ask the owner what
@@ -4172,3 +4193,89 @@ debug build of `302a928`'s app code.
 - Starting the AVD: `Start-Process emulator.exe -ArgumentList "-avd","FullTime_Pixel8_API35"`, then
   `adb wait-for-device` + poll `getprop sys.boot_completed` (PowerShell).
 - Deploy ran from Bash per CLAUDE.md's recipe on the owner's "deploy" - no classifier block.
+
+---
+
+## 41. 2026-10-06 session — iOS moved to the JTM Technology Ltd account, new bundle ID, push verified, TestFlight upload 401
+
+Opened with `/load` (state matched §40). Three commits, all pushed: `a51231e`, `0df7165`, `2d7414e`
+(plus this handover). No API deploy. One prod DB write (§41.4, owner-requested).
+
+### 41.1 New iOS-only bundle ID (`a51231e`, `0df7165`)
+
+- Owner had to move iOS to a new Apple Developer account (JTM Technology Ltd) and gave the new ID
+  `co.uk.jtmtechnology.fulltime.app` - the same ID §23 prepared and §25.1 reverted.
+- `FullTime.App.csproj`: second `ApplicationId` conditioned on the `ios` target platform. Checked with
+  `dotnet msbuild -getProperty:ApplicationId`: android → `com.jtmtechnology.fulltime.app`, ios → the
+  new ID. MacCatalyst/Windows keep the shared ID (not shipped).
+- `codemagic.yaml` + `codemagic-ios.yaml`: `bundle_identifier` in both iOS workflows. Which of the two
+  files Codemagic reads is still unconfirmed, so both are kept in step.
+- `Platforms/iOS/GoogleService-Info.plist`: new Firebase iOS app in the same project `fulltime-98cc9`
+  (`GOOGLE_APP_ID ...ios:8097bf1f2a76b944139d25` - the app first registered in §23).
+- The auto-mode classifier blocked moving + pushing the plist ("Sensitive-Source Provenance", its
+  `API_KEY` is the same public Firebase key already committed). It went through once the owner left
+  auto mode.
+
+### 41.2 Push on the new build - confirmed working
+
+- Test pushes went via a throwaway console app in the scratchpad (FirebaseAdmin 3.6.0, same
+  `Notification` + `Apns.Aps.Sound = "default"` shape as `PushNotificationService`) using the
+  gitignored `fulltime-98cc9-firebase-adminsdk-*.json`; deleted after.
+- User "Al" (`alan@jtmtechnology.co.uk`) has 5 iOS tokens (`DevicePlatform` Android=0, iOS=1). 3 sent;
+  2 returned `Unregistered` (old installs - left in the DB, harmless).
+- The newest token (registered 2026-10-06 11:48 UTC) got "FullTime test 2"; owner confirmed with the
+  new build on the phone: "all good". So bundle ID + new Firebase iOS app + new APNs key work end to
+  end. Which key ID Firebase holds for APNs wasn't seen from here (probably `VYBPRG9238`, unconfirmed).
+
+### 41.3 TestFlight upload: 401 from Apple - narrowed down, not yet fixed
+
+- Codemagic builds 41, 42, 43 signed fine (App Store profile, cert expires 2027-10-06) but the
+  `altool` upload failed: `NOT_AUTHORIZED` 401, then "Cannot determine the Apple ID from Bundle ID".
+- Tested every `AuthKey_*.p8` in the repo root locally (Node, ES256 JWT, `GET /v1/apps`) with Issuer ID
+  `69a6de7e-d84f-47e3-e053-5b8c7c11a4d1`: **only `TR9V9M799N` works** (200, lists the team's apps
+  including `co.uk.jtmtechnology.fulltime.app` = "FullTime Betting League", id `6819653798`).
+  `VYBPRG9238`, `22CR5F5JZ4`, `7S6HYA5Q5H`, `D8W88C22Z2` → 401 (also tried `sub: user` for
+  `VYBPRG9238`: 401).
+- **Ruled out:** a bad key or missing app record - the key works locally and the app record exists.
+  Build 43 still 401'd after the owner pointed the `FullTime` integration at `TR9V9M799N`, so whatever
+  Codemagic sends isn't that key. Untested suspects: integration on the wrong Codemagic account
+  (personal vs team), the edit not saving, or leftover `APP_STORE_CONNECT_*` env vars.
+- `2d7414e`: `ios-testflight` imports variable group `app_store_credentials` and publishes with
+  `api_key`/`key_id`/`issuer_id` from those variables instead of `auth: integration`. Signing still
+  uses the integration. **Not yet run - the owner has to create the group first.**
+- Earlier this session `ios-ad-hoc` failed with "No matching profiles found ... ad_hoc" (needs an Ad Hoc
+  profile + the iPhone's UDID registered on the new team) and once with `App Store Connect
+  integration "FullTime" does not exist`; the owner sorted both out in Codemagic.
+
+### 41.4 Review test account password reset (prod DB write, owner-requested)
+
+- `test@jtmtechnology.co.uk` ("Test User", `af654af5-aa98-4471-be1d-ba3355784887`, already
+  `EmailVerified`): `PasswordHash` set to a BCrypt hash made locally with BCrypt.Net-Next 4.0.3 (same
+  as `AuthService`), reset token fields cleared, one row in `BEGIN/COMMIT`. Verified with
+  `BCrypt.Verify` and a real `POST /api/auth/login` → 200. Password is the owner's - not recorded here.
+
+### 41.5 App Store listing prep (no code)
+
+- Owner's draft description is in untracked `app.txt`. Checked against code: 5 leagues max
+  (`LeagueService.MaxLeaguesPerUser`), email invites, weekly top-up, day-7 spinner bonus and the
+  worldwide table (top 50 memberships) are accurate. Corrections given: "profile" is now **Settings**,
+  Nations League was missing, settlement is "shortly after" not "the moment" of full time; drop "no
+  gambling licence is needed"; state that credits can't be bought/cashed out. A revised version was
+  given in chat only (not saved to a file).
+- `Info.plist` `UIDeviceFamily` = 1 and 2, so **iPad screenshots are required** (one 2064×2752 exists
+  locally). Making it iPhone-only would avoid that but needs a new build - offered, not decided.
+- Screenshots: `store-screenshots/iphone-6.3/fulltime-6.3-01..09.png` (1206×2622, 24-bit RGB, from the
+  1284×2778 originals: scale to 2622 high, 3 px cropped per side). Uploading the 1284×2778 originals to
+  the 6.3" slot gave "File dimensions are invalid".
+- Working copy, left uncommitted on purpose: the four tracked JPGs in `store-screenshots/iphone-6.5/`
+  show as **deleted** (not by Claude - restorable with `git restore store-screenshots/iphone-6.5/`);
+  untracked `app.txt`, `1024x1024bb.png`, `iphone-6.3/` and the `1284x2778bb*.png` files.
+
+### 41.6 Environment notes
+
+- Five `AuthKey_*.p8` private keys sit in the repo root - all gitignored and never committed. The owner
+  was advised to move them out. `TR9V9M799N` = App Store Connect API (Team key), the rest unknown.
+- Codemagic needs two different Apple keys: the APNs key goes to **Firebase** (with the Team ID), the
+  App Store Connect API key goes to **Codemagic** (with the Issuer ID). Both download as
+  `AuthKey_<id>.p8`, so they're easy to mix up.
+- App Store Connect, 6.3" iPhone slot: 1206×2622 / 2622×1206 / 1179×2556 / 2556×1179 only.
