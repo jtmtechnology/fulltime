@@ -9,7 +9,7 @@ workflows:
       xcode: 26.6
       ios_signing:
         distribution_type: ad_hoc
-        bundle_identifier: com.jtmtechnology.fulltime.app
+        bundle_identifier: co.uk.jtmtechnology.fulltime.app
       vars:
         DOTNET_PATH: $CM_BUILD_DIR/dotnet
         DOTNET: $CM_BUILD_DIR/dotnet/dotnet
@@ -63,7 +63,7 @@ workflows:
       xcode: 26.6
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.jtmtechnology.fulltime.app
+        bundle_identifier: co.uk.jtmtechnology.fulltime.app
       vars:
         DOTNET_PATH: $CM_BUILD_DIR/dotnet
         DOTNET: $CM_BUILD_DIR/dotnet/dotnet

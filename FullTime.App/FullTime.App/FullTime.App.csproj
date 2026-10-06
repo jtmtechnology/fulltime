@@ -57,6 +57,9 @@
          Platforms/Android/Resources/google-services.json (has both old and new package_name
          entries; only the new one matters going forward). -->
     <ApplicationId>com.jtmtechnology.fulltime.app</ApplicationId>
+    <!-- iOS moved to the JTM Technology Ltd developer account, where the old ID wasn't available;
+         Android can't follow because its ID is fixed once published on Play. -->
+    <ApplicationId Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">co.uk.jtmtechnology.fulltime.app</ApplicationId>
 
     <!-- Versions -->
     <ApplicationDisplayVersion>1.13</ApplicationDisplayVersion>
