@@ -23,9 +23,10 @@ namespace FullTime.App.Services;
 // Init(...) is called explicitly - and Android's and iOS's Init overloads take genuinely different
 // parameters (confirmed via reflection against the installed 2.4.0 package: Android's takes a
 // MauiAppCompatActivity + explicit appId; iOS's takes neither, since the App ID there already comes
-// from Info.plist's GADApplicationIdentifier). handleTrackingAuthorization: true on iOS means the
-// plugin's Init call handles the App Tracking Transparency prompt itself, so AppDelegate no longer
-// needs to request it separately.
+// from Info.plist's GADApplicationIdentifier). handleTrackingAuthorization is false on iOS: the app
+// never shows the App Tracking Transparency prompt, so iOS gets non-personalised ads only. Turning it
+// back on needs NSUserTrackingUsageDescription in Info.plist (the prompt crashes without it) and a
+// matching tracking declaration in App Store Connect's App Privacy, or review is blocked.
 //
 // IMTAdmob's readiness check is poll-based (IsInterstitialLoaded()), not event-based, despite the
 // interface exposing OnInterstitialLoaded/OnInterstitialFailedToLoad events - polling is simpler and
@@ -130,7 +131,7 @@ public class MauiInterstitialAdService(IAdsRemovalService adsRemoval) : IInterst
         CrossMauiMTAdmob.Current.Init(
             license: null!, nativeAdsId: null!, openAdsId: null!, enableOpenAds: false,
             tagForUnderAgeOfConsent: false, testDeviceIds: [], geography: DebugGeography.DEBUG_GEOGRAPHY_DISABLED,
-            initialiseConsentAtStartup: false, debugMode: true, handleTrackingAuthorization: true);
+            initialiseConsentAtStartup: false, debugMode: true, handleTrackingAuthorization: false);
 #endif
     }
 

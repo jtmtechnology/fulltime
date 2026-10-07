@@ -51,13 +51,12 @@
     <string>ca-app-pub-3940256099942544~1458002511</string>
     <key>GADIsAdManagerApp</key>
     <true/>
-    <!-- Confirmed missing on a real ad-hoc build: no ads ever showed. Both of these are required by
-         AdMob's iOS setup docs, not optional extras - without NSUserTrackingUsageDescription the app
-         never even asks for tracking permission (AppDelegate.OnActivated requests it), and without
-         SKAdNetworkItems, ad networks report "required SKAdNetwork identifier(s) missing" and can
-         refuse to fill at all rather than just attributing less accurately. -->
-    <key>NSUserTrackingUsageDescription</key>
-    <string>Used to show more relevant ads and help keep FullTime free.</string>
+    <!-- Required by AdMob's iOS setup docs: without SKAdNetworkItems, ad networks report "required
+         SKAdNetwork identifier(s) missing" and can refuse to fill at all. There is deliberately no
+         NSUserTrackingUsageDescription: the app doesn't ask for tracking permission (2026-10-07),
+         because App Store Connect blocked review until App Privacy declared tracking, and the owner
+         chose non-personalised ads over a "Data Used to Track You" label. Adding the key back means
+         also declaring tracking in App Privacy. -->
     <key>SKAdNetworkItems</key>
     <array>
         <dict><key>SKAdNetworkIdentifier</key><string>cstr6suwn9.skadnetwork</string></dict>

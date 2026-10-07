@@ -10,9 +10,7 @@ public class AppDelegate : MauiUIApplicationDelegate
 {
     protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
 
-    // App Tracking Transparency is requested by Plugin.MauiMtAdmob's own Init call
-    // (handleTrackingAuthorization: true, see MauiInterstitialAdService) rather than here - it
-    // knows the right point in its own startup sequence to ask, and asking twice risked a conflict.
+    // App Tracking Transparency is deliberately never requested - see MauiInterstitialAdService.
 
     [Export("application:didRegisterForRemoteNotificationsWithDeviceToken:")]
     [BindingImpl(BindingImplOptions.GeneratedCode | BindingImplOptions.Optimizable)]
