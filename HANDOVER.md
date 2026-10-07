@@ -78,6 +78,12 @@ the `app_store_credentials` variable group). **iOS no longer asks for tracking p
 owner's choice - non-personalised ads on iOS). App Store review submission is blocked only on the owner
 publishing App Privacy (§42.2); TestFlight external beta review needs Test Information (§42.3).
 
+**Latest (2026-10-07 session 2, §43): iOS pushes were failing, now fixed - no code change, no deploy.**
+Every push to the owner's new-bundle iPhone on 6 Oct evening failed with FCM `Invalid APNs credential`
+(server, Android and old-bundle tokens all fine). Firebase's iOS app `co.uk.jtmtechnology.fulltime.app`
+held APNs key `22CR5F5JZ4`, which Apple rejects; the owner switched it to **`VYBPRG9238`** (Team
+`W4FJUU8MX4`) and a test push arrived on the phone.
+
 **§1 below is a 2026-09-09 snapshot (GCP-era) and is historical** - trust this banner, §7's top
 priorities and the newest numbered sections instead.
 
@@ -565,7 +571,13 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated 2026-10-07, see §42):**
+**Top priorities for whoever picks this up next (updated 2026-10-07, see §42/§43):**
+- **DONE (§43): iOS push fixed** - Firebase APNs key for `co.uk.jtmtechnology.fulltime.app` is now
+  `VYBPRG9238` / Team `W4FJUU8MX4`; test push confirmed on the owner's iPhone. If "Invalid APNs
+  credential" ever reappears in the journal, check that Firebase entry first (§43).
+- **New (§43, optional): delete `AuthKey_22CR5F5JZ4.p8` from the repo root** once the owner confirms in
+  the Apple Developer portal that it's revoked/dead - Apple rejects it, and leaving it invites the same
+  mix-up again.
 - **New (§42): finish the iOS 1.0 submission.** Last blocker seen was App Privacy ("an Admin must
   provide information") - owner fills in Data Types with **no tracking** (table in §42.2) and clicks
   Publish, then Add for Review. Also: age rating (Simulated Gambling: Frequent/Intense), review
@@ -585,7 +597,7 @@ still in effect:
 - **New (§40): next Android build = 1.14/21** and carries the carousel animation + Remove ads slide
   (`302a928`). Both were eyeballed by the owner on the emulator ("looks good" for the animation; the
   Remove ads slide was deployed to the emulator but not explicitly confirmed).
-- **Still open (§39): iOS App Review is blocked on Apple fixing the App Store Connect legal entity.**
+- **SUPERSEDED - see the §41 item above; kept for history (§39): iOS App Review is blocked on Apple fixing the App Store Connect legal entity.**
   Ask the owner whether Apple Support has finished. Two checks: App Store Connect → Business shows
   **JTM Technology Ltd** (34 Milesmere, MK8 8DP), and the top-right account menu's second line says
   JTM Technology Ltd, not "Alan Browne". Once both show the company, the owner replies in Resolution
@@ -4338,3 +4350,55 @@ One code commit, pushed: `6082865`. No API deploy.
 - Still deliberately uncommitted: four tracked JPGs in `store-screenshots/iphone-6.5/` deleted (not by
   Claude; restorable via `git restore store-screenshots/iphone-6.5/`), untracked `app.txt`,
   `1024x1024bb.png`, `store-screenshots/iphone-6.3/`, `1284x2778bb*.png`, `2064x2752bb.png`.
+
+---
+
+## 43. 2026-10-07 session 2 — iOS push failing ("Invalid APNs credential"), fixed in Firebase
+
+Opened with `/load` (state matched §42). No code changes, no deploy, no prod DB writes. Owner report:
+"push notifications didn't work last night".
+
+### 43.1 What the journal showed (confirmed)
+
+- Server side was fine: Croatia v Spain / England v Czechia (6 Oct) produced every Goal, Goal
+  disallowed, Red card, Full-time, Bet Won/Lost push on time, titles carrying minutes (`GOAL (England)
+  27'`, `Red card! 79'`) - so §40's minute-in-title change is now seen live in the journal.
+- Owner "Al" (`alan@jtmtechnology.co.uk`, user `eff4d5b2-…`): Android tokens `40c3c51d`, `db7048f5` and
+  old-bundle iOS token `d7213faf` were all accepted by FCM. Three old iOS tokens were removed as
+  `Unregistered`.
+- **Only the new-bundle iPhone token `c3c9026b` (registered 6 Oct 11:48 UTC) failed**: 13 sends,
+  19:02-20:40 UTC, all `FirebaseMessagingException: Invalid APNs credential` (logged by
+  `PushNotificationService` as `Failed to send push notification to device …`). No such error anywhere
+  in the journal from 5 Oct up to 19:02 on 6 Oct. The same token had received "FullTime test 2" around
+  midday 6 Oct (§41.2).
+- Useful grep (the journal is flooded with EF SQL logging, so a plain `journalctl | grep` over a day
+  times out): `sudo journalctl -u fulltime-api --since … -o short-iso -g "Sent push|Failed to send
+  push|stale \("`.
+
+### 43.2 Cause and fix
+
+- Firebase → Project settings → Cloud Messaging → Apple app `co.uk.jtmtechnology.fulltime.app` had
+  APNs auth key **`22CR5F5JZ4`**, Team **`W4FJUU8MX4`** (dev + prod rows).
+- A direct APNs check (ES256 JWT from the local `AuthKey_22CR5F5JZ4.p8`, POST to
+  `api.push.apple.com` with a dummy device token) returned `403 InvalidProviderToken` - on prod and
+  sandbox, with `W4FJUU8MX4` and with the old team `TP83HF2TR7`. The script was never validated against
+  a known-good key, but it agrees with FCM's error.
+- Owner replaced both Firebase rows with **`VYBPRG9238`** / `W4FJUU8MX4`. A test push ("FullTime test
+  3") via a throwaway FirebaseAdmin 3.6.0 console app (scratchpad, deleted after) was accepted by FCM
+  and **the owner confirmed it arrived on the phone**.
+- **Why it broke between midday and 19:00 on 6 Oct is not confirmed.** Leading guess: the Firebase key
+  was swapped to `22CR5F5JZ4` during §41's key juggling. Alternative: `22CR5F5JZ4` was revoked in the
+  Apple portal. Not checked.
+- `W4FJUU8MX4` is evidently the Team ID of the new JTM Technology Ltd Apple account (§41); `TP83HF2TR7`
+  was the earlier account (§39).
+
+### 43.3 Environment note
+
+- The auto-mode classifier blocks testing the repo-root `AuthKey_*.p8` files against APNs as
+  "Credential Exploration" (it allowed the first check on `22CR5F5JZ4`, then blocked testing the other
+  keys and the owner's newly chosen `VYBPRG9238`). Sending a normal FCM test push to a known token was
+  allowed. If a key needs verifying again, ask the owner to run the check with `!` or go straight to an
+  FCM test push.
+- Known roles of the root keys now: `TR9V9M799N` = App Store Connect API key (Codemagic upload,
+  §41.3); `VYBPRG9238` = working APNs key (Firebase); `22CR5F5JZ4` = rejected by APNs; `7S6HYA5Q5H`,
+  `D8W88C22Z2` = unknown.
