@@ -73,6 +73,11 @@ with 401** (builds 41-43); `2d7414e` switches the upload to a Codemagic variable
 Connect API key is **`TR9V9M799N`** (verified locally), not `VYBPRG9238`. App Store Connect app
 record exists: "FullTime Betting League", Apple ID `6819653798`.
 
+**Latest (2026-10-07, §42): the TestFlight upload works** (build `b9c83a80-…` uploaded + processed via
+the `app_store_credentials` variable group). **iOS no longer asks for tracking permission** (`6082865`,
+owner's choice - non-personalised ads on iOS). App Store review submission is blocked only on the owner
+publishing App Privacy (§42.2); TestFlight external beta review needs Test Information (§42.3).
+
 **§1 below is a 2026-09-09 snapshot (GCP-era) and is historical** - trust this banner, §7's top
 priorities and the newest numbered sections instead.
 
@@ -560,17 +565,17 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated end of 2026-10-06, see §41):**
-- **New (§41): get the first TestFlight upload of the new bundle ID through.** Owner creates Codemagic
-  variable group `app_store_credentials` (`APP_STORE_CONNECT_PRIVATE_KEY` = full contents of
-  `AuthKey_TR9V9M799N.p8`, `APP_STORE_CONNECT_KEY_IDENTIFIER` = `TR9V9M799N`,
-  `APP_STORE_CONNECT_ISSUER_ID` = `69a6de7e-d84f-47e3-e053-5b8c7c11a4d1`), then reruns
-  `ios-testflight`. If it still 401s, the key itself is not the problem (§41.3) - look at what
-  Codemagic actually injects.
-- **New (§41): App Store submission under the new account.** Listing text drafted (§41.5), 6.3"
-  screenshots made, review account `test@jtmtechnology.co.uk` password reset (owner has it). Still to do:
-  iPad screenshots (app declares iPad support), age rating (Simulated Gambling: Frequent/Intense),
-  App Privacy, `remove_ads` IAP, then submit. Check Business shows JTM Technology Ltd first.
+**Top priorities for whoever picks this up next (updated 2026-10-07, see §42):**
+- **New (§42): finish the iOS 1.0 submission.** Last blocker seen was App Privacy ("an Admin must
+  provide information") - owner fills in Data Types with **no tracking** (table in §42.2) and clicks
+  Publish, then Add for Review. Also: age rating (Simulated Gambling: Frequent/Intense), review
+  sign-in `test@jtmtechnology.co.uk` (password reset §41.4, owner has it), `remove_ads` IAP. If
+  rejected, get Apple's message verbatim.
+- **New (§42): TestFlight external beta review needs Test Information** (Feedback Email + Beta App
+  Review contact name/phone/email) at App Store Connect → TestFlight → Test Information. Until then
+  every `ios-testflight` run uploads fine but ends "failed" at `submit_to_testflight`. Alternative
+  offered, not decided: set `submit_to_testflight: false` (internal testers only).
+- **DONE (§42): TestFlight upload 401 fixed** by `2d7414e` (variable group `app_store_credentials`).
 - **Superseded (§41): the §39 "App Store Connect legal entity" item below** - the owner moved iOS to a
   fresh app record under the JTM Technology Ltd account rather than waiting on Apple Support.
 - **New (§40): check the first real pushes with minutes** (`2692834`, deployed) - titles should read
@@ -4279,3 +4284,57 @@ Opened with `/load` (state matched §40). Three commits, all pushed: `a51231e`, 
   App Store Connect API key goes to **Codemagic** (with the Issuer ID). Both download as
   `AuthKey_<id>.p8`, so they're easy to mix up.
 - App Store Connect, 6.3" iPhone slot: 1206×2622 / 2622×1206 / 1179×2556 / 2556×1179 only.
+
+---
+
+## 42. 2026-10-07 session (continuation of §41) — iOS tracking prompt removed, TestFlight upload working, App Store submission blockers
+
+One code commit, pushed: `6082865`. No API deploy.
+
+### 42.1 Tracking permission removed (`6082865`, iOS app-only, in the build uploaded this session)
+
+- "Add for Review" was blocked: the binary had `NSUserTrackingUsageDescription` but App Privacy said
+  "Data Not Collected". The tracking prompt was real, not a leftover: `MauiInterstitialAdService`
+  initialised MTAdmob with `handleTrackingAuthorization: true`.
+- Recommended declaring tracking in App Privacy (no rebuild). **The owner chose instead to stop asking.**
+  `Info.plist` key removed (`SKAdNetworkItems` kept - AdMob needs it to fill), iOS
+  `handleTrackingAuthorization: false`, comments in `Info.plist` / `MauiInterstitialAdService` /
+  `AppDelegate` record why. Android untouched.
+- Effect (as explained to the owner, not measured): ads still show; iOS gets no IDFA so ads are
+  non-personalised and likely earn less; UMP (GDPR consent) unchanged. iOS is still on Google's test
+  AdMob IDs anyway until first approval (per CLAUDE.md).
+- Not built locally (no Mac); the plist parses as XML. The owner's later Codemagic build uploaded fine
+  and the tracking error cleared from "Unable to Add for Review", which suggests that build was attached
+  (not directly confirmed).
+- Re-enabling tracking needs all three: the plist key, `handleTrackingAuthorization: true`, and a
+  tracking declaration in App Privacy.
+
+### 42.2 App Privacy - owner still to publish
+
+- The second "Unable to Add for Review" showed only the App Privacy item (iPad screenshot + tracking
+  items had cleared). Answers given to the owner, all **not used for tracking** (Device ID left out -
+  no IDFA): Name, Email Address, Gameplay Content, User ID → App Functionality, linked; Advertising
+  Data, Product Interaction → Third-Party Advertising (+ Analytics), not linked; Coarse Location →
+  Third-Party Advertising, not linked; Crash Data, Performance Data → Analytics, not linked. AdMob rows
+  follow Google's AdMob App Store disclosure guidance - owner told to check Google's current page.
+- Privacy policy (`FullTime.Website/wwwroot/privacy.html`) already mentions AdMob, Google and Firebase.
+
+### 42.3 TestFlight upload fixed; beta review step fails on missing Test Information
+
+- With the variable group in place, the publish step found the app, uploaded, and Apple finished
+  processing build `b9c83a80-fc49-458b-9a9d-683069c8e94d`. So §41.3's 401 is resolved by `2d7414e`;
+  why the `FullTime` integration sent a bad key was never found.
+- Codemagic's `HIDDEN (hash: …)` values don't match MD5/SHA-1/SHA-256 prefixes of the expected values -
+  presumably salted; can't be used to verify what was pasted.
+- Then `submit_to_testflight` failed: "Complete test information is required ... Feedback Email ...
+  Beta App Review Information: First Name, Last Name, Phone Number, Email". This only blocks external
+  TestFlight testing - the build is usable by internal testers and for the App Store submission.
+
+### 42.4 Store assets / working copy
+
+- `store-screenshots/iphone-6.5/2064x2752bb.png` (13" iPad size) is back in the working copy
+  (untracked); the iPad-screenshot blocker cleared, so presumably the owner uploaded it. iPad support
+  (`UIDeviceFamily` 2) is kept.
+- Still deliberately uncommitted: four tracked JPGs in `store-screenshots/iphone-6.5/` deleted (not by
+  Claude; restorable via `git restore store-screenshots/iphone-6.5/`), untracked `app.txt`,
+  `1024x1024bb.png`, `store-screenshots/iphone-6.3/`, `1284x2778bb*.png`, `2064x2752bb.png`.
