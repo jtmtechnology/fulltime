@@ -2,12 +2,17 @@ using FullTime.App.Shared.Models;
 
 namespace FullTime.App.Shared.Services;
 
-// Shared between MatchCard.razor and MatchSummarySheet.razor so a finished match's "FT"/"AET"
-// label and penalty-shootout score read the same in both places rather than drifting.
+// Shared between MatchCard.razor, MatchSummarySheet.razor and BetList.razor so a finished match's
+// "FT"/"AET" label and penalty-shootout score read the same everywhere rather than drifting.
 public static class MatchDisplay
 {
-    public static string FinishedLabel(UpcomingMatchDto match) => match.WentToExtraTime ? "AET" : "FT";
+    public static string FinishedLabel(UpcomingMatchDto match) => FinishedLabel(match.WentToExtraTime);
+
+    public static string FinishedLabel(bool wentToExtraTime) => wentToExtraTime ? "AET" : "FT";
 
     public static string? PenaltyScoreText(UpcomingMatchDto match) =>
-        match.HomePenalties is { } home && match.AwayPenalties is { } away ? $"{home}-{away} pens" : null;
+        PenaltyScoreText(match.HomePenalties, match.AwayPenalties);
+
+    public static string? PenaltyScoreText(int? homePenalties, int? awayPenalties) =>
+        homePenalties is { } home && awayPenalties is { } away ? $"{home}-{away} pens" : null;
 }

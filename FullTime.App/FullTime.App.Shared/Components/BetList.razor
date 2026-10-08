@@ -24,8 +24,32 @@
                     <li>
                         <div class="bet-leg-header">
                             <span class="muted">@leg.KickoffTime.ToLocalTime().ToString("ddd d MMM HH:mm")</span> —
-                            <LogoImg Src="@leg.HomeLogoUrl" CssClass="team-logo" Alt="@leg.HomeTeam" />@leg.HomeTeam v
+                            <LogoImg Src="@leg.HomeLogoUrl" CssClass="team-logo" Alt="@leg.HomeTeam" />@leg.HomeTeam
+                            @if (HasScore(leg))
+                            {
+                                <strong class="bet-leg-score">@leg.HomeScore - @leg.AwayScore</strong>
+                            }
+                            else
+                            {
+                                <text> v </text>
+                            }
                             <LogoImg Src="@leg.AwayLogoUrl" CssClass="team-logo" Alt="@leg.AwayTeam" />@leg.AwayTeam
+                            @if (leg.MatchStatus == "InProgress")
+                            {
+                                <span class="live-clock bet-leg-status">Live</span>
+                            }
+                            else if (leg.MatchStatus == "Finished")
+                            {
+                                <span class="live-clock finished bet-leg-status">@MatchDisplay.FinishedLabel(leg.WentToExtraTime)</span>
+                                @if (MatchDisplay.PenaltyScoreText(leg.HomePenalties, leg.AwayPenalties) is { } pens)
+                                {
+                                    <span class="live-clock finished bet-leg-status">(@pens)</span>
+                                }
+                            }
+                            else if (leg.MatchStatus == "Postponed")
+                            {
+                                <span class="live-clock postponed bet-leg-status">Postponed</span>
+                            }
                         </div>
                         <ul class="bet-leg-picks">
                             @foreach (var pick in leg.Picks)
@@ -49,4 +73,7 @@
 @code {
     [Parameter, EditorRequired] public List<BetDto> Bets { get; set; } = [];
     [Parameter] public string CurrencySymbol { get; set; } = "£";
+
+    private static bool HasScore(BetLegDto leg) =>
+        leg.MatchStatus is "InProgress" or "Finished" && leg.HomeScore is not null && leg.AwayScore is not null;
 }

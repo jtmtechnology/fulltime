@@ -707,6 +707,8 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 .bet-card ul { list-style: none; margin: 0.5rem 0 0; padding: 0; }
 .bet-card li { padding: 0.25rem 0; font-size: 0.85rem; }
 .bet-leg-header { font-size: 0.85rem; }
+.bet-leg-score { margin: 0 0.35rem; white-space: nowrap; }
+.bet-leg-status { margin-left: 0.35rem; font-size: 0.8rem; }
 .bet-leg-picks { margin: 0.15rem 0 0.5rem; padding-left: 1rem; }
 .bet-leg-picks li { padding: 0.1rem 0; }
 

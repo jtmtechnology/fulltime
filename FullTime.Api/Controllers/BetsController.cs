@@ -18,7 +18,8 @@ public record BetLegPickDto(
     decimal OddsAtPlacement, string Outcome, string? PlayerName, string? Team, bool PaidOutEarly = false);
 public record BetLegDto(
     Guid MatchId, string HomeTeam, string AwayTeam, string? HomeLogoUrl, string? AwayLogoUrl,
-    DateTime KickoffTime, decimal OddsAtPlacement, string Outcome, List<BetLegPickDto> Picks);
+    DateTime KickoffTime, decimal OddsAtPlacement, string Outcome, List<BetLegPickDto> Picks,
+    string MatchStatus, int? HomeScore, int? AwayScore, int? HomePenalties, int? AwayPenalties, bool WentToExtraTime);
 public record BetDto(Guid Id, decimal Stake, decimal CombinedOdds, decimal PotentialReturn, string Status,
     DateTime PlacedAt, DateTime? SettledAt, Guid? LeagueId, string? LeagueName, string? BoostApplied, List<BetLegDto> Legs,
     string? BoostSkippedReason = null);
@@ -161,7 +162,13 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
             l.Picks.Select(p => new BetLegPickDto(
                 p.MarketType.ToString(), p.Line, p.Side.HasValue ? p.Side.ToString() : null,
                 p.PredictedHomeScore, p.PredictedAwayScore, p.OddsAtPlacement, p.Outcome.ToString(),
-                p.PlayerName, p.Team, p.PaidOutEarlyAt != null)).ToList()
+                p.PlayerName, p.Team, p.PaidOutEarlyAt != null)).ToList(),
+            l.Match!.Status.ToString(),
+            l.Match!.HomeScore,
+            l.Match!.AwayScore,
+            l.Match!.HomePenalties,
+            l.Match!.AwayPenalties,
+            l.Match!.WentToExtraTime
         )).ToList());
 
     private Guid CurrentUserId =>
