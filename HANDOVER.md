@@ -84,6 +84,11 @@ Every push to the owner's new-bundle iPhone on 6 Oct evening failed with FCM `In
 held APNs key `22CR5F5JZ4`, which Apple rejects; the owner switched it to **`VYBPRG9238`** (Team
 `W4FJUU8MX4`) and a test push arrived on the phone.
 
+**Latest (2026-10-08, §44): match scores now show on bet history** (My Bets + leaderboard friend-bets
+panel) - `8b82af5`, pushed, **API deployed to Oracle**, seen working on the emulator. **Android
+1.14/21 signed AAB built** (`a93e21b` version bump, pushed) - **upload to Play Console is the
+owner's.**
+
 **§1 below is a 2026-09-09 snapshot (GCP-era) and is historical** - trust this banner, §7's top
 priorities and the newest numbered sections instead.
 
@@ -571,7 +576,13 @@ still in effect:
 
 ## 7. Known issues / outstanding
 
-**Top priorities for whoever picks this up next (updated 2026-10-07, see §42/§43):**
+**Top priorities for whoever picks this up next (updated 2026-10-08, see §42-§44):**
+- **New (§44): Android 1.14/21 AAB is built, not uploaded** - owner uploads it to Play Console. Ask
+  whether it went up / was released before building 1.15/22. Not installed on the emulator or
+  signature-checked locally.
+- **New (§44): bet-history scores not yet seen in two states** - the "Live" tag (needs a bet on an
+  in-progress match) and the leaderboard friend-bets panel (same `BetList` component as My Bets, so
+  expected to work). Check on the next matchday.
 - **DONE (§43): iOS push fixed** - Firebase APNs key for `co.uk.jtmtechnology.fulltime.app` is now
   `VYBPRG9238` / Team `W4FJUU8MX4`; test push confirmed on the owner's iPhone. If "Invalid APNs
   credential" ever reappears in the journal, check that Firebase entry first (§43).
@@ -594,7 +605,7 @@ still in effect:
   e.g. `GOAL (Italy) 23'`, `Red card! 85'`, `Yellow card 90+2'`. Italy v Türkiye (5 Oct 18:45 UTC) was
   the first candidate. Journal `Sent Goal alert` lines don't include the title; ask the owner what
   their phone showed.
-- **New (§40): next Android build = 1.14/21** and carries the carousel animation + Remove ads slide
+- **DONE (§44): built as 1.14/21 - see the §44 item above.** (§40) It carries the carousel animation + Remove ads slide
   (`302a928`). Both were eyeballed by the owner on the emulator ("looks good" for the animation; the
   Remove ads slide was deployed to the emulator but not explicitly confirmed).
 - **SUPERSEDED - see the §41 item above; kept for history (§39): iOS App Review is blocked on Apple fixing the App Store Connect legal entity.**
@@ -4402,3 +4413,43 @@ Opened with `/load` (state matched §42). No code changes, no deploy, no prod DB
 - Known roles of the root keys now: `TR9V9M799N` = App Store Connect API key (Codemagic upload,
   §41.3); `VYBPRG9238` = working APNs key (Firebase); `22CR5F5JZ4` = rejected by APNs; `7S6HYA5Q5H`,
   `D8W88C22Z2` = unknown.
+
+---
+
+## 44. 2026-10-08 session - match scores on bet history, Android 1.14/21 AAB
+
+Opened with the load skill (state matched §43). One feature commit + one version bump, both pushed.
+API deployed to Oracle. No prod DB writes.
+
+### 44.1 Match scores on My Bets / friend bets (`8b82af5`, deployed)
+
+- Owner asked for match results on My Bets and the leaderboard "tap a name" bets panel. Both render
+  through `Components/BetList.razor`, so the change is made once there.
+- API: `BetLegDto` (in `BetsController.cs`) gained `MatchStatus`, `HomeScore`, `AwayScore`,
+  `HomePenalties`, `AwayPenalties`, `WentToExtraTime`, taken from the leg's `Match`. The app-side copy
+  in `ApiModels.cs` has defaults for all of them, so an app build against an older API still shows
+  `Home v Away`. Old app builds ignore the new fields.
+- Display: `Home 2 - 1 Away FT` (or `AET`, plus `(4-3 pens)`), `Live` in accent while InProgress,
+  muted `Postponed`, unchanged `Home v Away` before kickoff. `MatchDisplay` got primitive-arg overloads
+  of `FinishedLabel`/`PenaltyScoreText` so match cards and bet list share the same labels.
+- Verified: API `/api/config` OK after deploy; on the emulator (debug build) My Bets showed
+  `Albania 2 - 1 San Marino FT` and an upcoming `West Ham v QPR` unchanged. Owner: "all good".
+  Not seen: `Live` tag, friend-bets panel.
+- Previous API build kept at `/opt/fulltime-api-previous` on the VM.
+
+### 44.2 Android 1.14/21 (`a93e21b`)
+
+- Version bumped 1.13/20 -> 1.14/21; signed AAB built per `signing/README.md` at
+  `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`.
+  Contains everything through `8b82af5`: promo carousel animation, Remove ads slide (§40), bet scores.
+- Real AdMob IDs confirmed in `AndroidManifest.xml` and `MauiInterstitialAdService.cs` (correct,
+  Android is live).
+- First publish hit `APT2258: The data is invalid` again (corrupt aapt2 cache, right after a Debug
+  emulator build). `dotnet build-server shutdown` + a PowerShell force-delete of the app's `obj` and
+  `bin` fixed it, as in §31. Expect this when a Release publish follows a Debug `-t:Run`; clearing
+  first saves a failed run.
+
+### 44.3 Working copy
+
+- Store-asset changes from §42.4 still deliberately uncommitted (deleted iphone-6.5 JPGs, untracked
+  `app.txt`, `1024x1024bb.png`, `iphone-6.3/`, `1284x2778bb*.png`, `2064x2752bb.png`).
