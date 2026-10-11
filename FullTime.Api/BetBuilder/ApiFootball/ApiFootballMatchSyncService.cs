@@ -345,7 +345,7 @@ public class ApiFootballMatchSyncService(
         match.AwayTeamLogoUrl = dto.Teams.Away.Logo;
         match.KickoffTime = dto.Fixture.Date.UtcDateTime;
 
-        var newStatus = DeriveStatus(dto.Fixture.Status.Short, match.Status, externalId);
+        var newStatus = DeriveStatus(dto.Fixture.Status.Short, match.Status, externalId, match.KickoffTime);
         var isHalfTime = dto.Fixture.Status.Short == "HT";
 
         // Captured before overwriting below - MatchAlertService.NotifyAsync needs both sides of
@@ -363,6 +363,13 @@ public class ApiFootballMatchSyncService(
         match.HomeScore = dto.Goals?.Home;
         match.AwayScore = dto.Goals?.Away;
         match.Status = newStatus;
+        // A match briefly reported Finished and then back to live keeps a stale Result otherwise,
+        // and SettlementService resolves picks off Result (Rayo Vallecano v Athletic Club,
+        // 2026-10-10, ended up InProgress at 0-0 with Result = Away).
+        if (newStatus != MatchStatus.Finished)
+        {
+            match.Result = null;
+        }
         match.Minute = dto.Fixture.Status.Elapsed;
         match.AddedTimeMinutes = dto.Fixture.Status.Extra;
         match.IsHalfTime = isHalfTime;
@@ -512,12 +519,17 @@ public class ApiFootballMatchSyncService(
         }
     }
 
-    // API-Football's short status codes. Confirmed live: NS, 1H, HT, 2H, FT. The rest (ET, P, PEN,
-    // SUSP, INT, PST, CANC, ABD, AWD, WO) are API-Football's own documented set, not yet seen live —
+    // An interrupted match that hasn't resumed a day after kickoff is treated as abandoned -
+    // API-Football can leave one at INT indefinitely rather than ever moving it to ABD (Rayo
+    // Vallecano v Athletic Club, 2026-10-10).
+    private static readonly TimeSpan InterruptedAbandonAfter = TimeSpan.FromHours(24);
+
+    // API-Football's short status codes. Confirmed live: NS, 1H, HT, 2H, FT, INT. The rest (ET, P,
+    // PEN, SUSP, PST, CANC, ABD, AWD, WO) are API-Football's own documented set, not yet seen live —
     // mapped defensively rather than assumed, and — per the DeriveStatus incident this whole cutover
     // is partly fixing (see HighlightlyMatchSyncService.DeriveStatus) — anything still unrecognized
     // logs a warning and keeps the match's previous status rather than silently guessing InProgress.
-    private MatchStatus DeriveStatus(string statusShort, MatchStatus previousStatus, string externalId)
+    private MatchStatus DeriveStatus(string statusShort, MatchStatus previousStatus, string externalId, DateTime kickoffUtc)
     {
         switch (statusShort)
         {
@@ -525,9 +537,13 @@ public class ApiFootballMatchSyncService(
                 return MatchStatus.Upcoming;
             case "PST":
                 return MatchStatus.Postponed;
-            case "FT" or "AET" or "PEN" or "AWD" or "WO" or "CANC" or "ABD":
+            case "FT" or "AET" or "PEN" or "AWD" or "WO":
                 return MatchStatus.Finished;
-            case "1H" or "2H" or "HT" or "ET" or "P" or "SUSP" or "INT":
+            case "CANC" or "ABD":
+                return MatchStatus.Abandoned;
+            case "SUSP" or "INT":
+                return DateTime.UtcNow - kickoffUtc > InterruptedAbandonAfter ? MatchStatus.Abandoned : MatchStatus.InProgress;
+            case "1H" or "2H" or "HT" or "ET" or "P":
                 return MatchStatus.InProgress;
         }
 

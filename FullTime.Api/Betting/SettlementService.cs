@@ -18,6 +18,7 @@ public class SettlementService(
         // payout is what completes the bet.
         var earlyPaidBetIds = await ApplyEarlyPayoutsAsync(ct);
         await ResolvePicksAsync(ct);
+        await VoidAbandonedLegsAsync(ct);
         await ResolveLegsAsync(ct);
         await SettleBetsAsync(earlyPaidBetIds, ct);
     }
@@ -150,7 +151,8 @@ public class SettlementService(
             .Include(p => p.BetLeg)
             .ThenInclude(l => l!.Match)
             .ThenInclude(m => m!.PlayerStats)
-            .Where(p => p.Outcome == SelectionOutcome.Pending && p.BetLeg!.Match!.Result != null
+            .Where(p => p.Outcome == SelectionOutcome.Pending
+                && p.BetLeg!.Match!.Status == MatchStatus.Finished && p.BetLeg!.Match!.Result != null
                 && (p.MarketType != MarketType.FirstTeamToScore || p.BetLeg!.Match!.FirstGoalScorerSide != null)
                 && (!EventsDerivedMarketTypes.Contains(p.MarketType) || p.BetLeg!.Match!.EventsFinalizedAt != null)
                 && (!PlayerStatMarketTypes.Contains(p.MarketType) || p.BetLeg!.Match!.PlayerStatsResolvedAt != null)
@@ -344,6 +346,34 @@ public class SettlementService(
     private static string Surname(string? name) =>
         name?.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries) is { Length: > 0 } parts ? parts[^1] : name ?? "";
 
+    // A pending same-game multi is voided whole even if one of its picks was already paid out early -
+    // it was priced as one selection. A leg already decided (e.g. a single paid out early before the
+    // abandonment) stands.
+    private async Task VoidAbandonedLegsAsync(CancellationToken ct)
+    {
+        var legs = await db.BetLegs
+            .Include(l => l.Picks)
+            .Where(l => l.Outcome == SelectionOutcome.Pending && l.Match!.Status == MatchStatus.Abandoned)
+            .ToListAsync(ct);
+
+        if (legs.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var leg in legs)
+        {
+            leg.Outcome = SelectionOutcome.Void;
+            foreach (var pick in leg.Picks.Where(p => p.Outcome == SelectionOutcome.Pending))
+            {
+                pick.Outcome = SelectionOutcome.Void;
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation("Voided {Count} bet leg(s) on abandoned matches", legs.Count);
+    }
+
     private async Task ResolveLegsAsync(CancellationToken ct)
     {
         var pendingLegs = await db.BetLegs
@@ -397,6 +427,7 @@ public class SettlementService(
         var settledCount = 0;
         var wonBets = new List<Bet>();
         var lostBets = new List<Bet>();
+        var voidBets = new List<Bet>();
 
         foreach (var bet in pendingBets)
         {
@@ -407,8 +438,16 @@ public class SettlementService(
                 lostBets.Add(bet);
                 settledCount++;
             }
-            else if (bet.Legs.All(l => l.Outcome == SelectionOutcome.Correct))
+            else if (bet.Legs.All(l => l.Outcome == SelectionOutcome.Void))
             {
+                bet.Status = BetStatus.Void;
+                bet.SettledAt = DateTime.UtcNow;
+                voidBets.Add(bet);
+                settledCount++;
+            }
+            else if (bet.Legs.All(l => l.Outcome is SelectionOutcome.Correct or SelectionOutcome.Void))
+            {
+                RepriceWithoutVoidLegs(bet);
                 bet.Status = BetStatus.Won;
                 bet.SettledAt = DateTime.UtcNow;
                 wonBets.Add(bet);
@@ -425,18 +464,25 @@ public class SettlementService(
         // A won bet credits whichever pool its stake originally came from — the global Worldwide
         // balance for LeagueId == null, or that specific league's own membership balance otherwise.
         // Each pool is fully independent, so this must never touch User.Balance for a league bet.
-        var wonLeagueBets = wonBets.Where(b => b.LeagueId is not null).ToList();
-        var leagueIds = wonLeagueBets.Select(b => b.LeagueId!.Value).Distinct().ToList();
+        // A void bet's refund goes the same way.
+        var credits = wonBets.Select(b => (Bet: b, Amount: b.PotentialReturn))
+            .Concat(voidBets.Select(b => (Bet: b, Amount: b.Stake)))
+            .ToList();
+        var leagueIds = credits.Where(c => c.Bet.LeagueId is not null).Select(c => c.Bet.LeagueId!.Value).Distinct().ToList();
         var memberships = leagueIds.Count == 0
             ? []
             : await db.LeagueMemberships.Where(m => leagueIds.Contains(m.LeagueId)).ToListAsync(ct);
         var membershipLookup = memberships.ToDictionary(m => (m.LeagueId, m.UserId));
 
-        foreach (var bet in wonLeagueBets)
+        foreach (var (bet, amount) in credits)
         {
-            if (membershipLookup.TryGetValue((bet.LeagueId!.Value, bet.UserId), out var membership))
+            if (bet.LeagueId is null)
             {
-                membership.Balance += bet.PotentialReturn;
+                bet.User!.Balance += amount;
+            }
+            else if (membershipLookup.TryGetValue((bet.LeagueId.Value, bet.UserId), out var membership))
+            {
+                membership.Balance += amount;
             }
             else
             {
@@ -444,14 +490,9 @@ public class SettlementService(
                 // that league is still Pending. Log and move on rather than aborting the whole
                 // sweep over one bad row.
                 logger.LogError(
-                    "Won bet {BetId} references league {LeagueId} but user {UserId} has no membership — winnings not credited",
-                    bet.Id, bet.LeagueId, bet.UserId);
+                    "{Status} bet {BetId} references league {LeagueId} but user {UserId} has no membership — {Amount} not credited",
+                    bet.Status, bet.Id, bet.LeagueId, bet.UserId, amount);
             }
-        }
-
-        foreach (var bet in wonBets.Where(b => b.LeagueId is null))
-        {
-            bet.User!.Balance += bet.PotentialReturn;
         }
 
         await db.SaveChangesAsync(ct);
@@ -468,6 +509,29 @@ public class SettlementService(
         {
             await push.SendToUserAsync(bet.UserId, "Bet Lost", $"{DescribeBet(bet)} didn't come in.", ct);
         }
+
+        foreach (var bet in voidBets)
+        {
+            var symbol = Localization.CurrencyCatalog.SymbolFor(bet.User?.Country);
+            await push.SendToUserAsync(
+                bet.UserId, "Bet Void", $"{DescribeBet(bet)} — match abandoned, {symbol}{bet.Stake:0.00} stake returned", ct);
+        }
+    }
+
+    // A void leg counts as odds 1.0, so dividing its odds back out of CombinedOdds keeps any
+    // Daily Spinner boost already folded in there. Rewritten in place so My Bets shows the odds
+    // and return actually paid.
+    private static void RepriceWithoutVoidLegs(Bet bet)
+    {
+        var voidOdds = bet.Legs.Where(l => l.Outcome == SelectionOutcome.Void).Select(l => l.OddsAtPlacement).ToList();
+        if (voidOdds.Count == 0)
+        {
+            return;
+        }
+
+        var odds = voidOdds.Aggregate(bet.CombinedOdds, (combined, legOdds) => combined / legOdds);
+        bet.CombinedOdds = Math.Round(odds, 2);
+        bet.PotentialReturn = Math.Round(bet.Stake * odds, 2);
     }
 
     // A single-match bet (a straight pick or a same-game Bet Builder multi) is identified by its

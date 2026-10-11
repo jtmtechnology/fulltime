@@ -9,8 +9,8 @@ public class BetLegPick
     public MarketType MarketType { get; set; }
 
     // Null for MarketType.MatchResult, BothTeamsToScore, and CorrectScore. Half-lines only
-    // (1.5/2.5/...) for OverUnder — goals are integers, so a half-line can never push, which keeps
-    // SelectionOutcome binary with no Void/Refund state needed.
+    // (1.5/2.5/...) for OverUnder — goals are integers, so a half-line can never push. A pick
+    // only ends Void when its match is abandoned.
     public decimal? Line { get; set; }
 
     // Null only for MarketType.CorrectScore, which uses PredictedHomeScore/PredictedAwayScore

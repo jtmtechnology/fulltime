@@ -527,6 +527,7 @@
         "InProgress" when match.Minute is { } minute =>
             match.AddedTimeMinutes is { } added && added > 0 ? $"{minute}+{added}'" : $"{minute}'",
         "Finished" => MatchDisplay.FinishedLabel(match),
+        "Abandoned" => "Abandoned",
         _ => null,
     };
 

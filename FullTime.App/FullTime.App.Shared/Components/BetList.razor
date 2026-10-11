@@ -46,9 +46,9 @@
                                     <span class="live-clock finished bet-leg-status">(@pens)</span>
                                 }
                             }
-                            else if (leg.MatchStatus == "Postponed")
+                            else if (leg.MatchStatus is "Postponed" or "Abandoned")
                             {
-                                <span class="live-clock postponed bet-leg-status">Postponed</span>
+                                <span class="live-clock postponed bet-leg-status">@leg.MatchStatus</span>
                             }
                         </div>
                         <ul class="bet-leg-picks">

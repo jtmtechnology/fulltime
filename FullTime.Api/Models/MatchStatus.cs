@@ -13,5 +13,10 @@ public enum MatchStatus
     // never reaches Finished - confirmed in production 2026-09-09: this alone doubled the
     // Highlightly call count on every tick and was a real contributor to that day's quota
     // exhaustion). Also excluded from the app's match listings entirely, same as the user's request.
-    Postponed
+    Postponed,
+
+    // Terminal: API-Football ABD/CANC, or INT/SUSP that never resumed. Its bet legs are voided
+    // rather than settled on whatever partial score was last seen, as a bookmaker would (Rayo
+    // Vallecano v Athletic Club, 2026-10-10, sat at INT for a day with no further update).
+    Abandoned
 }
