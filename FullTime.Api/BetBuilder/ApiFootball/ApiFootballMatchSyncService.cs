@@ -519,10 +519,11 @@ public class ApiFootballMatchSyncService(
         }
     }
 
-    // An interrupted match that hasn't resumed a day after kickoff is treated as abandoned -
-    // API-Football can leave one at INT indefinitely rather than ever moving it to ABD (Rayo
-    // Vallecano v Athletic Club, 2026-10-10).
-    private static readonly TimeSpan InterruptedAbandonAfter = TimeSpan.FromHours(24);
+    // An interrupted match still not resumed 2h after kickoff is treated as abandoned (owner's
+    // call) - API-Football can leave one at INT indefinitely rather than ever moving it to ABD
+    // (Rayo Vallecano v Athletic Club, 2026-10-10). A late interruption that does resume after
+    // this keeps its legs voided; settlement never revisits a Void leg.
+    private static readonly TimeSpan InterruptedAbandonAfter = TimeSpan.FromHours(2);
 
     // API-Football's short status codes. Confirmed live: NS, 1H, HT, 2H, FT, INT. The rest (ET, P,
     // PEN, SUSP, PST, CANC, ABD, AWD, WO) are API-Football's own documented set, not yet seen live —
