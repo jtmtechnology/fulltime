@@ -36,11 +36,21 @@ public partial class MainPage : ContentPage
     {
         public AndroidX.Core.View.WindowInsetsCompat OnApplyWindowInsets(Android.Views.View v, AndroidX.Core.View.WindowInsetsCompat insets)
         {
-            var systemBars = insets.GetInsets(AndroidX.Core.View.WindowInsetsCompat.Type.SystemBars());
+            // The root insets as well as the dispatched ones: a parent consuming the dispatched
+            // insets is the likeliest reason a 3-button Android 14 phone reported 0 here and lost its
+            // tab bar labels under the nav bar. Cutout included for teardrop-notch phones.
+            var types = AndroidX.Core.View.WindowInsetsCompat.Type.SystemBars()
+                | AndroidX.Core.View.WindowInsetsCompat.Type.DisplayCutout();
+            var dispatched = insets.GetInsets(types);
+            var root = AndroidX.Core.View.ViewCompat.GetRootWindowInsets(v)?.GetInsets(types);
             var density = v.Resources?.DisplayMetrics?.Density ?? 1f;
-            var bottomPx = systemBars.Bottom / density;
+            var topPx = Math.Max(dispatched.Top, root?.Top ?? 0) / density;
+            var bottomPx = Math.Max(dispatched.Bottom, root?.Bottom ?? 0) / density;
+            var culture = System.Globalization.CultureInfo.InvariantCulture;
             webView.EvaluateJavascript(
-                $"document.documentElement.style.setProperty('--android-nav-inset-bottom','{bottomPx.ToString(System.Globalization.CultureInfo.InvariantCulture)}px')",
+                "var s=document.documentElement.style;" +
+                $"s.setProperty('--android-status-inset-top','{topPx.ToString(culture)}px');" +
+                $"s.setProperty('--android-nav-inset-bottom','{bottomPx.ToString(culture)}px')",
                 null);
             return insets;
         }
