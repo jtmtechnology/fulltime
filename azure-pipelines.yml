@@ -1,0 +1,102 @@
+# iOS TestFlight build on Azure Pipelines' free Microsoft-hosted macOS tier (1,800 min/month, 60 min
+# per run). Mirrors codemagic.yaml's ios-testflight workflow; moved here because Codemagic's free
+# queue got too slow. Codemagic config is kept as a fallback.
+#
+# Manual runs only, so pushes to main don't burn minutes.
+trigger: none
+pr: none
+
+pool:
+  vmImage: macOS-15
+
+variables:
+  - group: app-store
+  - name: XCODE_VERSION
+    value: '26.6'
+  - name: DOTNET_PATH
+    value: $(Agent.TempDirectory)/dotnet
+  - name: DOTNET
+    value: $(Agent.TempDirectory)/dotnet/dotnet
+
+steps:
+  - script: |
+      set -euo pipefail
+      XCODE_APP="/Applications/Xcode_$(XCODE_VERSION).app"
+      if [ ! -d "$XCODE_APP" ]; then
+        # The toolchain pin (SDK/workload 10.0.401 + MAUI 10.0.20) only launches when built with
+        # this Xcode; a different one produced the 2026-09-30 launch crash. Fail rather than guess.
+        echo "##vso[task.logissue type=error]Xcode $(XCODE_VERSION) not on this image. Available:"
+        ls -d /Applications/Xcode_*.app
+        exit 1
+      fi
+      sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+      xcodebuild -version
+    displayName: Select Xcode $(XCODE_VERSION)
+
+  - script: |
+      set -euo pipefail
+      curl -sSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
+      chmod +x dotnet-install.sh
+      ./dotnet-install.sh --version 10.0.401 --install-dir "$(DOTNET_PATH)"
+    displayName: Install .NET SDK
+
+  - script: |
+      # Pinned: unpinned, 2026-09-29 pulled workload set 10.0.401.1 (.NET for iOS 27 + MAUI
+      # 10.0.110), which needed Xcode 27 and gave a build that crashed on launch. 10.0.401
+      # (iOS 26.5.10318, MAUI 10.0.20) on Xcode 26.6 is the last set known to launch.
+      "$(DOTNET)" workload install maui-ios --version 10.0.401
+    displayName: Install MAUI iOS workload
+
+  - task: InstallAppleCertificate@2
+    inputs:
+      certSecureFile: fulltime-distribution.p12
+      certPwd: $(P12_PASSWORD)
+      keychain: temp
+
+  - task: InstallAppleProvisioningProfile@1
+    inputs:
+      provisioningProfileLocation: secureFiles
+      provProfileSecureFile: fulltime-appstore.mobileprovision
+
+  - task: DownloadSecureFile@1
+    name: ascKey
+    inputs:
+      secureFile: asc-api-key.p8
+
+  - script: |
+      set -euo pipefail
+      PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "print :Name" /dev/stdin <<< \
+        "$(security cms -D -i "$HOME/Library/MobileDevice/Provisioning Profiles/$(APPLE_PROV_PROFILE_UUID).mobileprovision")")
+
+      # Offset keeps build numbers above everything Codemagic already uploaded for 1.0.0;
+      # App Store Connect rejects a CFBundleVersion it has seen before.
+      BUILD_NUMBER=$(( $(Build.BuildId) + 1000 ))
+      echo "Signing as '$(APPLE_CERTIFICATE_SIGNING_IDENTITY)' with profile '$PROFILE_NAME', build $BUILD_NUMBER"
+
+      cd FullTime.App/FullTime.App
+      "$(DOTNET)" publish -f net10.0-ios \
+        -c Release \
+        -p:IosOnlyBuild=true \
+        -p:BuildIpa=true \
+        -p:ApplicationDisplayVersion="1.0.0" \
+        -p:ApplicationVersion=$BUILD_NUMBER \
+        -p:RuntimeIdentifier=ios-arm64 \
+        -p:CodesignKey="$(APPLE_CERTIFICATE_SIGNING_IDENTITY)" \
+        -p:CodesignProvision="$PROFILE_NAME"
+    displayName: Build and sign for App Store
+
+  - script: |
+      set -euo pipefail
+      # altool only looks for the key in a few fixed folders, under this exact file name.
+      mkdir -p "$HOME/.appstoreconnect/private_keys"
+      cp "$(ascKey.secureFilePath)" "$HOME/.appstoreconnect/private_keys/AuthKey_$(ASC_KEY_ID).p8"
+      IPA=$(find FullTime.App/FullTime.App/bin/Release/net10.0-ios -name "*.ipa" | head -1)
+      xcrun altool --upload-app -f "$IPA" -t ios \
+        --apiKey "$(ASC_KEY_ID)" --apiIssuer "$(ASC_ISSUER_ID)"
+    displayName: Upload to TestFlight
+
+  - task: PublishPipelineArtifact@1
+    condition: succeededOrFailed()
+    inputs:
+      targetPath: FullTime.App/FullTime.App/bin/Release/net10.0-ios
+      artifact: ios-ipa
