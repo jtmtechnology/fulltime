@@ -62,8 +62,8 @@
     <ApplicationId Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">co.uk.jtmtechnology.fulltime.app</ApplicationId>
 
     <!-- Versions -->
-    <ApplicationDisplayVersion>1.15</ApplicationDisplayVersion>
-    <ApplicationVersion>22</ApplicationVersion>
+    <ApplicationDisplayVersion>1.16</ApplicationDisplayVersion>
+    <ApplicationVersion>23</ApplicationVersion>
 
     <!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
     <WindowsPackageType>None</WindowsPackageType>
@@ -74,7 +74,7 @@
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
     <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 
-    <!-- Push-notification entitlement — required on both the ad-hoc and App Store distribution
+    <!-- Push-notification entitlement â€” required on both the ad-hoc and App Store distribution
          profiles (aps-environment is "production" for any Distribution-type profile, not just App Store). -->
     <CodesignEntitlements Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">Platforms/iOS/Entitlements.plist</CodesignEntitlements>
   </PropertyGroup>
