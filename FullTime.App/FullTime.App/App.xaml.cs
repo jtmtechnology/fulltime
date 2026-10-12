@@ -6,10 +6,11 @@ public partial class App : Application
 {
     private readonly MauiAppLifecycle _lifecycle;
 
-    public App(MauiAppLifecycle lifecycle)
+    public App(MauiAppLifecycle lifecycle, MauiInstallReporter installReporter)
     {
         _lifecycle = lifecycle;
         InitializeComponent();
+        _ = installReporter.ReportIfFirstLaunchAsync();
     }
 
     protected override Window CreateWindow(IActivationState? activationState)

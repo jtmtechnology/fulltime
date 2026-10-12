@@ -154,6 +154,14 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         return await res.Content.ReadFromJsonAsync<List<BetDto>>() ?? [];
     }
 
+    // Anonymous - sent once from a fresh install so the owner hears about new users before they
+    // register. See InstallsController.
+    public async Task ReportInstallAsync(string platform, string appVersion)
+    {
+        var res = await httpClient.PostAsJsonAsync("api/installs", new { platform, appVersion });
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+    }
+
     public async Task<SpinStatusDto> GetSpinStatusAsync()
     {
         Authorize();

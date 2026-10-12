@@ -62,6 +62,7 @@ builder.Services.Configure<BettingOptions>(builder.Configuration.GetSection(Bett
 builder.Services.AddScoped<AuthService>();
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+builder.Services.AddSingleton<OwnerAlerts>();
 // Rollback-by-config toggle (see ProvidersOptions) — both Highlightly and its API-Football/
 // the-odds-api replacements stay compiled in and DI-registered regardless of which is active; only
 // the *hosted services* (the background loops that actually call out) are conditional, read

@@ -6,6 +6,7 @@ using FullTime.Api.Betting;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
 using FullTime.Api.Moderation;
+using FullTime.Api.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -17,6 +18,7 @@ public class AuthService(
     IOptions<JwtOptions> jwtOptions,
     IOptions<BettingOptions> bettingOptions,
     IEmailSender emailSender,
+    OwnerAlerts ownerAlerts,
     ILogger<AuthService> logger)
 {
     private static readonly TimeSpan VerificationTokenLifetime = TimeSpan.FromHours(24);
@@ -54,6 +56,7 @@ public class AuthService(
         await db.SaveChangesAsync(ct);
 
         await SendVerificationEmailAsync(user, baseUrl, ct);
+        ownerAlerts.NewRegistration(user.Name, user.Email);
 
         return new RegisterResult(RegisterOutcome.Success, user.Id);
     }
