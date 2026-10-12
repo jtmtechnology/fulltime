@@ -84,7 +84,7 @@ else
                         ? pendingBets.GroupBy(b => b.UserName).ToDictionary(g => g.Key, g => g.Sum(b => b.Stake))
                         : [];
 
-                    <p class="muted tap-hint">Tap a name to see their last 5 bets.</p>
+                    <p class="muted tap-hint">Tap a name to see their last 5 bets in this league.</p>
                     <div class="table-scroll">
                         <table class="simple-table">
                             <thead><tr><th>#</th><th>Name</th><th>Balance</th><th>Profit</th><th>Pending</th></tr></thead>
@@ -92,7 +92,7 @@ else
                                 @for (var i = 0; i < entries.Count; i++)
                                 {
                                     var entry = entries[i];
-                                    <tr class="clickable-row" @onclick="() => ToggleFriendBets(entry.UserId)">
+                                    <tr class="clickable-row" @onclick="() => ToggleFriendBets(league.Id, entry.UserId)">
                                         <td>@(i + 1)</td>
                                         <td>@entry.Name</td>
                                         <td>@entry.CurrencySymbol@entry.Balance.ToString("0.00")</td>
@@ -108,10 +108,10 @@ else
                                             }
                                         </td>
                                     </tr>
-                                    @if (_expandedUserId == entry.UserId)
+                                    @if (_expandedRow == (league.Id, entry.UserId))
                                     {
                                         <tr class="friend-bets-row">
-                                            <td colspan="5"><FriendBetsPanel UserId="@entry.UserId" CurrencySymbol="@entry.CurrencySymbol" /></td>
+                                            <td colspan="5"><FriendBetsPanel UserId="@entry.UserId" LeagueId="@league.Id" CurrencySymbol="@entry.CurrencySymbol" /></td>
                                         </tr>
                                     }
                                 }
@@ -175,12 +175,13 @@ else
     private Dictionary<Guid, List<PendingBetDto>> _leaguePendingBets = [];
     private bool _loadingLeagues = true;
     private Guid? _confirmingLeaveLeagueId;
-    private Guid? _expandedUserId;
+    private (Guid LeagueId, Guid UserId)? _expandedRow;
 
-    // One row expanded at a time (across either table) - collapses on a second tap of the same
-    // name; FriendBetsPanel does its own fetch on mount, so there's nothing else to load here.
-    private void ToggleFriendBets(Guid userId) =>
-        _expandedUserId = _expandedUserId == userId ? null : userId;
+    // One row expanded at a time - collapses on a second tap of the same name. Keyed by league as
+    // well as user because the panel is league-scoped and someone can sit in several of your league
+    // tables. FriendBetsPanel does its own fetch on mount, so there's nothing else to load here.
+    private void ToggleFriendBets(Guid leagueId, Guid userId) =>
+        _expandedRow = _expandedRow == (leagueId, userId) ? null : (leagueId, userId);
 
     private string _status = "Loading…";
     private bool _error;

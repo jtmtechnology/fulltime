@@ -1,4 +1,4 @@
-@* Expands under a tapped leaderboard row (either table) - fetches on mount rather than the parent
+@* Expands under a tapped league leaderboard row - fetches on mount rather than the parent
    pre-loading every row's bets up front, since only one row is ever expanded at a time. *@
 @inject ApiClient Api
 
@@ -21,6 +21,7 @@ else if (_bets is not null)
 
 @code {
     [Parameter, EditorRequired] public Guid UserId { get; set; }
+    [Parameter, EditorRequired] public Guid LeagueId { get; set; }
     [Parameter, EditorRequired] public string CurrencySymbol { get; set; } = "£";
 
     private List<BetDto>? _bets;
@@ -31,7 +32,7 @@ else if (_bets is not null)
     {
         try
         {
-            _bets = await Api.GetUserBetsAsync(UserId);
+            _bets = await Api.GetUserBetsAsync(UserId, LeagueId);
         }
         catch (Exception)
         {

@@ -109,11 +109,14 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
     // with the target, the same boundary GetLeagueLeaderboard/GetPendingBets already draw. Returns
     // 404 rather than 403 for a non-shared user, matching those endpoints' "don't confirm the id
     // exists" convention.
+    // leagueId scopes the list to the league table that was tapped - a member's Worldwide or
+    // other-league bets aren't that league's business. It's optional only because app builds before
+    // 1.16 don't send it; those still get the unscoped list.
     [HttpGet("user/{userId:guid}")]
-    public async Task<ActionResult<List<BetDto>>> GetUserBets(Guid userId, CancellationToken ct)
+    public async Task<ActionResult<List<BetDto>>> GetUserBets(Guid userId, [FromQuery] Guid? leagueId, CancellationToken ct)
     {
         var myLeagueIds = await db.LeagueMemberships
-            .Where(m => m.UserId == CurrentUserId)
+            .Where(m => m.UserId == CurrentUserId && (leagueId == null || m.LeagueId == leagueId))
             .Select(m => m.LeagueId)
             .ToListAsync(ct);
 
@@ -128,7 +131,7 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
             .Include(b => b.League)
             .Include(b => b.Legs).ThenInclude(l => l.Match)
             .Include(b => b.Legs).ThenInclude(l => l.Picks)
-            .Where(b => b.UserId == userId)
+            .Where(b => b.UserId == userId && (leagueId == null || b.LeagueId == leagueId))
             .OrderByDescending(b => b.PlacedAt)
             .Take(5)
             .ToListAsync(ct);

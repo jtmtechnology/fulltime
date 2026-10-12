@@ -146,10 +146,10 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
 
     // Only returns anything if the caller shares a league with userId - see
     // BetsController.GetUserBets. Backs the leaderboard's "tap a name" last-5-bets view.
-    public async Task<List<BetDto>> GetUserBetsAsync(Guid userId)
+    public async Task<List<BetDto>> GetUserBetsAsync(Guid userId, Guid leagueId)
     {
         Authorize();
-        var res = await httpClient.GetAsync($"api/bets/user/{userId}");
+        var res = await httpClient.GetAsync($"api/bets/user/{userId}?leagueId={leagueId}");
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
         return await res.Content.ReadFromJsonAsync<List<BetDto>>() ?? [];
     }
