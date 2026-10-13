@@ -1,10 +1,22 @@
-# iOS TestFlight build on Azure Pipelines' free Microsoft-hosted macOS tier (1,800 min/month, 60 min
-# per run). Mirrors codemagic.yaml's ios-testflight workflow; moved here because Codemagic's free
-# queue got too slow. Codemagic config is kept as a fallback.
+# iOS build on Azure Pipelines' free Microsoft-hosted macOS tier (1,800 min/month, 60 min per run).
+# Mirrors codemagic.yaml's ios-testflight and ios-ad-hoc workflows; moved here because Codemagic's
+# free queue got too slow. Codemagic config is kept as a fallback.
+#
+# Ad Hoc builds aren't uploaded anywhere - Azure has no install-link hosting, so the owner downloads
+# the ios-ipa-adhoc artifact and puts it on Diawi by hand.
 #
 # Manual runs only, so pushes to main don't burn minutes.
 trigger: none
 pr: none
+
+parameters:
+  - name: distribution
+    displayName: Distribution
+    type: string
+    default: appstore
+    values:
+      - appstore
+      - adhoc
 
 pool:
   vmImage: macOS-15
@@ -56,12 +68,7 @@ steps:
   - task: InstallAppleProvisioningProfile@1
     inputs:
       provisioningProfileLocation: secureFiles
-      provProfileSecureFile: fulltime-appstore.mobileprovision
-
-  - task: DownloadSecureFile@1
-    name: ascKey
-    inputs:
-      secureFile: asc-api-key.p8
+      provProfileSecureFile: fulltime-${{ parameters.distribution }}.mobileprovision
 
   - script: |
       set -euo pipefail
@@ -83,20 +90,26 @@ steps:
         -p:RuntimeIdentifier=ios-arm64 \
         -p:CodesignKey="$(APPLE_CERTIFICATE_SIGNING_IDENTITY)" \
         -p:CodesignProvision="$PROFILE_NAME"
-    displayName: Build and sign for App Store
+    displayName: Build and sign (${{ parameters.distribution }})
 
-  - script: |
-      set -euo pipefail
-      # altool only looks for the key in a few fixed folders, under this exact file name.
-      mkdir -p "$HOME/.appstoreconnect/private_keys"
-      cp "$(ascKey.secureFilePath)" "$HOME/.appstoreconnect/private_keys/AuthKey_$(ASC_KEY_ID).p8"
-      IPA=$(find FullTime.App/FullTime.App/bin/Release/net10.0-ios -name "*.ipa" | head -1)
-      xcrun altool --upload-app -f "$IPA" -t ios \
-        --apiKey "$(ASC_KEY_ID)" --apiIssuer "$(ASC_ISSUER_ID)"
-    displayName: Upload to TestFlight
+  - ${{ if eq(parameters.distribution, 'appstore') }}:
+      - task: DownloadSecureFile@1
+        name: ascKey
+        inputs:
+          secureFile: asc-api-key.p8
+
+      - script: |
+          set -euo pipefail
+          # altool only looks for the key in a few fixed folders, under this exact file name.
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          cp "$(ascKey.secureFilePath)" "$HOME/.appstoreconnect/private_keys/AuthKey_$(ASC_KEY_ID).p8"
+          IPA=$(find FullTime.App/FullTime.App/bin/Release/net10.0-ios -name "*.ipa" | head -1)
+          xcrun altool --upload-app -f "$IPA" -t ios \
+            --apiKey "$(ASC_KEY_ID)" --apiIssuer "$(ASC_ISSUER_ID)"
+        displayName: Upload to TestFlight
 
   - task: PublishPipelineArtifact@1
     condition: succeededOrFailed()
     inputs:
       targetPath: FullTime.App/FullTime.App/bin/Release/net10.0-ios
-      artifact: ios-ipa
+      artifact: ios-ipa-${{ parameters.distribution }}
