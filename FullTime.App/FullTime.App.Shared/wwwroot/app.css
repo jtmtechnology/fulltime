@@ -707,14 +707,51 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 .slip-sheet button[disabled] { opacity: 0.5; }
 
 .bet-list { display: flex; flex-direction: column; gap: 0.75rem; }
-.bet-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem; }
-.bet-card ul { list-style: none; margin: 0.5rem 0 0; padding: 0; }
-.bet-card li { padding: 0.25rem 0; font-size: 0.85rem; }
-.bet-leg-header { font-size: 0.85rem; }
-.bet-leg-score { margin: 0 0.35rem; white-space: nowrap; }
-.bet-leg-status { margin-left: 0.35rem; font-size: 0.8rem; }
-.bet-leg-picks { margin: 0.15rem 0 0.5rem; padding-left: 1rem; }
-.bet-leg-picks li { padding: 0.1rem 0; }
+.bet-card {
+    background: var(--bg-elevated); border: 1px solid var(--border); border-left: 3px solid var(--border);
+    border-radius: 10px; padding: 0.85rem; font-size: 0.85rem;
+}
+.bet-card-won { border-left-color: var(--accent); }
+.bet-card-lost { border-left-color: var(--danger); }
+.bet-card-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.bet-card-top .context-badge { margin-right: 0; }
+.bet-card-meta { font-size: 0.78rem; margin-top: 0.35rem; }
+
+.bet-status-pill {
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    border-radius: 999px; padding: 0.15rem 0.55rem; white-space: nowrap;
+    background: rgba(154,164,178,0.15); color: var(--text-muted);
+}
+.bet-status-won { background: rgba(57,255,136,0.15); color: var(--accent); }
+.bet-status-lost { background: rgba(255,77,94,0.15); color: var(--danger); }
+.bet-status-pending { background: rgba(255,176,32,0.15); color: var(--warn); }
+
+.bet-legs { margin-top: 0.35rem; }
+.bet-leg { padding: 0.6rem 0; border-top: 1px solid var(--border); }
+.bet-leg-meta { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.75rem; margin-bottom: 0.3rem; }
+.bet-leg-team { display: flex; align-items: center; padding: 0.1rem 0; }
+.bet-leg-team-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bet-leg-score { min-width: 1.5rem; text-align: right; font-size: 0.95rem; }
+
+.bet-pick { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; }
+.bet-pick-group { font-size: 0.75rem; margin-top: 0.45rem; }
+.bet-pick-group + .bet-pick { margin-top: 0.2rem; }
+.bet-pick-icon {
+    flex: none; width: 1.1rem; height: 1.1rem; border-radius: 50%; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700;
+    border: 1px solid var(--text-muted); color: var(--text-muted);
+}
+.bet-pick-correct { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.bet-pick-incorrect { border-color: var(--danger); background: var(--danger); color: var(--bg); }
+.bet-pick-label { flex: 1; min-width: 0; }
+.bet-pick-label.muted { color: var(--text); }
+.bet-pick-odds { font-weight: 700; white-space: nowrap; }
+
+.bet-card-totals { margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+.bet-card-totals > div { display: flex; justify-content: space-between; align-items: baseline; padding: 0.15rem 0; }
+.bet-total-label { color: var(--text-muted); }
+.bet-total-value { font-weight: 700; font-size: 0.95rem; }
+.bet-total-lost { color: var(--text-muted); text-decoration: line-through; }
 
 .context-badge {
     display: inline-block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;

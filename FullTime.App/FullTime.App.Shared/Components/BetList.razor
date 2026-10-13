@@ -5,67 +5,108 @@
 <div class="bet-list">
     @foreach (var bet in Bets)
     {
-        <div class="bet-card">
-            <div>
+        <div class="bet-card bet-card-@bet.Status.ToLowerInvariant()">
+            <div class="bet-card-top">
                 <span class="context-badge">@(bet.LeagueName ?? "Worldwide")</span>
-                <strong>@bet.PlacedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong> —
-                Stake @CurrencySymbol@bet.Stake.ToString("0.00") ·
-                Combined odds @bet.CombinedOdds.ToString("0.00") ·
-                Potential return @CurrencySymbol@bet.PotentialReturn.ToString("0.00") ·
-                <span class="@BetDisplay.StatusClass(bet.Status)">@bet.Status</span>
+                <span class="bet-status-pill bet-status-@bet.Status.ToLowerInvariant()">@bet.Status</span>
+            </div>
+            <div class="bet-card-meta muted">
+                @BetTypeLabel(bet) · @bet.PlacedAt.ToLocalTime().ToString("d MMM, HH:mm")
                 @if (bet.BoostApplied is not null)
                 {
-                    <span class="live"> · 🚀 @bet.BoostApplied applied</span>
+                    <span class="live"> · 🚀 @bet.BoostApplied</span>
                 }
             </div>
-            <ul>
+
+            <div class="bet-card-totals">
+                <div>
+                    <span class="bet-total-label">Stake</span>
+                    <span class="bet-total-value">@CurrencySymbol@bet.Stake.ToString("0.00")</span>
+                </div>
+                <div>
+                    <span class="bet-total-label">Combined odds</span>
+                    @* Decimal, not FormatOdds: its nearest-simple-ratio rounding turned a boosted 5.10
+                       into "4/1", which doesn't multiply out to the return shown below it. *@
+                    <span class="bet-total-value">@bet.CombinedOdds.ToString("0.00")</span>
+                </div>
+                <div>
+                    <span class="bet-total-label">@ReturnLabel(bet.Status)</span>
+                    <span class="bet-total-value @ReturnClass(bet.Status)">@CurrencySymbol@ReturnAmount(bet).ToString("0.00")</span>
+                </div>
+            </div>
+
+            <div class="bet-legs">
                 @foreach (var leg in bet.Legs)
                 {
-                    <li>
-                        <div class="bet-leg-header">
-                            <span class="muted">@leg.KickoffTime.ToLocalTime().ToString("ddd d MMM HH:mm")</span> —
-                            <LogoImg Src="@leg.HomeLogoUrl" CssClass="team-logo" Alt="@leg.HomeTeam" />@leg.HomeTeam
-                            @if (HasScore(leg))
-                            {
-                                <strong class="bet-leg-score">@leg.HomeScore - @leg.AwayScore</strong>
-                            }
-                            else
-                            {
-                                <text> v </text>
-                            }
-                            <LogoImg Src="@leg.AwayLogoUrl" CssClass="team-logo" Alt="@leg.AwayTeam" />@leg.AwayTeam
+                    <div class="bet-leg">
+                        <div class="bet-leg-meta">
+                            <span class="muted">@leg.KickoffTime.ToLocalTime().ToString("ddd d MMM, HH:mm")</span>
                             @if (leg.MatchStatus == "InProgress")
                             {
-                                <span class="live-clock bet-leg-status">Live</span>
+                                <span class="live-clock">Live</span>
                             }
                             else if (leg.MatchStatus == "Finished")
                             {
-                                <span class="live-clock finished bet-leg-status">@MatchDisplay.FinishedLabel(leg.WentToExtraTime)</span>
-                                @if (MatchDisplay.PenaltyScoreText(leg.HomePenalties, leg.AwayPenalties) is { } pens)
-                                {
-                                    <span class="live-clock finished bet-leg-status">(@pens)</span>
-                                }
+                                <span class="live-clock finished">
+                                    @MatchDisplay.FinishedLabel(leg.WentToExtraTime)
+                                    @if (MatchDisplay.PenaltyScoreText(leg.HomePenalties, leg.AwayPenalties) is { } pens)
+                                    {
+                                        <text> (@pens)</text>
+                                    }
+                                </span>
                             }
                             else if (leg.MatchStatus is "Postponed" or "Abandoned")
                             {
-                                <span class="live-clock postponed bet-leg-status">@leg.MatchStatus</span>
+                                <span class="live-clock postponed">@leg.MatchStatus</span>
                             }
                         </div>
-                        <ul class="bet-leg-picks">
-                            @foreach (var pick in leg.Picks)
+                        <div class="bet-leg-team">
+                            <LogoImg Src="@leg.HomeLogoUrl" CssClass="team-logo" Alt="@leg.HomeTeam" />
+                            <span class="bet-leg-team-name">@leg.HomeTeam</span>
+                            @if (HasScore(leg))
                             {
-                                <li class="@BetDisplay.StatusClass(pick.Outcome)">
-                                    @BetDisplay.PickLabel(pick, leg.HomeTeam, leg.AwayTeam) (@pick.Outcome)
+                                <strong class="bet-leg-score">@leg.HomeScore</strong>
+                            }
+                        </div>
+                        <div class="bet-leg-team">
+                            <LogoImg Src="@leg.AwayLogoUrl" CssClass="team-logo" Alt="@leg.AwayTeam" />
+                            <span class="bet-leg-team-name">@leg.AwayTeam</span>
+                            @if (HasScore(leg))
+                            {
+                                <strong class="bet-leg-score">@leg.AwayScore</strong>
+                            }
+                        </div>
+
+                        @* A Bet Builder leg is priced as a whole (correlated picks), not as the product
+                           of its picks, so its odds belong on the leg rather than on each pick. Skipped
+                           when it's the bet's only leg - the totals row already shows the same price. *@
+                        @if (leg.Picks.Count > 1 && bet.Legs.Count > 1)
+                        {
+                            <div class="bet-pick bet-pick-group muted">
+                                <span class="bet-pick-label">Bet Builder</span>
+                                <span class="bet-pick-odds">@OddsCell.FormatOdds(leg.OddsAtPlacement)</span>
+                            </div>
+                        }
+                        @foreach (var pick in leg.Picks)
+                        {
+                            <div class="bet-pick">
+                                <span class="bet-pick-icon bet-pick-@pick.Outcome.ToLowerInvariant()">@OutcomeIcon(pick.Outcome)</span>
+                                <span class="bet-pick-label @BetDisplay.StatusClass(pick.Outcome)">
+                                    @BetDisplay.PickLabel(pick, leg.HomeTeam, leg.AwayTeam)
                                     @if (pick.PaidOutEarly)
                                     {
                                         <span class="early-payout-tag">⚡ Early payout</span>
                                     }
-                                </li>
-                            }
-                        </ul>
-                    </li>
+                                </span>
+                                @if (leg.Picks.Count == 1)
+                                {
+                                    <span class="bet-pick-odds">@OddsCell.FormatOdds(pick.OddsAtPlacement)</span>
+                                }
+                            </div>
+                        }
+                    </div>
                 }
-            </ul>
+            </div>
         </div>
     }
 </div>
@@ -76,4 +117,38 @@
 
     private static bool HasScore(BetLegDto leg) =>
         leg.MatchStatus is "InProgress" or "Finished" && leg.HomeScore is not null && leg.AwayScore is not null;
+
+    private static string BetTypeLabel(BetDto bet) => bet.Legs.Count switch
+    {
+        1 when bet.Legs[0].Picks.Count > 1 => "Bet Builder",
+        1 => "Single",
+        2 => "Double",
+        3 => "Treble",
+        var n => $"{n}-fold acca",
+    };
+
+    private static string OutcomeIcon(string outcome) => outcome switch
+    {
+        "Correct" => "✓",
+        "Incorrect" => "✕",
+        "Void" => "–",
+        _ => "",
+    };
+
+    private static string ReturnLabel(string status) => status switch
+    {
+        "Won" => "Returned",
+        "Void" => "Refunded",
+        _ => "Potential return",
+    };
+
+    // A void bet hands back the stake, not PotentialReturn - showing the latter would read as a win.
+    private static decimal ReturnAmount(BetDto bet) => bet.Status == "Void" ? bet.Stake : bet.PotentialReturn;
+
+    private static string ReturnClass(string status) => status switch
+    {
+        "Won" => "live",
+        "Lost" => "bet-total-lost",
+        _ => "",
+    };
 }
