@@ -19,7 +19,8 @@ parameters:
       - adhoc
 
 pool:
-  vmImage: macOS-15
+  # macOS-15 tops out at Xcode 26.3; the pinned toolchain needs 26.6.
+  vmImage: macOS-26
 
 variables:
   - group: app-store
