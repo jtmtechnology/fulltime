@@ -217,7 +217,9 @@ public class SettlementService(
                 };
             case MarketType.PlayerGoalscorerAnytime:
             {
-                var scored = FindPlayerEvent(match, pick, "Goal") is not null;
+                // Live sync stores a scored penalty as "Penalty", not "Goal" (MapEventType), and a
+                // penalty counts as a goal for the scorer. Own goals and missed penalties don't.
+                var scored = FindPlayerEvent(match, pick, "Goal", "Penalty") is not null;
                 return pick.Side switch { SelectionSide.Yes => scored, SelectionSide.No => !scored, _ => false };
             }
             case MarketType.PlayerCard:
@@ -317,12 +319,12 @@ public class SettlementService(
     // A player with no matching event genuinely didn't do the thing (no goal, no card) — that's a
     // legitimate No/0 outcome, not "still unresolved" (the ResolvePicksAsync guard above already
     // ensures EventsFinalizedAt is set before any pick here is evaluated at all).
-    private static MatchEvent? FindPlayerEvent(Match match, BetLegPick pick, string eventType)
+    private static MatchEvent? FindPlayerEvent(Match match, BetLegPick pick, params string[] eventTypes)
     {
         var surname = Surname(pick.PlayerName);
         var team = pick.Team switch { "Home" => SelectionSide.Home, "Away" => SelectionSide.Away, _ => (SelectionSide?)null };
         return match.Events.FirstOrDefault(e =>
-            e.Type == eventType && string.Equals(Surname(e.PlayerName), surname, StringComparison.OrdinalIgnoreCase)
+            eventTypes.Contains(e.Type) && string.Equals(Surname(e.PlayerName), surname, StringComparison.OrdinalIgnoreCase)
             && (team is null || e.Team == team));
     }
 
@@ -336,7 +338,7 @@ public class SettlementService(
         var surname = Surname(pick.PlayerName);
         var team = pick.Team switch { "Home" => SelectionSide.Home, "Away" => SelectionSide.Away, _ => (SelectionSide?)null };
         return match.Events.Count(e =>
-            e.Type == "Goal" && string.Equals(Surname(e.AssistPlayerName), surname, StringComparison.OrdinalIgnoreCase)
+            e.Type is "Goal" or "Penalty" && string.Equals(Surname(e.AssistPlayerName), surname, StringComparison.OrdinalIgnoreCase)
             && (team is null || e.Team == team));
     }
 
