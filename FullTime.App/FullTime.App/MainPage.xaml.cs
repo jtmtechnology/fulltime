@@ -34,11 +34,20 @@ public partial class MainPage : ContentPage
     private sealed class SafeAreaInsetListener(Android.Webkit.WebView webView)
         : Java.Lang.Object, AndroidX.Core.View.IOnApplyWindowInsetsListener
     {
+        // Insets usually arrive while the WebView still holds its placeholder document, and the real
+        // page load then throws the inline style away - the owner's Samsung ended up with a 0px nav
+        // inset and its 3-button nav drawn over the tab labels. So keep re-applying until the script
+        // runs in the loaded Blazor page. ~10s of retries covers a slow cold start.
+        private const int RetryDelayMs = 250;
+        private const int MaxRetries = 40;
+
+        private string script = "";
+        private int retriesLeft;
+
         public AndroidX.Core.View.WindowInsetsCompat OnApplyWindowInsets(Android.Views.View v, AndroidX.Core.View.WindowInsetsCompat insets)
         {
-            // The root insets as well as the dispatched ones: a parent consuming the dispatched
-            // insets is the likeliest reason a 3-button Android 14 phone reported 0 here and lost its
-            // tab bar labels under the nav bar. Cutout included for teardrop-notch phones.
+            // The root insets as well as the dispatched ones, in case a parent consumes the
+            // dispatched insets. Cutout included for teardrop-notch phones.
             var types = AndroidX.Core.View.WindowInsetsCompat.Type.SystemBars()
                 | AndroidX.Core.View.WindowInsetsCompat.Type.DisplayCutout();
             var dispatched = insets.GetInsets(types);
@@ -47,12 +56,28 @@ public partial class MainPage : ContentPage
             var topPx = Math.Max(dispatched.Top, root?.Top ?? 0) / density;
             var bottomPx = Math.Max(dispatched.Bottom, root?.Bottom ?? 0) / density;
             var culture = System.Globalization.CultureInfo.InvariantCulture;
-            webView.EvaluateJavascript(
+            script =
                 "var s=document.documentElement.style;" +
                 $"s.setProperty('--android-status-inset-top','{topPx.ToString(culture)}px');" +
-                $"s.setProperty('--android-nav-inset-bottom','{bottomPx.ToString(culture)}px')",
-                null);
+                $"s.setProperty('--android-nav-inset-bottom','{bottomPx.ToString(culture)}px');" +
+                "document.readyState==='complete'&&!!window.Blazor";
+            retriesLeft = MaxRetries;
+            Apply();
             return insets;
+        }
+
+        private void Apply() => webView.EvaluateJavascript(script, new AppliedCallback(this));
+
+        private void RetryUnlessApplied(Java.Lang.Object? result)
+        {
+            if (result?.ToString() == "true" || retriesLeft-- <= 0)
+                return;
+            webView.PostDelayed(Apply, RetryDelayMs);
+        }
+
+        private sealed class AppliedCallback(SafeAreaInsetListener owner) : Java.Lang.Object, Android.Webkit.IValueCallback
+        {
+            public void OnReceiveValue(Java.Lang.Object? value) => owner.RetryUnlessApplied(value);
         }
     }
 #endif
