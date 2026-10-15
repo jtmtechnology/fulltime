@@ -15,11 +15,13 @@ public record PlaceBetRequest(decimal Stake, List<LegRequest> Legs, Guid? League
 
 public record BetLegPickDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore,
-    decimal OddsAtPlacement, string Outcome, string? PlayerName, string? Team, bool PaidOutEarly = false);
+    decimal OddsAtPlacement, string Outcome, string? PlayerName, string? Team, bool PaidOutEarly = false,
+    string? LiveState = null);
 public record BetLegDto(
     Guid MatchId, string HomeTeam, string AwayTeam, string? HomeLogoUrl, string? AwayLogoUrl,
     DateTime KickoffTime, decimal OddsAtPlacement, string Outcome, List<BetLegPickDto> Picks,
-    string MatchStatus, int? HomeScore, int? AwayScore, int? HomePenalties, int? AwayPenalties, bool WentToExtraTime);
+    string MatchStatus, int? HomeScore, int? AwayScore, int? HomePenalties, int? AwayPenalties, bool WentToExtraTime,
+    int? Minute, int? AddedTimeMinutes, bool IsHalfTime);
 public record BetDto(Guid Id, decimal Stake, decimal CombinedOdds, decimal PotentialReturn, string Status,
     DateTime PlacedAt, DateTime? SettledAt, Guid? LeagueId, string? LeagueName, string? BoostApplied, List<BetLegDto> Legs,
     string? BoostSkippedReason = null);
@@ -100,6 +102,7 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
             .Take(20)
             .ToListAsync(ct);
 
+        await LoadLiveEventsAsync(bets, ct);
         return Ok(bets.Select(ToBetDto).ToList());
     }
 
@@ -136,6 +139,7 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
             .Take(5)
             .ToListAsync(ct);
 
+        await LoadLiveEventsAsync(bets, ct);
         return Ok(bets.Select(ToBetDto).ToList());
     }
 
@@ -147,7 +151,30 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
             .Include(b => b.Legs).ThenInclude(l => l.Picks)
             .FirstOrDefaultAsync(b => b.Id == betId, ct);
 
-        return bet is null ? null : ToBetDto(bet);
+        if (bet is null)
+        {
+            return null;
+        }
+
+        await LoadLiveEventsAsync([bet], ct);
+        return ToBetDto(bet);
+    }
+
+    // Only live matches' events - LivePickState ignores everything else, and a finished match's
+    // full event list for every bet on the page would be wasted rows. Loaded into the tracked
+    // Match entities, so EF fixes them up onto Match.Events without an Include.
+    private async Task LoadLiveEventsAsync(List<Bet> bets, CancellationToken ct)
+    {
+        var liveMatchIds = bets.SelectMany(b => b.Legs)
+            .Where(l => l.Match!.Status == MatchStatus.InProgress && l.Outcome == SelectionOutcome.Pending)
+            .Select(l => l.MatchId)
+            .Distinct()
+            .ToList();
+
+        if (liveMatchIds.Count > 0)
+        {
+            await db.MatchEvents.Where(e => liveMatchIds.Contains(e.MatchId)).LoadAsync(ct);
+        }
     }
 
     private static BetDto ToBetDto(Bet b) => new(
@@ -165,13 +192,16 @@ public class BetsController(AppDbContext db, BetService betService) : Controller
             l.Picks.Select(p => new BetLegPickDto(
                 p.MarketType.ToString(), p.Line, p.Side.HasValue ? p.Side.ToString() : null,
                 p.PredictedHomeScore, p.PredictedAwayScore, p.OddsAtPlacement, p.Outcome.ToString(),
-                p.PlayerName, p.Team, p.PaidOutEarlyAt != null)).ToList(),
+                p.PlayerName, p.Team, p.PaidOutEarlyAt != null, LivePickState.For(p, l.Match!))).ToList(),
             l.Match!.Status.ToString(),
             l.Match!.HomeScore,
             l.Match!.AwayScore,
             l.Match!.HomePenalties,
             l.Match!.AwayPenalties,
-            l.Match!.WentToExtraTime
+            l.Match!.WentToExtraTime,
+            l.Match!.Minute,
+            l.Match!.AddedTimeMinutes,
+            l.Match!.IsHalfTime
         )).ToList());
 
     private Guid CurrentUserId =>

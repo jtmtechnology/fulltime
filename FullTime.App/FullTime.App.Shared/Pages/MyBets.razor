@@ -3,6 +3,8 @@
 @inject AuthState AuthState
 @inject ActiveContextState ContextState
 @inject NavigationManager Nav
+@inject MatchUpdatesClient MatchUpdates
+@implements IDisposable
 
 <PageTitle>FullTime — My Bets</PageTitle>
 
@@ -49,7 +51,118 @@ else if (!string.IsNullOrEmpty(_status))
         {
             _status = $"Error: {ex.Message}";
             _error = true;
+            return;
+        }
+
+        // A failed connection just leaves the page as loaded, same as before live updates existed.
+        MatchUpdates.MatchUpdated += OnMatchUpdated;
+        MatchUpdates.MatchEventsUpdated += OnMatchEventsUpdated;
+        try
+        {
+            await MatchUpdates.EnsureStartedAsync();
+        }
+        catch
+        {
         }
     }
 
+    // The server re-evaluates every live pick (BetLegPickDto.LiveState) on each fetch, so a score or
+    // status change on one of this user's undecided legs refetches. Minute ticks arrive every minute
+    // and can't move a pick, so they only patch the clock in place.
+    private void OnMatchUpdated(MatchLiveUpdate update)
+    {
+        if (PendingLeg(update.MatchId) is not { } leg)
+        {
+            return;
+        }
+
+        var scoreOrStatusChanged = leg.HomeScore != update.HomeScore || leg.AwayScore != update.AwayScore
+            || leg.MatchStatus != update.Status;
+
+        _ = InvokeAsync(async () =>
+        {
+            PatchClock(update);
+            StateHasChanged();
+            if (scoreOrStatusChanged)
+            {
+                await RefreshAsync();
+            }
+        });
+    }
+
+    // BetLegDto is a positional record, so each matching leg is replaced rather than mutated. The
+    // same match can sit in several bets.
+    private void PatchClock(MatchLiveUpdate update)
+    {
+        foreach (var legs in _bets!.Select(b => b.Legs))
+        {
+            for (var i = 0; i < legs.Count; i++)
+            {
+                if (legs[i].MatchId == update.MatchId)
+                {
+                    legs[i] = legs[i] with
+                    {
+                        MatchStatus = update.Status,
+                        HomeScore = update.HomeScore,
+                        AwayScore = update.AwayScore,
+                        Minute = update.Minute,
+                        AddedTimeMinutes = update.AddedTimeMinutes,
+                        IsHalfTime = update.IsHalfTime,
+                    };
+                }
+            }
+        }
+    }
+
+    // A booking or a goalscorer's name landing in the feed (player picks) - no score change involved.
+    private void OnMatchEventsUpdated(Guid matchId)
+    {
+        if (PendingLeg(matchId) is not null)
+        {
+            _ = InvokeAsync(RefreshAsync);
+        }
+    }
+
+    private BetLegDto? PendingLeg(Guid matchId) =>
+        _bets?.SelectMany(b => b.Legs).FirstOrDefault(l => l.MatchId == matchId && l.Outcome == "Pending");
+
+    // Two pushes can land close together (a goal is a score change, then an events change a poll
+    // later); the second waits for the first fetch rather than racing it.
+    private bool _refreshing;
+    private bool _refreshAgain;
+
+    private async Task RefreshAsync()
+    {
+        if (_refreshing)
+        {
+            _refreshAgain = true;
+            return;
+        }
+
+        _refreshing = true;
+        try
+        {
+            do
+            {
+                _refreshAgain = false;
+                _bets = await Api.GetMyBetsAsync();
+                StateHasChanged();
+            }
+            while (_refreshAgain);
+        }
+        catch
+        {
+            // Keeps showing the last good list; the next push tries again.
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        MatchUpdates.MatchUpdated -= OnMatchUpdated;
+        MatchUpdates.MatchEventsUpdated -= OnMatchEventsUpdated;
+    }
 }

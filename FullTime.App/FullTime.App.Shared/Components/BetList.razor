@@ -43,7 +43,7 @@
                             <span class="muted">@leg.KickoffTime.ToLocalTime().ToString("ddd d MMM, HH:mm")</span>
                             @if (leg.MatchStatus == "InProgress")
                             {
-                                <span class="live-clock">Live</span>
+                                <span class="live-clock">@(MatchDisplay.LiveClock(leg.Minute, leg.AddedTimeMinutes, leg.IsHalfTime) ?? "Live")</span>
                             }
                             else if (leg.MatchStatus == "Finished")
                             {
@@ -90,12 +90,16 @@
                         @foreach (var pick in leg.Picks)
                         {
                             <div class="bet-pick">
-                                <span class="bet-pick-icon bet-pick-@pick.Outcome.ToLowerInvariant()">@OutcomeIcon(pick.Outcome)</span>
+                                <span class="bet-pick-icon @PickIconClass(pick)">@PickIcon(pick)</span>
                                 <span class="bet-pick-label @BetDisplay.StatusClass(pick.Outcome)">
                                     @BetDisplay.PickLabel(pick, leg.HomeTeam, leg.AwayTeam)
                                     @if (pick.PaidOutEarly)
                                     {
                                         <span class="early-payout-tag">⚡ Early payout</span>
+                                    }
+                                    @if (pick.LiveState is { } liveState)
+                                    {
+                                        <span class="live-pick-tag live-pick-@liveState.ToLowerInvariant()">@LiveTagText(pick, leg, liveState)</span>
                                     }
                                 </span>
                                 @if (leg.Picks.Count == 1)
@@ -134,6 +138,39 @@
         "Void" => "–",
         _ => "",
     };
+
+    // A live Landed/Dead gets an outlined circle rather than the filled settled one: VAR can still
+    // take a goal back, and nothing is paid until full time.
+    private static string PickIconClass(BetLegPickDto pick) => pick.LiveState switch
+    {
+        "Landed" => "bet-pick-landed",
+        "Dead" => "bet-pick-dead",
+        _ => $"bet-pick-{pick.Outcome.ToLowerInvariant()}",
+    };
+
+    private static string PickIcon(BetLegPickDto pick) => pick.LiveState switch
+    {
+        "Landed" => "✓",
+        "Dead" => "✕",
+        _ => OutcomeIcon(pick.Outcome),
+    };
+
+    private static string LiveTagText(BetLegPickDto pick, BetLegDto leg, string liveState)
+    {
+        if (liveState == "Losing" && pick.MarketType == "OverUnder" && pick.Side == "Over" && pick.Line is { } line)
+        {
+            var needed = (int)Math.Floor(line) + 1 - ((leg.HomeScore ?? 0) + (leg.AwayScore ?? 0));
+            return needed == 1 ? "Needs 1 more goal" : $"Needs {needed} more goals";
+        }
+
+        return liveState switch
+        {
+            "Landed" => "Landed",
+            "Dead" => "Gone",
+            "Winning" => "Winning",
+            _ => "Losing",
+        };
+    }
 
     private static string ReturnLabel(string status) => status switch
     {

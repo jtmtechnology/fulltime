@@ -67,13 +67,15 @@ public record PlaceBetRequest(decimal Stake, List<LegRequest> Legs, Guid? League
 
 public record BetLegPickDto(
     string MarketType, decimal? Line, string? Side, int? PredictedHomeScore, int? PredictedAwayScore,
-    decimal OddsAtPlacement, string Outcome, string? PlayerName = null, string? Team = null, bool PaidOutEarly = false);
+    decimal OddsAtPlacement, string Outcome, string? PlayerName = null, string? Team = null, bool PaidOutEarly = false,
+    string? LiveState = null);
 public record BetLegDto(
     Guid MatchId, string HomeTeam, string AwayTeam, string? HomeLogoUrl, string? AwayLogoUrl,
     DateTime KickoffTime, decimal OddsAtPlacement, string Outcome, List<BetLegPickDto> Picks,
     // Defaulted so this build still works against an API that doesn't send the match score yet.
     string MatchStatus = "Upcoming", int? HomeScore = null, int? AwayScore = null,
-    int? HomePenalties = null, int? AwayPenalties = null, bool WentToExtraTime = false);
+    int? HomePenalties = null, int? AwayPenalties = null, bool WentToExtraTime = false,
+    int? Minute = null, int? AddedTimeMinutes = null, bool IsHalfTime = false);
 public record BetDto(Guid Id, decimal Stake, decimal CombinedOdds, decimal PotentialReturn, string Status,
     DateTime PlacedAt, DateTime? SettledAt, Guid? LeagueId, string? LeagueName, string? BoostApplied, List<BetLegDto> Legs,
     string? BoostSkippedReason = null);

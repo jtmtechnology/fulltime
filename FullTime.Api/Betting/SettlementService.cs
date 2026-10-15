@@ -174,7 +174,7 @@ public class SettlementService(
         logger.LogInformation("Resolved {Count} bet pick(s)", pendingPicks.Count);
     }
 
-    private static bool IsPickCorrect(BetLegPick pick, Match match)
+    internal static bool IsPickCorrect(BetLegPick pick, Match match)
     {
         var home = match.HomeScore!.Value;
         var away = match.AwayScore!.Value;

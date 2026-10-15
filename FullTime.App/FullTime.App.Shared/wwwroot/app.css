@@ -743,6 +743,15 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 }
 .bet-pick-correct { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .bet-pick-incorrect { border-color: var(--danger); background: var(--danger); color: var(--bg); }
+.bet-pick-landed { border-color: var(--accent); color: var(--accent); }
+.bet-pick-dead { border-color: var(--danger); color: var(--danger); }
+.live-pick-tag {
+    display: inline-block; margin-left: 0.35rem; padding: 0.05rem 0.45rem; border-radius: 999px;
+    border: 1px solid currentColor; font-size: 0.7rem; font-weight: 700; white-space: nowrap;
+}
+.live-pick-landed, .live-pick-winning { color: var(--accent); }
+.live-pick-dead { color: var(--danger); }
+.live-pick-losing { color: var(--text-muted); }
 .bet-pick-label { flex: 1; min-width: 0; }
 .bet-pick-label.muted { color: var(--text); }
 .bet-pick-odds { font-weight: 700; white-space: nowrap; }

@@ -12,5 +12,6 @@ public record MatchLiveUpdate(
 // No client-callable methods — this hub only pushes. HighlightlyMatchSyncService broadcasts to it
 // (via IHubContext<MatchUpdatesHub>) whenever a tracked match's score or status actually changes,
 // so connected clients (Matches.razor, via MatchUpdatesClient) see it immediately instead of
-// waiting for their own next poll.
+// waiting for their own next poll. "MatchEventsUpdated" (just the match ID) is sent when a live
+// match's event list changes, for My Bets' player picks.
 public class MatchUpdatesHub : Hub;

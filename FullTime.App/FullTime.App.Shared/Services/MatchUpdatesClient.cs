@@ -16,6 +16,7 @@ public class MatchUpdatesClient(ApiClient api) : IAsyncDisposable
     private HubConnection? _connection;
 
     public event Action<MatchLiveUpdate>? MatchUpdated;
+    public event Action<Guid>? MatchEventsUpdated;
 
     public async Task EnsureStartedAsync()
     {
@@ -33,6 +34,7 @@ public class MatchUpdatesClient(ApiClient api) : IAsyncDisposable
             .Build();
 
         _connection.On<MatchLiveUpdate>("MatchUpdated", update => MatchUpdated?.Invoke(update));
+        _connection.On<Guid>("MatchEventsUpdated", matchId => MatchEventsUpdated?.Invoke(matchId));
 
         await _connection.StartAsync();
     }

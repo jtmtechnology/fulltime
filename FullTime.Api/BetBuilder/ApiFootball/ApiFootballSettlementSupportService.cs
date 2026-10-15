@@ -3,6 +3,8 @@ using FullTime.Api.BetBuilder.OddsApi;
 using FullTime.Api.Data;
 using FullTime.Api.Models;
 using FullTime.Api.Notifications;
+using FullTime.Api.Realtime;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -18,8 +20,11 @@ public class ApiFootballSettlementSupportService(
     AppDbContext db,
     IOptions<ApiFootballOptions> options,
     MatchAlertService matchAlerts,
+    IHubContext<MatchUpdatesHub> hub,
     ILogger<ApiFootballSettlementSupportService> logger)
 {
+    // Set by FetchAndStoreEventsAsync, read straight after by RefreshLiveMatchEventsAsync.
+    private bool _lastFetchChangedEvents;
 
     // Resolves MarketType.FirstTeamToScore (can't be derived from the final score alone) AND
     // populates MatchEvent/EventsFinalizedAt for TotalCorners/PlayerGoalscorerAnytime/PlayerCard/
@@ -190,6 +195,14 @@ public class ApiFootballSettlementSupportService(
                 await FetchAndStoreEventsAsync(match, ct);
                 await db.SaveChangesAsync(ct);
                 refreshedCount++;
+
+                // A booking or a scorer doesn't move the score, so MatchUpdated never fires for it;
+                // My Bets needs its own nudge to re-check player picks. Sent after the save - the
+                // delete above has already run, so a refetch any earlier sees no events at all.
+                if (_lastFetchChangedEvents)
+                {
+                    await hub.Clients.All.SendAsync("MatchEventsUpdated", match.Id, ct);
+                }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -289,6 +302,7 @@ public class ApiFootballSettlementSupportService(
         }).ToList();
 
         db.MatchEvents.AddRange(newRows);
+        _lastFetchChangedEvents = !newRows.Select(r => (r.Team, r.Minute, r.Type, r.PlayerName)).ToHashSet().SetEquals(previousKeySet);
 
         // Gated to the live path only (match still InProgress right now) - ResolveMatchEventsAsync's
         // post-Finished backfill calls this same method, and a match whose events are being resolved

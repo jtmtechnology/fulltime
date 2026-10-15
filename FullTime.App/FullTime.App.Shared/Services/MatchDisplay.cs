@@ -15,4 +15,11 @@ public static class MatchDisplay
 
     public static string? PenaltyScoreText(int? homePenalties, int? awayPenalties) =>
         homePenalties is { } home && awayPenalties is { } away ? $"{home}-{away} pens" : null;
+
+    // Same rules as MatchCard's LiveClockText: "HT", "63'", "90+3'", or null with no clock yet.
+    public static string? LiveClock(int? minute, int? addedTimeMinutes, bool isHalfTime) => isHalfTime
+        ? "HT"
+        : minute is { } m
+            ? addedTimeMinutes is { } added && added > 0 ? $"{m}+{added}'" : $"{m}'"
+            : null;
 }
