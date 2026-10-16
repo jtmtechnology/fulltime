@@ -446,6 +446,29 @@
         return total <= 0 ? 50 : row.HomeValue / total * 100;
     }
 
+    // API-Football never sends its documented "Second Yellow card" detail - a second booking arrives as
+    // a second "Yellow Card" plus a "Red Card" for the same player in the same minute (confirmed on
+    // fixtures 1557424, 1528924, 1550119, 1636392). That same-minute yellow is often missing from our
+    // stored events (it seems to be added to the feed after our last fetch), so the test is "booked
+    // earlier in the match", not "booked in the same minute". The rare straight red for an
+    // already-booked player shows as a second yellow too - accepted, since the feed can't tell them apart.
+    private static List<MatchEventDto> MergeSecondYellows(List<MatchEventDto> events)
+    {
+        var secondYellowKeys = events
+            .Where(e => e.Type == "Red Card" && e.PlayerName is not null)
+            .Where(r => events.Any(y => y.Type == "Yellow Card" && y.Team == r.Team && y.PlayerName == r.PlayerName
+                && BaseMinute(y.Minute) <= BaseMinute(r.Minute)))
+            .Select(e => (e.Team, e.Minute, e.PlayerName))
+            .ToHashSet();
+
+        return events
+            .Where(e => !(e.Type == "Yellow Card" && secondYellowKeys.Contains((e.Team, e.Minute, e.PlayerName))))
+            .Select(e => e.Type == "Red Card" && secondYellowKeys.Contains((e.Team, e.Minute, e.PlayerName))
+                ? e with { Type = "Second Yellow" }
+                : e)
+            .ToList();
+    }
+
     private async Task LoadEventsAsync(Guid matchId)
     {
         _eventsLoadedForMatchId = matchId;
@@ -454,7 +477,7 @@
 
         try
         {
-            _events = await Api.GetMatchEventsAsync(matchId);
+            _events = MergeSecondYellows(await Api.GetMatchEventsAsync(matchId));
         }
         catch (Exception)
         {

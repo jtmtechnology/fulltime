@@ -24,6 +24,8 @@
         "VAR Penalty" or "VAR Card" => "📺",
         "Yellow Card" => "🟨",
         "Red Card" => "🟥",
+        // Client-only type - see MatchSummarySheet.MergeSecondYellows.
+        "Second Yellow" => "🟨🟥",
         "Substitution" => "⇄",
         _ => "•",
     };
@@ -44,6 +46,7 @@
         "Own Goal" => $"{Event.PlayerName} (Own Goal)",
         "VAR Goal Cancelled" => $"{Event.PlayerName} (Disallowed)",
         "VAR Card" => $"{Event.PlayerName} (VAR card review)",
+        "Second Yellow" => $"{Event.PlayerName} (Second yellow)",
         _ => Event.PlayerName ?? Event.Type,
     };
 }
