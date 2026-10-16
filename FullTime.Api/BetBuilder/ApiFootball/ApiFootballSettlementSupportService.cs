@@ -313,19 +313,31 @@ public class ApiFootballSettlementSupportService(
             var newRedCards = newRows.Where(r =>
                 r.Type == "Red Card" && !previousKeySet.Contains((r.Team, r.Minute, r.Type, r.PlayerName)));
 
+            // A second booking arrives as a "Red Card" plus, sometimes, a same-minute "Yellow Card" -
+            // never as its own type (see MapEventType). "Booked earlier in the match" is the same test
+            // the app's MatchSummarySheet.MergeSecondYellows uses, so the push and the timeline agree.
+            bool IsSecondBooking(MatchEvent card) => newRows.Any(y =>
+                y.Type == "Yellow Card" && y.Team == card.Team && y.PlayerName == card.PlayerName
+                && ParseMinuteForSequence(y.Minute) < ParseMinuteForSequence(card.Minute));
+
             foreach (var redCard in newRedCards)
             {
                 var teamName = redCard.Team == SelectionSide.Home ? match.HomeTeam : match.AwayTeam;
+                var title = IsSecondBooking(redCard)
+                    ? $"Second yellow - red card! {redCard.Minute}'"
+                    : $"Red card! {redCard.Minute}'";
                 await matchAlerts.NotifyAsync(
-                    match, MatchAlertType.RedCard, $"Red card! {redCard.Minute}'",
+                    match, MatchAlertType.RedCard, title,
                     $"{redCard.PlayerName} ({teamName}) - {match.HomeTeam} {match.HomeScore ?? 0}-{match.AwayScore ?? 0} {match.AwayTeam}",
                     sequence: ParseMinuteForSequence(redCard.Minute), ct: ct);
             }
 
-            // A second yellow already maps to "Red Card" in MapEventType above, so it only ever
-            // fires the RedCard alert, never double-fires here too.
+            // A player's second yellow is announced by the red-card push above, so it gets no yellow
+            // push of its own - even when the red hasn't reached the feed yet, or the yellow turns up
+            // a fetch after the red.
             var newYellowCards = newRows.Where(r =>
-                r.Type == "Yellow Card" && !previousKeySet.Contains((r.Team, r.Minute, r.Type, r.PlayerName)));
+                r.Type == "Yellow Card" && !previousKeySet.Contains((r.Team, r.Minute, r.Type, r.PlayerName))
+                && !IsSecondBooking(r));
 
             foreach (var yellowCard in newYellowCards)
             {
