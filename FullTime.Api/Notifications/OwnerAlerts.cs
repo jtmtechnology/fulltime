@@ -19,6 +19,10 @@ public class OwnerAlerts(IEmailSender emailSender, IOptions<ApiFootballOptions> 
     public void NewRegistration(string name, string email) =>
         Send("FullTime: new registration", $"{name} <{email}> just registered.\n\nTime: {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC");
 
+    public void NewLeague(string leagueName, string creatorName, string creatorEmail) =>
+        Send("FullTime: new league created",
+            $"{creatorName} <{creatorEmail}> just created the league \"{leagueName}\".\n\nTime: {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC");
+
     public void NewInstall(string platform, string? appVersion)
     {
         lock (_gate)

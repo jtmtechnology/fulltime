@@ -11,7 +11,8 @@ using Microsoft.Extensions.Options;
 namespace FullTime.Api.Leagues;
 
 public class LeagueService(
-    AppDbContext db, PushNotificationService push, IEmailSender emailSender, IOptions<BettingOptions> options)
+    AppDbContext db, PushNotificationService push, IEmailSender emailSender, IOptions<BettingOptions> options,
+    OwnerAlerts ownerAlerts)
 {
     // Avoids 0/O and 1/I, which look alike when a code is read aloud or typed from a text message.
     private const string CodeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -68,6 +69,15 @@ public class LeagueService(
 
         db.Leagues.Add(league);
         await db.SaveChangesAsync(ct);
+
+        var creator = await db.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.Name, u.Email })
+            .FirstOrDefaultAsync(ct);
+        if (creator is not null)
+        {
+            ownerAlerts.NewLeague(league.Name, creator.Name, creator.Email);
+        }
 
         return new CreateLeagueResult(CreateLeagueOutcome.Success, league);
     }
