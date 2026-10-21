@@ -13,4 +13,14 @@ public class FormFactor : IFormFactor
     {
         return Environment.OSVersion.ToString();
     }
+
+    public string GetDeviceModel()
+    {
+        return "Web";
+    }
+
+    public string GetAppVersion()
+    {
+        return typeof(FormFactor).Assembly.GetName().Version?.ToString() ?? "unknown";
+    }
 }

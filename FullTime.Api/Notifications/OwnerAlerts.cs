@@ -12,9 +12,15 @@ public class OwnerAlerts(IEmailSender emailSender, IOptions<ApiFootballOptions> 
     // to the owner's inbox (and the Brevo daily quota) rather than trying to tell real installs apart.
     private const int MaxInstallAlertsPerDay = 50;
 
+    // Same reasoning (api/client-errors is anonymous too), and one broken screen hit by every user
+    // would otherwise send an email per user per attempt. The journal still gets every report.
+    private const int MaxClientErrorAlertsPerDay = 20;
+
     private readonly Lock _gate = new();
     private DateOnly _installAlertDay;
     private int _installAlertsToday;
+    private DateOnly _clientErrorAlertDay;
+    private int _clientErrorAlertsToday;
 
     public void NewRegistration(string name, string email) =>
         Send("FullTime: new registration", $"{name} <{email}> just registered.\n\nTime: {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC");
@@ -44,6 +50,29 @@ public class OwnerAlerts(IEmailSender emailSender, IOptions<ApiFootballOptions> 
         Send("FullTime: new user opened the app",
             $"Someone opened the app for the first time without being logged in.\n\n" +
             $"Platform: {platform}\nApp version: {appVersion ?? "unknown"}\nTime: {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC");
+    }
+
+    public void ClientError(string page, string userId, string device, string appVersion, string exception)
+    {
+        lock (_gate)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            if (_clientErrorAlertDay != today)
+            {
+                _clientErrorAlertDay = today;
+                _clientErrorAlertsToday = 0;
+            }
+
+            if (++_clientErrorAlertsToday > MaxClientErrorAlertsPerDay)
+            {
+                logger.LogWarning("Client error alert cap ({Cap}/day) reached - not emailing", MaxClientErrorAlertsPerDay);
+                return;
+            }
+        }
+
+        Send("FullTime: app showed \"Something went wrong\"",
+            $"Page: {page}\nUser: {userId}\nDevice: {device}\nApp version: {appVersion}\n" +
+            $"Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC\n\n{exception}");
     }
 
     // Fire-and-forget, same as the match-sync alerts - a slow or failing SMTP relay must never hold

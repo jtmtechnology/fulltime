@@ -36,7 +36,7 @@
         @* Last line of defence: an exception a page doesn't handle shows this card instead of
            taking the app down (in BlazorWebView an unhandled component exception is fatal).
            Inside the @key'd div, so navigating to another tab gets a fresh boundary. *@
-        <ErrorBoundary @ref="_pageErrorBoundary">
+        <ReportingErrorBoundary @ref="_pageErrorBoundary">
             <ChildContent>@Body</ChildContent>
             <ErrorContent>
                 <div class="page-error">
@@ -46,13 +46,13 @@
                     <button type="button" class="primary-btn" @onclick="() => _pageErrorBoundary?.Recover()">Try again</button>
                 </div>
             </ErrorContent>
-        </ErrorBoundary>
+        </ReportingErrorBoundary>
     </div>
 </main>
 
 @* Sheets and overlays sit outside @Body, so they get their own boundary - a failure in one of them
    shows a small notice rather than blanking the page under it. *@
-<ErrorBoundary @ref="_overlayErrorBoundary">
+<ReportingErrorBoundary @ref="_overlayErrorBoundary">
     <ChildContent>
         <BetSlipSheet />
         <ContextSwitcherSheet />
@@ -65,7 +65,7 @@
             <button type="button" @onclick="() => _overlayErrorBoundary?.Recover()">Dismiss</button>
         </div>
     </ErrorContent>
-</ErrorBoundary>
+</ReportingErrorBoundary>
 <BottomTabBar />
 <WinCelebrationOverlay Bet="_celebrationBet" CurrencySymbol="@ContextState.CurrencySymbol" OnDismiss="DismissCelebration" />
 

@@ -162,6 +162,17 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
     }
 
+    // Anonymous, but sends the token when there is one so the report names the user. See
+    // ClientErrorsController.
+    public async Task ReportClientErrorAsync(string page, string exception, string platform, string formFactor,
+        string deviceModel, string appVersion)
+    {
+        Authorize();
+        var res = await httpClient.PostAsJsonAsync("api/client-errors",
+            new { page, exception, platform, formFactor, deviceModel, appVersion });
+        if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
+    }
+
     public async Task<SpinStatusDto> GetSpinStatusAsync()
     {
         Authorize();

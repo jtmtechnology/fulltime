@@ -13,4 +13,14 @@ public class FormFactor : IFormFactor
     {
         return DeviceInfo.Platform.ToString() + " - " + DeviceInfo.VersionString;
     }
+
+    public string GetDeviceModel()
+    {
+        return $"{DeviceInfo.Manufacturer} {DeviceInfo.Model}";
+    }
+
+    public string GetAppVersion()
+    {
+        return $"{AppInfo.Current.VersionString} ({AppInfo.Current.BuildString})";
+    }
 }
