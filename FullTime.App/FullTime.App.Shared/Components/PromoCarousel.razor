@@ -83,8 +83,10 @@
 
     private async Task LoadSpinAsync()
     {
+        // Exception, not just ApiException: a null or non-JSON 200 body throws something else, and
+        // this runs in Matches' first render, so an escape blanks the home screen.
         try { _canSpin = (await Api.GetSpinStatusAsync()).CanSpin; }
-        catch (ApiException) { _canSpin = false; }
+        catch (Exception) { _canSpin = false; }
     }
 
     private async Task LoadBoostAsync()
@@ -94,13 +96,13 @@
             var status = await Api.GetBetBuilderBoostStatusAsync();
             _boost = status.Available && status.MatchId is not null ? status : null;
         }
-        catch (ApiException) { _boost = null; }
+        catch (Exception) { _boost = null; }
     }
 
     private async Task LoadPromosAsync()
     {
         try { _promos = await Api.GetActivePromosAsync(); }
-        catch (ApiException) { _promos = []; }
+        catch (Exception) { _promos = []; }
     }
 
     private List<Slide> CurrentSlides()

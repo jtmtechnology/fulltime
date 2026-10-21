@@ -45,7 +45,19 @@
         _error = false;
         _showResend = false;
 
-        var result = await Api.LoginAsync(_email, _password);
+        LoginOutcome result;
+        try
+        {
+            result = await Api.LoginAsync(_email, _password);
+        }
+        catch (Exception ex)
+        {
+            // A dropped connection or the 30s timeout - uncaught, this showed the "Something went
+            // wrong" card on the login page itself (likely what App Review hit, 2026-10-21).
+            _status = $"Error: {ex.Message}";
+            _error = true;
+            return;
+        }
 
         if (result.EmailNotVerified)
         {
@@ -55,21 +67,29 @@
             return;
         }
 
-        if (!result.Success)
+        if (!result.Success || result.Response is null)
         {
-            _status = $"Error: {result.Error}";
+            _status = $"Error: {result.Error ?? "Login failed - please try again."}";
             _error = true;
             return;
         }
 
-        await AuthState.SetTokenAsync(result.Response!.Token);
+        await AuthState.SetTokenAsync(result.Response.Token);
         Nav.NavigateTo("/");
     }
 
     private async Task ResendAsync()
     {
         if (string.IsNullOrEmpty(_email)) return;
-        _status = await Api.ResendVerificationAsync(_email);
-        _error = false;
+        try
+        {
+            _status = await Api.ResendVerificationAsync(_email);
+            _error = false;
+        }
+        catch (Exception ex)
+        {
+            _status = $"Error: {ex.Message}";
+            _error = true;
+        }
     }
 }

@@ -144,7 +144,7 @@
             _canSpin = status.CanSpin;
             _streak = status.Streak;
         }
-        catch (ApiException)
+        catch (Exception)
         {
             // best-effort - leave whatever's already showing if the status check fails
         }
@@ -168,7 +168,7 @@
         {
             response = await Api.SpinAsync();
         }
-        catch (ApiException)
+        catch (Exception)
         {
             // Most likely another session already used today's spin - resync with the server
             // rather than trusting the stale local _canSpin flag.

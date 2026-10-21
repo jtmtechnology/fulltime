@@ -741,7 +741,7 @@ else
             _boostPercent = boostStatus.Percent;
             _boostMinSelections = boostStatus.MinSelections;
         }
-        catch (ApiException)
+        catch (Exception)
         {
             // best-effort - the boost label just doesn't show if this fails; the boost itself (and
             // the evens requirement) is still enforced server-side at placement regardless.

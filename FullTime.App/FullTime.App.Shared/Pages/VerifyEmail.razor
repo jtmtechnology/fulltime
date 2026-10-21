@@ -61,7 +61,15 @@
     {
         if (string.IsNullOrEmpty(_resendEmail)) return;
 
-        _status = await Api.ResendVerificationAsync(_resendEmail);
-        _error = false;
+        try
+        {
+            _status = await Api.ResendVerificationAsync(_resendEmail);
+            _error = false;
+        }
+        catch (Exception ex)
+        {
+            _status = $"Error: {ex.Message}";
+            _error = true;
+        }
     }
 }

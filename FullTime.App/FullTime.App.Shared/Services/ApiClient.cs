@@ -204,7 +204,7 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
         Authorize();
         var res = await httpClient.GetAsync("api/promos/active");
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
-        return (await res.Content.ReadFromJsonAsync<List<PromoDto>>())!;
+        return await res.Content.ReadFromJsonAsync<List<PromoDto>>() ?? [];
     }
 
     public async Task<BetBuilderMarketsResponse> GetBetBuilderMarketsAsync(Guid matchId)
