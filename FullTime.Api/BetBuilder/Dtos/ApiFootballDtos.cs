@@ -199,6 +199,12 @@ public class FixtureEventDto
     // "detail": null, which crashed every settlement-support tick for two days.
     [JsonPropertyName("detail")]
     public string? Detail { get; set; }
+
+    // "Penalty Shootout" on every shootout kick, which otherwise looks exactly like an in-match
+    // penalty (Goal/"Penalty" or Goal/"Missed Penalty", minutes counting on from 91 when there was
+    // no extra time - Liverpool v Chelsea, fixture 1640388, 2026-10-28). "Foul" etc. on cards.
+    [JsonPropertyName("comments")]
+    public string? Comments { get; set; }
 }
 
 public class EventPlayerInfo

@@ -216,7 +216,7 @@ public class ApiClient(HttpClient httpClient, AuthState authState)
 
     public async Task<List<MatchEventDto>> GetMatchEventsAsync(Guid matchId)
     {
-        var res = await httpClient.GetAsync($"api/matches/{matchId}/events");
+        var res = await httpClient.GetAsync($"api/matches/{matchId}/events?includeShootout=true");
         if (!res.IsSuccessStatusCode) throw new ApiException(await ReadErrorAsync(res), res.StatusCode);
         return (await res.Content.ReadFromJsonAsync<List<MatchEventDto>>())!;
     }

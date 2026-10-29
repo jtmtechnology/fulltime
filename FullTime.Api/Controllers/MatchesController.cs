@@ -309,10 +309,14 @@ public class MatchesController(
     // Ordered in memory since Minute is stored as Highlightly's raw string ("45+2") - a DB-level
     // string sort would put "9" after "45"/"70".
     [HttpGet("{id:guid}/events")]
-    public async Task<ActionResult<List<MatchEventDto>>> GetMatchEvents(Guid id, CancellationToken ct)
+    // includeShootout is opt-in because clients without Match Details' penalties section (Android
+    // 1.19 and earlier, iOS 1.0) file every event by minute, and would show shootout kicks
+    // (numbered 91+) as second-half or extra-time events.
+    public async Task<ActionResult<List<MatchEventDto>>> GetMatchEvents(Guid id, [FromQuery] bool includeShootout, CancellationToken ct)
     {
         var events = await db.MatchEvents
             .Where(e => e.MatchId == id)
+            .Where(e => includeShootout || (e.Type != "Shootout Scored" && e.Type != "Shootout Missed"))
             .Select(e => new MatchEventDto(
                 e.Team.ToString(), e.Minute, e.Type, e.PlayerName, e.AssistPlayerName, e.SubstitutedPlayerName))
             .ToListAsync(ct);

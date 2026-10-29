@@ -94,12 +94,20 @@ public class ApiFootballSettlementSupportService(
     {
         var events = await FetchAndStoreEventsAsync(match, ct);
         var goals = (events ?? [])
-            // API-Football files a missed penalty under type "Goal" too.
-            .Where(e => e.Type == "Goal" && e.Detail != "Missed Penalty")
+            // API-Football files a missed penalty under type "Goal" too, and every shootout kick.
+            .Where(e => e.Type == "Goal" && e.Detail != "Missed Penalty" && !IsShootoutKick(e.Comments))
             .ToList();
         var scoreHasGoals = (match.HomeScore ?? 0) + (match.AwayScore ?? 0) > 0;
 
-        if ((events is null || (scoreHasGoals && goals.Count == 0)) && !isLastChance)
+        // Liverpool v Chelsea (2026-10-28) was finalized while its events still had no shootout
+        // kicks, and finalized matches are never fetched again - so wait until the scored kicks
+        // add up to the shootout score.
+        var shootoutIncomplete = match.HomePenalties is { } homePens && match.AwayPenalties is { } awayPens
+            && homePens + awayPens > 0
+            && (events ?? []).Count(e => e.Type == "Goal" && e.Detail != "Missed Penalty" && IsShootoutKick(e.Comments))
+                != homePens + awayPens;
+
+        if ((events is null || (scoreHasGoals && goals.Count == 0) || shootoutIncomplete) && !isLastChance)
         {
             logger.LogWarning(
                 "Events not available yet for match {MatchId} ({HomeTeam} {HomeScore}-{AwayScore} {AwayTeam}) - retrying in {Minutes} min",
@@ -107,7 +115,7 @@ public class ApiFootballSettlementSupportService(
             return false;
         }
 
-        if (events is null || (scoreHasGoals && goals.Count == 0))
+        if (events is null || (scoreHasGoals && goals.Count == 0) || shootoutIncomplete)
         {
             logger.LogWarning("Finalizing match {MatchId} ({HomeTeam} v {AwayTeam}) without complete events - out of retries",
                 match.Id, match.HomeTeam, match.AwayTeam);
@@ -224,8 +232,12 @@ public class ApiFootballSettlementSupportService(
     // anything genuinely unrecognized falls through to Detail raw, which the client already renders
     // as a generic bullet + raw text rather than crashing (same tolerant pattern as
     // BetBuilderSyncService.ParseOutcome).
-    private static string MapEventType(string type, string? detail) => (type, detail) switch
+    //
+    // Shootout kicks get their own types so nothing that counts "Goal"/"Penalty" rows (scorer and
+    // assist settlement, live pick states, the timeline) treats them as goals.
+    private static string MapEventType(string type, string? detail, string? comments) => (type, detail) switch
     {
+        ("Goal", _) when IsShootoutKick(comments) => detail == "Missed Penalty" ? "Shootout Missed" : "Shootout Scored",
         (_, null) => type,
         ("Goal", "Normal Goal") => "Goal",
         ("Goal", "Penalty") => "Penalty",
@@ -245,6 +257,9 @@ public class ApiFootballSettlementSupportService(
             && detail.Contains("confirm", StringComparison.OrdinalIgnoreCase) => "VAR Goal Confirmed",
         _ => detail,
     };
+
+    private static bool IsShootoutKick(string? comments) =>
+        comments?.Contains("Shootout", StringComparison.OrdinalIgnoreCase) == true;
 
     // Null means the fetch itself failed and nothing was touched - distinct from an empty list,
     // which is a successful fetch of a fixture that genuinely has no events (yet).
@@ -292,7 +307,7 @@ public class ApiFootballSettlementSupportService(
                     : e.Team.Id == match.AwayTeamId ? SelectionSide.Away
                     : SelectionSide.None,
                 Minute = e.Time.Extra is { } extra ? $"{e.Time.Elapsed}+{extra}" : e.Time.Elapsed.ToString(),
-                Type = MapEventType(e.Type, e.Detail),
+                Type = MapEventType(e.Type, e.Detail, e.Comments),
                 PlayerName = onName,
                 PlayerExternalId = onId,
                 AssistPlayerName = e.Type == "subst" ? null : e.Assist?.Name,

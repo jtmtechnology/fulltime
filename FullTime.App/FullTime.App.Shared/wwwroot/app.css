@@ -506,6 +506,12 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 .match-event-icon { font-size: 0.9rem; line-height: 1; flex-shrink: 0; }
 .match-event-text { flex: 0 1 auto; }
 .match-event-minute { color: var(--text-muted); font-size: 0.7rem; flex-shrink: 0; }
+.shootout-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border); font-size: 0.8rem;
+}
+.shootout-kick { display: flex; gap: 0.4rem; align-items: center; min-width: 0; }
+.shootout-kick.away { justify-content: flex-end; text-align: right; }
 
 /* Match Summary's Stats tab - home-vs-away bar comparisons. */
 .match-stats { margin-top: 0.5rem; }

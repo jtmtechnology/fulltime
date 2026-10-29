@@ -103,17 +103,32 @@
                     }
                 }
             }
-            @* API-Football has no per-kick shootout event data (confirmed live against a real
-               fixture - see ApiFootballSettlementSupportService.MapEventType's vocabulary comment),
-               only the final penalty score - so this is a static summary line, not another list of
-               MatchEventRows. Shown even when _events is otherwise empty, since a shootout result
-               matters regardless of whether any other events happened to resolve. *@
-            @if (!_loading && MatchDisplay.PenaltyScoreText(match) is { } penaltiesScore)
+            @* Shown even when _events is otherwise empty, since a shootout result matters regardless
+               of whether any other events happened to resolve. The kicks can lag the score by a few
+               minutes, or never arrive, so the header stands on its own. *@
+            @if (!_loading && MatchDisplay.PenaltyScoreText(match) is not null)
             {
                 <div class="match-events-half-header">
                     <span>Penalties</span>
-                    <span>@penaltiesScore</span>
+                    <span>@match.HomePenalties - @match.AwayPenalties</span>
                 </div>
+                @foreach (var (home, away) in _shootout)
+                {
+                    <div class="shootout-row">
+                        <span class="shootout-kick">
+                            @if (home is not null)
+                            {
+                                <span>@ShootoutIcon(home)</span> <span>@home.PlayerName</span>
+                            }
+                        </span>
+                        <span class="shootout-kick away">
+                            @if (away is not null)
+                            {
+                                <span>@away.PlayerName</span> <span>@ShootoutIcon(away)</span>
+                            }
+                        </span>
+                    </div>
+                }
             }
         }
         else if (_activeTab == "Stats")
@@ -238,6 +253,7 @@
     private string _halfTimeScore = "0 - 0";
     private string _fullTimeScore = "0 - 0";
     private string _extraTimeHalfScore = "0 - 0";
+    private List<(MatchEventDto? Home, MatchEventDto? Away)> _shootout = [];
 
     private string _activeTab = "Events";
     private bool _statsLoading;
@@ -487,6 +503,16 @@
             _eventsLoadedForMatchId = null;
         }
 
+        // Shootout kicks carry minutes (91+ with no extra time, 121+ after it) only because
+        // API-Football numbers them that way - they're not match time, so they come out of the
+        // timeline and are paired up in kick order per team instead.
+        var homeKicks = _events.Where(e => IsShootoutKick(e) && e.Team == "Home").ToList();
+        var awayKicks = _events.Where(e => IsShootoutKick(e) && e.Team == "Away").ToList();
+        _shootout = Enumerable.Range(0, Math.Max(homeKicks.Count, awayKicks.Count))
+            .Select(i => (homeKicks.ElementAtOrDefault(i), awayKicks.ElementAtOrDefault(i)))
+            .ToList();
+        _events = _events.Where(e => !IsShootoutKick(e)).ToList();
+
         // Stoppage-time minutes ("45+2") still belong to the half they extend, not the next one -
         // only a bare "46"+ base minute (no way to distinguish 2nd-half additions from 1st-half
         // ones without the raw base, hence splitting on Base rather than the full string). Extra
@@ -538,6 +564,10 @@
         _loading = false;
         await InvokeAsync(StateHasChanged);
     }
+
+    private static bool IsShootoutKick(MatchEventDto e) => e.Type is "Shootout Scored" or "Shootout Missed";
+
+    private static string ShootoutIcon(MatchEventDto kick) => kick.Type == "Shootout Scored" ? "✅" : "❌";
 
     private static int BaseMinute(string time) =>
         int.TryParse(time.Split('+')[0], out var b) ? b : int.MaxValue;

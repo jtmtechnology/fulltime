@@ -375,7 +375,12 @@ public class ApiFootballMatchSyncService(
         match.IsHalfTime = isHalfTime;
         match.HomePenalties = dto.Score?.Penalty?.Home;
         match.AwayPenalties = dto.Score?.Penalty?.Away;
-        match.WentToExtraTime = dto.Score?.Extratime?.Home is not null;
+        // score.extratime comes back 0-0 and elapsed 120 for a tie that went straight to penalties
+        // with no extra time (League Cup, Man City v Brighton, 2026-10-28), so neither says whether
+        // extra time was played. The ET status does, so once seen it sticks through P/PEN.
+        match.WentToExtraTime = match.WentToExtraTime
+            || dto.Fixture.Status.Short is "ET" or "AET"
+            || (dto.Score?.Extratime?.Home ?? 0) + (dto.Score?.Extratime?.Away ?? 0) > 0;
 
         if (changed)
         {
