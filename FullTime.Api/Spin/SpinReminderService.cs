@@ -34,7 +34,7 @@ public class SpinReminderService(AppDbContext db, PushNotificationService push, 
 
             user.LastSpinReminderDate = localToday;
             await push.SendToUserAsync(
-                user.Id, "Don't miss today's spin!", "Your free Daily Spinner spin is still waiting — grab it before the day's up.", ct);
+                user.Id, "Don't miss today's spin!", "Your Daily Spinner spin is still waiting — grab it before the day's up.", ct);
         }
 
         if (candidates.Count > 0)
