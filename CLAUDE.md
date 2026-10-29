@@ -33,6 +33,17 @@ than branching on `DeviceInfo.Platform` inside shared code.
   process"), run `dotnet build-server shutdown` first, then retry. If that's not enough, force
   clean `obj`/`bin` with PowerShell's `Remove-Item -Recurse -Force` — bash `rm -rf` sometimes can't
   fully clear MAUI's `obj/Debug/net10.0-android/lp/...` directories on Windows.
+- Install a Debug Android build with `dotnet build -t:Install -f net10.0-android`, not
+  `adb install` of the `-Signed.apk`. Debug uses Fast Deployment, so the APK has no assemblies and
+  the app aborts on launch ("No assemblies found in .../.__override__").
+- If the emulator can't resolve hostnames (the app says it can't reach FullTime, and
+  `adb shell ping api.jtmtechnology.co.uk` gives "unknown host"), start it with
+  `-dns-server 1.1.1.1,8.8.8.8`. It inherits the PC's internal TelXL DNS servers, which don't
+  always answer.
+- If Git Bash won't start (`fatal error - add_item ... errno 1`), run ssh/scp from PowerShell
+  with Git's own client, `& "C:\Program Files\Git\usr\bin\ssh.exe"`. Windows OpenSSH rejects the
+  key's permissions. A script piped from PowerShell into `bash -s` arrives with a BOM and CRLF
+  line endings, so give it a throwaway first line and run it as `tr -d '\r' | tail -n +2 | bash -s`.
 - MAUI's SDK has its own `Microsoft.Maui.Devices.IHapticFeedback`, which collides by name (via
   global usings) with any app-defined `IHapticFeedback` in the MAUI head. Fully qualify one of
   them at both the implementation and the DI-registration call site.
