@@ -152,6 +152,34 @@ owner.** (c) Guideline 5.3.4 handled in App Store Connect by excluding gambling-
 Tom's Brownes league balance went from £0 to £200, profit-neutral (StartingBalance raised by £200 too).
 Repo still at `d3a08c2`, level with origin. Everything open in §54.6 still stands.
 
+**Latest (2026-10-29, §56): all pushed through `2b656b5`; API and website deployed to Oracle.**
+- Penalty shootouts fixed (`a080e2a`). Ties that went straight to penalties no longer show "AET", and
+  Match Details lists each team's takers with ✅/❌. Liverpool v Chelsea's missing kicks were reloaded.
+- "Free spin" wording removed (`163d3ce`) because of Apple's concerns. The banner now says "DAILY SPIN".
+- **Android 1.20/27 signed AAB built.** The owner uploads it.
+- **iOS 1.0 resubmitted** on Codemagic build 51 (built after `163d3ce`), with a 5.3.4 note. **Not
+  confirmed** whether `remove_ads` went in with it (it was stuck at "Developer Rejected").
+- Store assets and this file are now committed (`d1ab532`).
+
+**Latest (2026-11-02, §57): all pushed through `adc40b2`; no API or website deploy (app-only).**
+- Fixed a "Something went wrong" card reported from Android 1.20 on 31 Oct (`2fe3df4`). Leaving
+  Matches before its first load finished threw `ObjectDisposedException`.
+- **Android 1.21/28 signed AAB built** (`adc40b2`). The owner uploads it. Whether 1.20/27 was uploaded first
+  is unknown.
+- §56's open items (iOS review, `remove_ads`, the bet365 badge link) are unchanged.
+- HANDOVER.md (§56-§57) is uncommitted.
+
+**Latest (2026-11-02 session 2, §58): no code changes, no deploys.** `remove_ads` was stuck at
+"Developer Rejected" again. The owner fixed it by re-saving the in-app purchase so it went back to "Ready to
+Submit", then adding it from the iOS 1.0 version page and submitting them together. The steps are in §58.1.
+HANDOVER.md (§56-§58) is uncommitted.
+
+**Latest (2026-11-05, §59): website deployed to Oracle with a new Terms of Service page,
+`https://fulltime.jtmtechnology.co.uk/terms.html`. It was written for Play Console's trader status /
+ToS page. The page and its footer links are NOT committed yet** (`terms.html` is new; `index.html` and
+`privacy.html` are modified). HANDOVER.md (§56-§59) is uncommitted. The owner chose 18+ as the
+minimum age, and that version is deployed (§59.2).
+
 **§1 below is a 2026-09-09 snapshot (GCP-era) and is historical** - trust this banner, §7's top
 priorities and the newest numbered sections instead.
 
@@ -5351,3 +5379,282 @@ asked, §52.7 checks, §53.1 new-league email.
 ### 55.4 Working copy
 
 - HANDOVER.md (§45-§55) and the §42.4 store-asset changes still uncommitted, by the owner's choice.
+  (Committed on 2026-10-29 in `d1ab532`, at the owner's request.)
+
+## 56. 2026-10-29 session - penalty shootouts, "Daily Spinner" wording, Android 1.20/27, iOS resubmission
+
+Commits, all pushed: `a080e2a` (shootouts), `f924f4b` (CLAUDE.md environment notes), `163d3ce`
+(spinner wording), `d1ab532` (store assets + HANDOVER), `2b656b5` (Android 1.20/27). **API and
+website deployed to Oracle.** `main` is level with `origin/main` and the working tree is clean
+(apart from this §56 edit).
+
+### 56.1 Penalty shootouts (`a080e2a`, API deployed, in Android 1.20/27 and iOS build 51)
+
+Owner's report: Man City v Brighton (League Cup R16, 28 Oct) showed "AET" with no extra time played.
+Shootout kicks showed as minutes. Liverpool v Chelsea's takers never appeared.
+
+**Confirmed from API-Football's raw response** (fixtures `1640575`, `1640388`):
+- For a tie that goes straight to penalties, API-Football still sends `score.extratime = {0,0}` and
+  `elapsed = 120`. The old rule `WentToExtraTime = Extratime.Home is not null` was therefore always
+  true. Status `PEN` can't tell you either way.
+- Shootout kicks are ordinary `Goal`/`Penalty` or `Goal`/`Missed Penalty` events with
+  `comments = "Penalty Shootout"`, numbered 91, 92 and on when there's no extra time. Before the
+  fix they were stored as `Penalty`/`Missed Penalty`, so **scorer/assist settlement and
+  `LivePickState` counted them as goals.** No bets were affected: the only bet on either match was
+  match-winner picks.
+- Liverpool v Chelsea was finalized at 21:58 UTC, before API-Football had added the kicks.
+  Finalized matches are never fetched again.
+
+**Fix:**
+- `WentToExtraTime` turns on when the status is `ET`/`AET`, or when an extra-time goal is scored.
+  Once on, it stays on through P/PEN (`ApiFootballMatchSyncService`).
+- New event types `Shootout Scored` and `Shootout Missed`, taken from `FixtureEventDto.Comments`.
+  Shootout kicks are left out of first-goalscorer detection.
+- Events aren't finalized until the scored shootout kicks equal `HomePenalties + AwayPenalties`.
+  It retries every 15 minutes until the 3-day last chance (`ApiFootballSettlementSupportService`).
+- `GET api/matches/{id}/events` only returns shootout kicks with `?includeShootout=true`. Old clients
+  (Android ≤1.19, iOS builds before 51) would otherwise file the kicks by minute in 2nd half or ET.
+- The app (`MatchSummarySheet`) takes the kicks out of the timeline. Under the "Penalties" header
+  (now "4 - 3") it shows two columns, home takers left and away right, each with ✅/❌ and no minute.
+
+**Prod DB write (owner-approved):** for `1640386` (Fleetwood v Arsenal, 27 Oct), `1640575` and
+`1640388`, `WentToExtraTime` was set false and `EventsFinalizedAt` set NULL. All three reloaded within a
+minute, and their scored kicks match the penalty score. Rayo v Athletic (`1570410`, Abandoned) still has
+`WentToExtraTime = true` and penalties 0-0. That isn't shown anywhere, so it was left alone.
+
+**Verified on the emulator** against prod: City v Brighton "FT (4-3 pens)" with 10 takers, and
+Liverpool v Chelsea "FT (6-5 pens)" with all 16 takers.
+
+**Not done:** while the shootout is still in progress, a straight-to-penalties match probably shows a
+"120'" clock. The app gets no status code it could use to show "Pens" instead.
+
+### 56.2 "Daily Spinner" wording (`163d3ce`, API + website deployed)
+
+The owner asked to drop "free" from the spinner because of Apple concerns. They mentioned another app,
+HeadsUp, having issues. Changes:
+- Banner: "FREE SPIN" → "DAILY SPIN".
+- DailySpinner page: "next free spin" → "next spin".
+- Reminder push: "Your Daily Spinner spin is still waiting…".
+- Website: "for a bonus prize", and "a +25% odds boost" (dropped "free").
+- `app.txt`: "for a bonus prize".
+
+Lines describing the app itself as free ("Totally free", "the free way…") were kept on purpose.
+
+### 56.3 Releases
+
+- **Android 1.20/27 signed AAB** (`2b656b5`):
+  `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`, built
+  10:10 on 29 Oct. It carries §56.1, §56.2, `8780d3a` and `d3a08c2`. **The owner uploads it.**
+  The signature wasn't checked separately (no `jarsigner` found).
+- **iOS:** the owner ran Codemagic `ios-testflight` after `163d3ce`, producing **build 51**. The
+  owner's screenshot showed iOS 1.0 (51) "Removed" from the earlier review with **2.1.0 App
+  Completeness + 5.3.4** reasons and an attachment `Screenshot-1021-155510.png`. **Apple's message
+  text was never captured.**
+  - `remove_ads` (first IAP, Non-Consumable) is in **"Developer Rejected"**. Its own "Add for Review" is
+    greyed, and the In-App Purchases section didn't appear on the 1.0 version page.
+  - The owner then said it was **submitted**. Whether `remove_ads` went in with it is unconfirmed.
+    If it didn't, a reviewer tapping "Remove ads" may trigger 2.1 again. The fallback is to hide
+    Remove ads on iOS until the IAP is approved, then do a new build.
+  - A 5.3.4 Notes text was drafted for App Review Information: virtual points only, no cash-out, no
+    prizes of value, the only IAP removes ads, odds shown for reference only. **Open check:** whether
+    the bet365 badge on match cards links anywhere. If it opens a bookmaker, the "no links to
+    bookmakers" claim is false, and the link itself may be what triggers 5.3.4.
+
+### 56.4 Environment notes (also added to CLAUDE.md in `f924f4b`)
+
+- **Git Bash wouldn't start all session** (`fatal error - add_item ... errno 1`). Everything ran from
+  PowerShell using `C:\Program Files\Git\usr\bin\ssh.exe`/`scp.exe`; Windows OpenSSH rejects the key's
+  ACLs. Scripts piped to the VM need `tr -d '\r' | tail -n +2 | bash -s` and a throwaway first line,
+  because of the BOM and CRLF.
+- Auto mode blocked reading the API-Football key via a raw PowerShell→ssh call ("Production Reads")
+  and the prod DB UPDATE ("Modify Shared Resources"). Both went through after the owner approved.
+  `scripts/apifootball-get.sh` is the pre-approved route, but it needs Bash.
+- Debug installs: use `dotnet build -t:Install -f net10.0-android`. A plain `adb install` crashes with
+  Fast Deployment. `adb` isn't on PATH: `C:\Program Files (x86)\Android\android-sdk\platform-tools\adb.exe`.
+- Emulator DNS fails through the TelXL DNS servers. It was started with
+  `-avd FullTime_Pixel8_API35 -dns-server 1.1.1.1,8.8.8.8`. The emulator also has an unrelated
+  **HeadsUp** app installed; Back from FullTime can land in it.
+- The API journal is huge (EF SQL logging). `journalctl ... | grep 'Client error on'` over a week runs for
+  more than 5 minutes. A background search for client-error reports since 21 Oct **failed**: the
+  VM dropped the connection after ~10 min. The only report found (in an earlier, truncated run) was
+  the 21 Oct `deploy-check` smoke test, so **whether any reviewer device reported an error is
+  unknown**. Next time use `journalctl -u fulltime-api --since ... --grep 'Client error on'` (filters
+  on the server), or check the owner's inbox for "FullTime: app showed "Something went wrong"".
+
+### 56.5 Next steps
+
+1. **iOS review:** wait. On rejection, get Apple's text verbatim (and the 5.3.4 / 2.1.0 messages from the
+   old submission, never captured). A "Something went wrong" email names the page and exception.
+2. Confirm whether `remove_ads` is in the submission. If it isn't and Apple flags it, hide Remove ads on iOS
+   until the IAP is approved (or get Apple Developer Support to unstick "Developer Rejected").
+3. Check whether the bet365 badge on match cards links to a bookmaker. If it does, consider removing the
+   link for 5.3.4.
+4. The owner uploads Android 1.20/27 to Play Console.
+5. Still open from §54.6/§52.7: Oracle Pay As You Go decision, the Samsung nav-bar check, the second-yellow
+   push and live bet states on real matches, the §49.3 decisions, NuGet upgrades, and the §53.1 new-league email.
+6. Next real shootout: confirm the takers appear without intervention, and that a tie with real extra time
+   still shows "AET" (that path is unverified, because no such match has happened since the fix).
+
+## 57. 2026-11-02 session - Matches mid-load crash, Android 1.21/28
+
+Opened with `/load` (state matched §56: HEAD `2b656b5`, level with `origin/main`, only HANDOVER.md
+modified). Commits, both pushed: `2fe3df4` (fix) and `adc40b2` (version bump). `main` is level with
+`origin/main`. HANDOVER.md (§56 + §57) is still uncommitted. **No API or website deploy**: the change is
+app-only.
+
+### 57.1 "Something went wrong" from a new Android user (`2fe3df4`)
+
+The owner pasted the `api/client-errors` email from 31 Oct 14:19 UTC:
+- page `login`, user anonymous, vivo V2521, Android 16, app 1.20 (27)
+- `System.ObjectDisposedException: CancellationTokenSource_Disposed` at
+  `FullTime.App.Shared.Pages.Matches.OnInitializedAsync()`
+
+This shows the first-ever error report coming in from a real user (§54).
+
+**Cause.** Confirmed from the code; not reproduced on a device.
+- `Matches.OnInitializedAsync` awaited `Prefs.InitializeAsync()` + `LoadMatchesAsync`, and only after
+  those returned did it read `_cts.Token`.
+- An anonymous user tapped the Log in tab before the first load finished. Blazor disposed the page,
+  and `Dispose()` ran `_cts.Cancel(); _cts.Dispose()`.
+- When the await then returned, `_cts.Token` threw. `ReportingErrorBoundary` (in the layout) caught it
+  and reported it under the current URL. That's why the email says "Page: login" even though the
+  exception came from Matches.
+- In the same case the page also did `MatchUpdates.MatchUpdated += OnMatchUpdated` after `Dispose`
+  had already unsubscribed, which leaked the handler.
+
+**Fix.**
+- `Matches.razor` and `LeagueMatches.razor` now read `var ct = _cts.Token;` before the first await.
+- After the load they `return` if `ct.IsCancellationRequested`, so neither the refresh loop nor the
+  SignalR subscription starts for a disposed page.
+- `ContextSwitcher.razor` has the same pattern but was left alone on purpose. It lives in MainLayout
+  for the whole session, so it is never disposed mid-init.
+- `PromoCarousel.razor` already took the token up front.
+
+**Status.** Built clean and in Android 1.21/28. The fix hasn't been seen on a device, and the race
+hasn't been reproduced. It reaches iOS only with the next Codemagic `ios-testflight` build. iOS build 51,
+now in review, doesn't have it.
+
+### 57.2 Android 1.21/28 (`adc40b2`)
+
+- `ApplicationDisplayVersion`/`ApplicationVersion` went from 1.20/27 to 1.21/28. Signed AAB built 08:40 on
+  2 Nov:
+  `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab`.
+- The AAB's `base/manifest/AndroidManifest.xml` was checked: versionCode 28, versionName 1.21. It has
+  `META-INF/FULLTIME.SF`/`.RSA` signature entries. The signature itself wasn't verified (still no
+  `jarsigner`).
+- It carries everything in 1.20/27 plus §57.1. **The owner uploads it.** Whether 1.20/27 ever went up is
+  unknown, and it doesn't matter now.
+- Android is live, so the real AdMob IDs are correct and weren't touched.
+
+### 57.3 Gotchas hit this session
+
+- **The first Release build failed with `APT2258: The data is invalid. (13)`** on
+  `obj\Release\net10.0-android\lp\<n>\jl\res\..\flat\<n>.flata`. These were corrupt aapt2 intermediates.
+  `dotnet build-server shutdown` + `Remove-Item -Recurse -Force FullTime.App\obj\Release\net10.0-android`
+  fixed it.
+- **Editing the csproj in PowerShell:**
+  - `Get-Content -Raw` (5.1) reads UTF-8 without a BOM as ANSI. It garbled the em dash in the
+    push-entitlement comment.
+  - `Set-Content -Encoding utf8` adds a BOM.
+  - Both were caught in the diff and reverted with `git restore`. Use
+    `[IO.File]::ReadAllText/WriteAllText` with `New-Object Text.UTF8Encoding($false)`.
+- **Commit messages from PowerShell:** a here-string piped into `git commit -F -` doesn't work. Git took
+  the message as a pathspec and nothing was committed. Write the message to a file in the scratchpad (LF
+  line endings, no BOM) and use `git commit -F <file>`.
+- The signing build command is in `signing/README.md` (gitignored). The password was read from that file
+  at build time rather than retyped.
+
+### 57.4 Next steps
+
+1. The owner uploads Android 1.21/28 to Play Console.
+2. Watch for more "Something went wrong" emails. Another `ObjectDisposedException` from Matches on
+   1.21+ would mean the fix missed a path.
+3. Everything in §56.5 still stands: the iOS review outcome (get Apple's text word for word), whether
+   `remove_ads` was in the submission, the bet365 badge link, the next real shootout, and the §54.6/§52.7
+   list.
+4. The next iOS build (after review, or if it's rejected) picks up `2fe3df4` automatically.
+5. HANDOVER.md (§56-§57) is uncommitted. Commit it when the owner asks.
+
+## 58. 2026-11-02 session 2 - `remove_ads` "Developer Rejected" fixed
+
+Opened with `/load`. HEAD was `adc40b2`, level with `origin/main`, and only HANDOVER.md was modified, which
+matched §57. **No code changes, commits or deploys this session.**
+
+### 58.1 Fixing an in-app purchase stuck at "Developer Rejected"
+
+The owner hit it again: `remove_ads` (Non-Consumable) showed "Developer Rejected". Before this, no fix had
+ever been recorded (§56.3 only listed fallbacks). **What worked, per the owner:**
+1. Open the in-app purchase in App Store Connect and save it. It goes back to **"Ready to Submit"**.
+2. On the iOS 1.0 version page, add it in the **"In-App Purchases and Subscriptions"** section.
+3. Submit the version and the in-app purchase together.
+
+Why it happens and why it needs these steps (general App Store Connect behaviour, not verified here):
+- A first in-app purchase can only be reviewed together with an app version. That's why its own
+  "Add for Review" button is greyed out.
+- Pulling the version from review sets the in-app purchase to "Developer Rejected".
+- The version-page section only appears while the version is editable and the in-app purchase is
+  "Ready to Submit".
+
+There's no need to hide Remove ads on iOS or to call Apple Developer Support, the fallbacks §56.3/§56.5
+suggested.
+
+**Not recorded:** which iOS build went in with this submission (build 51 is the latest known, and it doesn't
+have `2fe3df4`). The owner didn't say, so check App Store Connect.
+
+### 58.2 Next steps
+
+1. iOS review: wait. `remove_ads` is now part of the submission, so §56.5 item 2 is closed. On rejection,
+   get Apple's text word for word.
+2. Check whether the bet365 badge on match cards links to a bookmaker (§56.5 item 3). It can be checked
+   from the code.
+3. Everything else in §57.4 still stands: upload Android 1.21/28, watch for more `ObjectDisposedException`
+   reports from Matches, the next real shootout, and the §54.6/§52.7 list.
+4. HANDOVER.md (§56-§58) is uncommitted. Commit it when the owner asks.
+
+## 59. 2026-11-05 session - Play Console trader status, Terms of Service page
+
+Opened with `/load` (state matched §58: HEAD `adc40b2`, level with `origin/main`, only HANDOVER.md
+modified). **No commits.** The website was deployed with the new page, but the files aren't committed.
+
+### 59.1 Play Console "App-level trader status and Terms of Service"
+
+- The owner showed the page. The developer account is declared a trader, and the app inherits that.
+- **Advised "Yes, my trader status applies to this app"** (already selected). JTM Technology Ltd
+  publishes the app, and it shows ads and sells `remove_ads`, so trader status really applies. "No"
+  would tell EEA/UK users that consumer protection laws don't apply, which isn't accurate for a paid IAP.
+  Whether the owner saved it isn't recorded.
+- The Terms of Service URL is optional. There was no terms page anywhere (repo grep for "terms of
+  service/use", `/terms`, `eula`: nothing), so one was written on the owner's request.
+- The owner should paste `https://fulltime.jtmtechnology.co.uk/terms.html` into that field. Whether they
+  have isn't confirmed. The same URL works for App Store Connect if it's ever asked for.
+
+### 59.2 `terms.html` (deployed, uncommitted)
+
+- New `FullTime.Website/wwwroot/terms.html`, in the same layout/CSS as `privacy.html` (`legal-page`,
+  `styles.css?v=6`). Footer links "Privacy Policy · Terms of Service" were added to `index.html` and
+  `privacy.html`. `invite.html`'s footer wasn't changed.
+- Content: virtual points only (can't be bought, cashed out or exchanged), no prizes of value, odds for
+  reference only and not a bookmaker. Account rules, fair play, and bets settled on third-party data
+  (resettle/void on corrections or abandoned matches). Remove Ads is the only purchase and gives no
+  advantage. "As is" liability, a BeGambleAware / National Gambling Helpline (0808 8020 133) line, the law
+  of England and Wales with local consumer rights kept, and contact `fulltime@jtmtechnology.co.uk`.
+  These terms were deliberately written to match the 5.3.4 Notes claims (§56.3).
+- **Remove Ads wording was corrected before deploy.** The first draft said it was tied to the FullTime
+  account. `MauiAdsRemovalService` caches ownership in `Preferences` and re-syncs from the store
+  (`RestorePurchasesAsync`), so it belongs to the Google Play / App Store account. The page says that now.
+- **Minimum age: the owner chose 18+.** The first version said 13+ with parental permission under 18.
+  It was changed to "You must be 18 or over" in the "Your account" list and **redeployed** (live
+  page verified showing 18+; the 13+ build is now `/opt/fulltime-website-previous`). `privacy.html`'s "not directed at under 13" line was left
+  as it is.
+- Deployed with the standard CLAUDE.md recipe, run from PowerShell with Git's `scp.exe`/`ssh.exe`. Service
+  `active`, previous build kept at `/opt/fulltime-website-previous`. Verified live: `terms.html` returns
+  200, and the live `/` and `/privacy.html` carry the new footer link. Local `publish-website*` deleted.
+
+### 59.3 Next steps
+
+1. Commit `terms.html` + the two footer edits (and HANDOVER.md if the owner wants) when the owner says
+   so. Recent commits carry no ticket prefix.
+2. Owner: paste the terms URL into Play Console and save the trader status page.
+3. Everything in §58.2 still stands: the iOS review outcome (get Apple's text word for word), check
+   whether the bet365 badge links to a bookmaker (from the code), upload Android 1.21/28, watch for
+   `ObjectDisposedException` from Matches on 1.21+, the next real shootout, and the §54.6/§52.7 list.
