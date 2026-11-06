@@ -5683,19 +5683,14 @@ pushed as `e1a72a0`. **Website not yet live** (see 60.2).
 
 ### 60.2 Open
 
-- **Reset time unverified.** `SpinService` uses `DateTime.Now`, the VM's local clock. The page says "midnight
-  UTC (midnight UK in winter, 1am in BST)" on the assumption that the VM runs on UTC. Reading `timedatectl`
-  was blocked by auto mode. If the VM isn't on UTC, fix the page text.
-- **Website deploy half done.** `~/publish-website.tar.gz` (built from `e1a72a0`) is on the VM. Auto mode
-  blocked the stop/swap/start step, so the live `terms.html` doesn't have the Daily Spinner section yet. Run the
-  CLAUDE.md swap commands for `website` once the owner approves.
+- **Reset time confirmed:** the VM is `Etc/UTC`, so "midnight UTC" on the page is correct.
+- **Website deployed** from `e1a72a0` once the owner approved. Service `active`, previous build at
+  `/opt/fulltime-website-previous`, and the live `terms.html` returns 200 with the "Daily Spinner" section.
 - The app change reaches users only in the next Android AAB and Codemagic `ios-testflight` build. Neither was
   built this session. Android is still 1.21/28 locally, so the next store build needs a version bump.
 
 ### 60.3 Next steps
 
-1. Finish the website swap and check that `https://fulltime.jtmtechnology.co.uk/terms.html` shows "Daily Spinner".
-2. Confirm the VM timezone (`timedatectl`).
-3. Next Android build: bump to 1.22/29. Next iOS build: picks up `e1a72a0` and `2fe3df4`. If App Review
+1. Next Android build: bump to 1.22/29. Next iOS build: picks up `e1a72a0` and `2fe3df4`. If App Review
    raises 5.3.2, point them to the rules page (Profile → Daily Spinner rules).
-4. Everything in §59.3 items 2-3 still stands.
+2. Everything in §59.3 items 2-3 still stands.
