@@ -1195,6 +1195,22 @@ button.promo-banner { cursor: pointer; }
     background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px;
     padding: 1rem;
 }
+
+.rules-link { display: block; text-align: center; text-decoration: underline; font-size: 0.85rem; margin: 1rem 0; }
+.rules { display: flex; flex-direction: column; gap: 0.5rem; line-height: 1.45; margin: 1rem 0 2rem; }
+.rules h3 { margin: 0.75rem 0 0; font-size: 1rem; }
+.rules p, .rules ul { margin: 0; color: var(--text-muted); }
+.rules ul { padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.rules strong { color: var(--text); }
+.rules a { color: var(--accent); }
+.rules-sponsor {
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px;
+    padding: 0.75rem 1rem; color: var(--text) !important;
+}
+.rules-odds { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.rules-odds th, .rules-odds td { text-align: left; padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
+.rules-odds th:last-child, .rules-odds td:last-child { text-align: right; }
+.rules-odds th { color: var(--text-muted); font-weight: 600; font-size: 0.8rem; }
 .streak-title { font-weight: 700; }
 .streak-sub { font-size: 0.8rem; margin-top: 0.15rem; }
 .streak-track { display: flex; align-items: flex-start; margin: 1rem 0 0.75rem; }

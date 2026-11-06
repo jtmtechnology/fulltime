@@ -1,0 +1,109 @@
+@page "/spin-rules"
+@using System.Globalization
+@inject NavigationManager Nav
+
+@* Official rules for the Daily Spinner, kept in the app so they're always available (App Store
+   guideline 5.3.2). The chances are built from SpinSegments.All because SpinService picks a segment
+   uniformly from the same 8-slot list; the Mystery Cash range and streak bonus mirror SpinService
+   and BettingOptions.SpinStreakBonusAmount by hand, so change them here too if those change. *@
+<PageTitle>FullTime — Daily Spinner rules</PageTitle>
+
+<div class="page-header-row">
+    <button type="button" class="back-btn" @onclick="GoBack" aria-label="Back">‹</button>
+    <h1>Daily Spinner Rules</h1>
+</div>
+<div class="muted">Official rules</div>
+
+<div class="rules">
+    <p class="rules-sponsor">
+        Apple is not a sponsor of the Daily Spinner and is not involved with it in any way. Neither is
+        Google. The Daily Spinner is run by JTM Technology, the provider of FullTime.
+    </p>
+
+    <h3>1. What it is</h3>
+    <p>
+        The Daily Spinner is a wheel in the FullTime app that awards virtual points and odds boosts. You
+        don't need to buy anything to take part, and buying Remove Ads doesn't change your chances.
+    </p>
+
+    <h3>2. Who can take part</h3>
+    <p>
+        Anyone with a FullTime account who is 18 or over. One spin per account per day. Each person may
+        have only one account.
+    </p>
+
+    <h3>3. When you can spin</h3>
+    <p>
+        Once each day. The day resets at midnight UTC (midnight UK time in winter, 1am during British
+        Summer Time).
+    </p>
+
+    <h3>4. Prizes and chances</h3>
+    <p>Each spin lands on one segment, drawn at random by our server with these chances:</p>
+    <table class="rules-odds">
+        <thead><tr><th>Prize</th><th>Chance</th></tr></thead>
+        <tbody>
+            @foreach (var (label, pct) in Odds)
+            {
+                <tr><td>@label</td><td>@pct</td></tr>
+            }
+        </tbody>
+    </table>
+    <ul>
+        <li><strong>Mystery Cash</strong> is 5, 10, 15 and so on up to 50 points, each amount equally likely.
+            It's added to your balance in every league you're in.</li>
+        <li><strong>Bet Boost 25%</strong>, <strong>Bet Boost 50%</strong> and <strong>2x Odds Boost</strong>
+            multiply the combined odds of your next bet by 1.25, 1.5 or 2. The boost waits for a bet with
+            combined odds of Evens (2.00) or higher, and isn't added to a bet that already has a Bet Builder
+            boost. You can hold one boost at a time: a new one replaces any you haven't used.</li>
+    </ul>
+
+    <h3>5. Streak bonus</h3>
+    <p>
+        Spin on @StreakDays days in a row and you get a bonus @StreakBonus points on the seventh day, on top
+        of that day's prize, in every league you're in. The streak then starts again. Missing a day also
+        starts it again.
+    </p>
+
+    <h3>6. What points are worth</h3>
+    <p>
+        Points are virtual and have no real-world value. They can't be bought, cashed out, exchanged for money
+        or prizes, or given to another player. They can only be used to place bets in FullTime.
+    </p>
+
+    <h3>7. Fair play</h3>
+    <p>
+        Prizes are applied as soon as the spin finishes. If we find more than one account used to collect
+        extra spins, or any other abuse, we may remove the prizes won and close the accounts involved.
+    </p>
+
+    <h3>8. Changes</h3>
+    <p>
+        We may change or end the Daily Spinner. The prizes and chances shown here are always the ones in use.
+        The FullTime terms of service also apply.
+    </p>
+
+    <h3>9. Contact</h3>
+    <p>
+        JTM Technology, United Kingdom.
+        <a href="mailto:fulltime@jtmtechnology.co.uk">fulltime@jtmtechnology.co.uk</a>
+    </p>
+</div>
+
+@code {
+    private const int StreakDays = 7;
+    private const int StreakBonus = 100;
+
+    /// <summary>Where Back goes: "profile" when opened from Profile, otherwise the Daily Spinner.</summary>
+    [SupplyParameterFromQuery] public string? From { get; set; }
+
+    // Segments with the same prize (three Mystery Cash, two Try Again) are merged into one row.
+    private static readonly List<(string Label, string Pct)> Odds = SpinSegments.All
+        .GroupBy(s => s.Label)
+        .OrderByDescending(g => g.Count())
+        .Select(g => (g.Key == "Try Again Tomorrow" ? "Try again tomorrow (no prize)" : g.Key,
+            ((double)g.Count() / SpinSegments.All.Length).ToString("0.#%", CultureInfo.InvariantCulture)))
+        .ToList();
+
+    private void GoBack() => Nav.NavigateTo(From == "profile" ? "/profile" : "/daily-spinner");
+}
