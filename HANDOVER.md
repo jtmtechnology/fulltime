@@ -5652,9 +5652,50 @@ modified). **No commits.** The website was deployed with the new page, but the f
 
 ### 59.3 Next steps
 
-1. Commit `terms.html` + the two footer edits (and HANDOVER.md if the owner wants) when the owner says
-   so. Recent commits carry no ticket prefix.
+1. (Done: committed and pushed as `2431139`, with this handover in `4e49d14`.)
 2. Owner: paste the terms URL into Play Console and save the trader status page.
 3. Everything in §58.2 still stands: the iOS review outcome (get Apple's text word for word), check
    whether the bet365 badge links to a bookmaker (from the code), upload Android 1.21/28, watch for
    `ObjectDisposedException` from Matches on 1.21+, the next real shootout, and the §54.6/§52.7 list.
+
+## 60. 2026-11-06 session - Daily Spinner official rules (App Store 5.3.2)
+
+Opened with `/load` (state matched §59: HEAD `4e49d14`, level with `origin/main`, only HANDOVER.md modified).
+The owner asked for spin rules "like we just did for HeadsUp" (HeadsUp `112a196`, same day). Committed and
+pushed as `e1a72a0`. **Website not yet live** (see 60.2).
+
+### 60.1 What was added (`e1a72a0`)
+
+- New `Pages/SpinRules.razor` at `/spin-rules`, same structure as HeadsUp's: a boxed "Apple is not a sponsor
+  (nor Google), run by JTM Technology" statement, then numbered rules. They cover eligibility (18+, one account),
+  the daily reset, prizes and chances, the streak bonus, what points are worth, fair play, changes and contact.
+- Chances are built from `SpinSegments.All`, because `SpinService` picks uniformly from the same 8 slots:
+  Mystery Cash 37.5%, Try again 25%, each boost 12.5%. **Copied by hand** (a comment in the page says so):
+  - Mystery Cash 5-50 in steps of 5 (`SpinService`)
+  - the 100-point day-7 streak bonus (`BettingOptions.SpinStreakBonusAmount`; no override in appsettings.json)
+- The boost text matches `BetService`. A boost waits for combined odds of 2.00 or more, isn't added on top of a
+  Bet Builder boost, and a new boost replaces an unused one.
+- Links: under the streak card on DailySpinner, and "Daily Spinner rules" at the bottom of Profile
+  (`?from=profile` sends Back to Profile; otherwise Back goes to the spinner).
+- `terms.html` has a new "Daily Spinner" section pointing to the in-app rules, with the Apple/Google statement.
+- Verified on the emulator (Debug install): the Profile link opens the page, and the odds table and text render
+  correctly. Back navigation and the spinner-page link weren't tapped.
+
+### 60.2 Open
+
+- **Reset time unverified.** `SpinService` uses `DateTime.Now`, the VM's local clock. The page says "midnight
+  UTC (midnight UK in winter, 1am in BST)" on the assumption that the VM runs on UTC. Reading `timedatectl`
+  was blocked by auto mode. If the VM isn't on UTC, fix the page text.
+- **Website deploy half done.** `~/publish-website.tar.gz` (built from `e1a72a0`) is on the VM. Auto mode
+  blocked the stop/swap/start step, so the live `terms.html` doesn't have the Daily Spinner section yet. Run the
+  CLAUDE.md swap commands for `website` once the owner approves.
+- The app change reaches users only in the next Android AAB and Codemagic `ios-testflight` build. Neither was
+  built this session. Android is still 1.21/28 locally, so the next store build needs a version bump.
+
+### 60.3 Next steps
+
+1. Finish the website swap and check that `https://fulltime.jtmtechnology.co.uk/terms.html` shows "Daily Spinner".
+2. Confirm the VM timezone (`timedatectl`).
+3. Next Android build: bump to 1.22/29. Next iOS build: picks up `e1a72a0` and `2fe3df4`. If App Review
+   raises 5.3.2, point them to the rules page (Profile → Daily Spinner rules).
+4. Everything in §59.3 items 2-3 still stands.
