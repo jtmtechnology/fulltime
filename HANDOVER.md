@@ -15,9 +15,10 @@ code.
 **⚠️ Production infrastructure moved from GCP to Oracle Cloud on 2026-09-21 (§27.3).** Every
 `fulltime-*` service on the old GCP VM is stopped. **`CLAUDE.md`'s deployment section now documents
 the Oracle recipe (updated 2026-09-23, §30.1)** — `linux-arm64` publish, plain `scp`/`ssh` with
-`~/.ssh/oracle_fulltime` as `ubuntu@89.168.59.239`. Run it from the **Bash tool, not PowerShell**:
-Windows OpenSSH rejects the key file's permissions (§30.1). §27 still has the OCI CLI setup and the
-`iptables` gotcha detail.
+`~/.ssh/oracle_fulltime` as `ubuntu@89.168.59.239`. Windows OpenSSH rejects the key file's
+permissions (§30.1), and **Git Bash currently won't start on this machine** (§56.4), so run it from
+PowerShell with `& "C:\Program Files\Git\usr\bin\ssh.exe"` / `scp.exe`. §27 still has the OCI CLI setup
+and the `iptables` gotcha detail.
 
 **⚠️ iOS 1.0 is submitted to App Review as of 2026-09-23 (§30.4)** — first real submission with
 in-app account deletion. An *earlier* 1.0 submission had already been **rejected** (reason never
@@ -175,10 +176,21 @@ Submit", then adding it from the iOS 1.0 version page and submitting them togeth
 HANDOVER.md (§56-§58) is uncommitted.
 
 **Latest (2026-11-05, §59): website deployed to Oracle with a new Terms of Service page,
-`https://fulltime.jtmtechnology.co.uk/terms.html`. It was written for Play Console's trader status /
-ToS page. The page and its footer links are NOT committed yet** (`terms.html` is new; `index.html` and
-`privacy.html` are modified). HANDOVER.md (§56-§59) is uncommitted. The owner chose 18+ as the
-minimum age, and that version is deployed (§59.2).
+`https://fulltime.jtmtechnology.co.uk/terms.html`**, written for Play Console's trader status / ToS
+page. Committed as `2431139`. The owner chose 18+ as the minimum age (§59.2).
+
+**Latest (2026-11-06, §60): in-app Daily Spinner rules page (`/spin-rules`, `e1a72a0`) for App Store
+5.3.2.** Website deployed. The app change is in no store build yet; the next Android build is 1.22/29.
+
+**Latest (2026-11-14, §61): iOS 1.0 rejected under 4.3 (Spam) and 4.2.6 (App Generation Services).**
+No code changes, no deploys. A Resolution Center reply answering Apple's nine questions was drafted
+(under the 4,000-character limit); **whether the owner sent it is not recorded.** (It was sent - Apple replied, see §62.) The bet365 badge
+open item is closed: it's a plain image, not a link (§61.3).
+
+**Latest (2026-11-18, §62): Apple held the 4.3 rejection after the reply. The app now opens on the
+friends league (`0be10cc`), the review account's league was filled with 5 demo members and 13 settled
+demo bets on real results, Android 1.22/29 AAB built (`4328e61`), and iOS build 54 was resubmitted with
+App Review Notes.** Waiting on Apple. The Android AAB isn't uploaded yet.
 
 **§1 below is a 2026-09-09 snapshot (GCP-era) and is historical** - trust this banner, §7's top
 priorities and the newest numbered sections instead.
@@ -5694,3 +5706,166 @@ pushed as `e1a72a0`. **Website not yet live** (see 60.2).
 1. Next Android build: bump to 1.22/29. Next iOS build: picks up `e1a72a0` and `2fe3df4`. If App Review
    raises 5.3.2, point them to the rules page (Profile → Daily Spinner rules).
 2. Everything in §59.3 items 2-3 still stands.
+
+## 61. 2026-11-14 session - App Review rejection under 4.3 Spam / 4.2.6
+
+Opened with `/load`. HEAD `d01e409`, level with `origin/main`, working tree clean. **No code changes,
+commits or deploys.** Only this handover was edited (uncommitted).
+
+### 61.1 The rejection
+
+The owner pasted Apple's message: **Guidelines 4.3 - Spam and 4.2.6 - App Generation Services.** It cites
+4.3(a) (duplicates an existing app), 4.3(b) (an opportunistic variant of a popular category) and 4.2.6
+(built from a commercial template and not submitted by the content provider). Apple's options: don't
+resubmit without significant changes, or, if the app already complies, **reply instead of resubmitting**
+and answer nine questions in full:
+1. What it does / the problem it solves (not the marketing text). 2. The target user. 3. The gap in the
+market. 4. Beta testing, with feedback applied to production. 5. Standalone or part of a suite (how it
+differs from the others). 6. Could it be an IAP or feature of another app on the account? 7. Code,
+frameworks or assets shared with the account's other apps. 8. Code shared with any third-party app.
+9. Was it made for a client who provided the content?
+
+### 61.2 Reply drafted (answers to all nine)
+
+- Strategy: reply, don't resubmit. Message: a private family/friends league with play money, a
+  sportsbook-style range of markets (accas, Bet Builder, player props) settled automatically on real data,
+  no money, prizes or bookmaker links. The gap is set against prediction games, fantasy apps, real-money
+  sportsbooks and public/referral-funded simulators.
+- **Resolution Center limit: 4,000 characters.** The first draft (~7,100) was rejected by the form. The
+  sent-length version is ~3,400 characters, and a copy was left in the session scratchpad (temporary, not
+  kept). If it's needed again, rebuild it from these points.
+- Usage figures quoted (read-only prod queries, 2026-11-14): **29 `Users`, 10 `Leagues`, 182 `Bets`, placed
+  by 6 distinct users, `PlacedAt` from 2026-09-06 to 2026-11-13.** The 29 includes test accounts. `Bets`
+  has `PlacedAt`/`SettledAt`, not `CreatedAt`.
+- Beta feedback examples were taken from this file (final scores on bet history §44, tap a name for bets
+  §15.6/§46, stuck-at-90 clock §15.1, corners/cards descriptions §14, live pick states §50, crash fixes from
+  error reporting §57). **Most were logged as "owner reported", so which came from family members is
+  unknown.** The owner was asked to keep only true ones.
+- **Other apps on the JTM Apple account:** HeadsUp (`C:\AB\HeadsUp`, bundle `co.uk.jtmtechnology.headsup.app`,
+  heads-up poker with play chips; its own iOS build 11 was rejected under 5.3.2). There's also a Poker
+  Mentor project (`C:\AB\Poker`). **Whether Poker Mentor is published under JTM is unknown**; the owner
+  was told to add it to answer 5 if it is.
+- Shared-code answer (Q7), checked by grepping HeadsUp's `src`: **no shared application code.** HeadsUp
+  repeats FullTime techniques (Android inset bridge, Firebase push via the same plugin, spin reminder, owner
+  emails) and shares the Firebase project `fulltime-98cc9`, the Brevo SMTP relay and the Oracle VM (HeadsUp's
+  API on port 8443), with separate APIs and databases. **Both apps have a daily spin**. It's not mentioned in the
+  reply, but it's a likely question if Apple digs further.
+
+### 61.3 bet365 badge - closed
+
+`MatchCard.razor:64-68` and `BetBuilder.razor:57` render `BookmakerLogo`, which is a plain `<img>` (logo URL
+from `BookmakerLogos.cs`, fotmob CDN) with **no link**. So "no links to bookmakers" in the 5.3.4 notes and in
+this reply is true. The app still shows the bet365 name and logo ("Prices from bet365"), which a reviewer
+could raise separately (trademark / 5.3). Not acted on.
+
+### 61.4 Next steps
+
+1. Owner: send the reply in the Resolution Center (after trimming answer 4's feedback list to true items and
+   adding any other JTM apps to answer 5). **Don't resubmit the build** unless Apple asks or significant
+   changes are made. Record Apple's response word for word.
+2. If Apple rejects the reply, options to consider: a screen recording of a full league → bet → live →
+   settlement cycle, a demo account with a populated league, and possibly removing the bet365 logo.
+3. Everything in §60.3 still stands (Android 1.22/29 bump, next iOS build, Play Console terms URL, watch
+   for `ObjectDisposedException` from Matches, the next real shootout, the §54.6/§52.7 list).
+4. HANDOVER.md (§61 and the banner fixes) is uncommitted. Commit it when the owner asks.
+
+## 62. 2026-11-18 session - 4.3 held, league-first home screen, demo league, Android 1.22/29, iOS resubmitted
+
+Opened with `/load` (HEAD `d01e409`, level with `origin/main`, only HANDOVER.md modified). Pushed `0be10cc` and
+`4328e61` to `main`.
+
+### 62.1 Apple's reply to the §61 message (word for word, received 2026-11-17 7:09 PM)
+
+> We still found that your app duplicates the content and functionality of apps are live on the App Store. This
+> is not in compliance with the guideline. To be in compliance with the guideline, please revise your app to
+> provide different content and functionality that are in compliance with the App Store Review Guidelines. We
+> look forward to receiving your revised submission and continuing our review of your app.
+
+So the §61 reply was sent. The owner's reading, which the code backs up: **the reviewer thinks it's a scores
+app.** `/` was `Matches.razor` (fixtures and live scores), and the review account `test@jtmtechnology.co.uk`
+was alone in its league "Weekend" with one old lost bet, so nothing social was visible.
+
+### 62.2 League-first home screen (`0be10cc`)
+
+- `Leaderboard.razor` now routes `/` **and** `/leaderboard`. The alias stays because the promo admin page
+  (`FullTime.Api/wwwroot/admin/promos.html`) offers `/leaderboard` as a link. Heading "Your leagues".
+- **Logged out at `/`:** a welcome card (4 steps: private league, same play-money points topped up weekly,
+  real matches settled automatically, league table/friends' bets; "No real money", Create account / Log in,
+  "Browse this week's matches"). It no longer redirects to `/login`. **Not seen on a device** - the emulator
+  was signed in as the review account.
+- `Matches.razor` moved to `/matches`. Every back-to-Matches link was updated: `LeagueMatches` back,
+  `BetBuilder.BackToMatchesUrl`, the `MatchCard` default `ReturnUrl`, and the `DailySpinner` back button (the
+  spinner is reached from the carousel, which stays on Matches).
+- `BottomTabBar`: **Leagues** (trophy, first, `href=""`) → Matches → Bet Slip → My Bets → Settings. The old
+  Leaderboard tab is gone. `IsLeaguesActive` highlights Leagues on `/leaderboard` too (NavLink only matches its
+  own href). Razor rejects `class="tab-item @(...)"` on a component (RZ9986), so the whole class string is
+  built in C#.
+- "Leaderboard tab" → "Leagues tab" in `BetSlipSheet` and `ContextSwitcherSheet`.
+- Live promos have no links (checked), so nothing pointed at the old `/`.
+- Verified on the emulator (Debug): opens on Leagues, Matches tab works, tab highlight correct.
+- **Not changed:** `FullTime.Website/wwwroot/invite.html` still says "open the Leaderboard tab". Leave it until
+  1.22+ is what most users have, then say "Leagues tab" and redeploy the website.
+
+### 62.3 Demo league for App Review (production data - read this before touching it)
+
+- **5 demo members** registered through the live API (not raw SQL): Dave, Sarah, Pete, Jess, Mo as
+  `demo-<name>@jtmtechnology.co.uk`. Verified by reading each `EmailVerificationToken` (read-only) and calling
+  `/api/auth/verify-email`. Country set to `US` to match Test User (so the table shows $), then joined
+  "Weekend" (invite code `SPQJJM`). They share one generated password, in
+  `C:\Users\alan.browne\Documents\Claude\Friends\demo-league-accounts.txt` (outside the repo).
+- The domain's mail is iCloud. Brevo accepted the 5 verification emails. **Whether they bounced (no
+  catch-all) is unknown** - check Brevo if it matters. 5 "new registration" owner emails also went out.
+- **13 settled demo bets inserted directly into prod** (owner asked for history rather than waiting for the
+  weekend). Real finished PL/La Liga matches from 31 Oct-8 Nov, outcomes computed from the real scores,
+  1X2 odds from the last pre-kickoff `OddsSnapshots` row. The Over 2.5 and BTTS odds (1.70-1.95) are made up
+  (no history stored for those markets). **No `Matches` rows were touched.** `SettlementService` only reads
+  `Pending` picks/legs/bets, so these are never swept. `LeagueMemberships.Balance` was adjusted by each
+  member's net. Test User got 2 of the bets.
+- Resulting table: Test User $288.00 (-2.00, top only because of earlier top-ups from a $290 start), Sarah
+  $145.61, Mo $125.85, Jess $111.93, Dave $111.30, Pete $78.00.
+- **Back-out:** `C:\Users\alan.browne\Documents\Claude\Friends\demo-history-undo.sql` deletes exactly these 13
+  bets (picks → legs → bets) and reverses the balance changes. The applied SQL is `demo-history.sql` next to it.
+  To remove the demo members entirely, delete their accounts afterwards (in-app deletion or FK-safe order).
+- Verified in the app as Test User: the table shows the spread, tapping Sarah shows her treble with real FT
+  scores, and the win card ("You won! $21.00 Bournemouth v Leeds") fired on launch. Reviewer devices that have
+  used this account will probably see the win cards too.
+- **This is demo data.** Don't count it in usage figures (§61.2's 182 bets predates it) and don't describe
+  these members as real users to Apple.
+- Pending column is empty for everyone. Real pending bets could be placed for the 5 members through the API
+  once a weekend's odds load.
+
+### 62.4 Builds
+
+- **Android 1.22/29** (`4328e61`): signed AAB built 09:29 on 18 Nov via `signing/build-release.ps1`, at
+  `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab` (~40 MB).
+  The manifest shows versionCode 29 / versionName 1.22, with `META-INF/FULLTIME.SF`/`.RSA` entries (the
+  signature itself wasn't verified - no `jarsigner`). Contains §60's Daily Spinner rules page and §62.2. The release build wasn't
+  installed on a device. **The owner uploads it.**
+- Gotcha: a PowerShell 5.1 `Get-Content`/`Set-Content` round trip on the csproj added a BOM and garbled a UTF-8
+  comment (`—` → mojibake). Reverted, and the version was changed with the Edit tool instead. Don't edit project
+  files that way.
+- **iOS:** the owner ran Codemagic; build **1.0.0 (54)** was submitted at 10:00 on 18 Nov. **Whether 54 was built
+  from `0be10cc` or later wasn't confirmed** (the push was about 09:20, so it probably was).
+
+### 62.5 Resubmission
+
+- With the submission Waiting for Review, the Resolution Center has **no Reply button** (replies only while
+  rejected). The owner removed the submission from review (status "Removed", 4.3.0 Design: Spam), added the note
+  to **App Review Information → Notes** on the version page, and resubmitted (with `remove_ads`).
+- The note (~1,900 chars): what changed in this build (opens on the private league; logged-out explainer;
+  demo account now in a populated league), what FullTime is, how it differs (not a scores app, not a real-money
+  sportsbook, not a prediction/fantasy game, not a template - **check the "built from scratch" claim stays true**),
+  and how to review (sign in, Weekend league, tap a member, Matches to build a bet). It calls the members
+  "demo members".
+
+### 62.6 Next steps
+
+1. Wait for Apple. Record their response word for word. If 4.3 holds again, consider a screen recording of
+   league → bet → settlement, a phone call through the Resolution Center or "Meet with Apple", and how much the
+   app's own identity (name "FullTime Betting League", screenshots) leads with leagues rather than matches.
+2. Owner: upload the Android 1.22/29 AAB to Play Console.
+3. Check the App Store screenshots/listing lead with the league table and friends' bets, not match lists.
+4. Once 1.22+ is widespread: `invite.html` wording → "Leagues tab", redeploy the website.
+5. Carried over: Play Console terms URL / trader status (§59.3), watch for `ObjectDisposedException` from
+   Matches, the next real shootout, the §54.6/§52.7 list.
+6. HANDOVER.md (§61, §62 and the banner) is uncommitted. Commit it when the owner asks.
