@@ -190,7 +190,7 @@ open item is closed: it's a plain image, not a link (§61.3).
 **Latest (2026-11-18, §62): Apple held the 4.3 rejection after the reply. The app now opens on the
 friends league (`0be10cc`), the review account's league was filled with 5 demo members and 13 settled
 demo bets on real results, Android 1.22/29 AAB built (`4328e61`), and iOS build 54 was resubmitted with
-App Review Notes.** Waiting on Apple. The Android AAB isn't uploaded yet.
+App Review Notes.** Waiting on Apple. The Android AAB was uploaded to Play Console the same day.
 
 **§1 below is a 2026-09-09 snapshot (GCP-era) and is historical** - trust this banner, §7's top
 priorities and the newest numbered sections instead.
@@ -5840,7 +5840,7 @@ was alone in its league "Weekend" with one old lost bet, so nothing social was v
   `FullTime.App/FullTime.App/bin/Release/net10.0-android/com.jtmtechnology.fulltime.app-Signed.aab` (~40 MB).
   The manifest shows versionCode 29 / versionName 1.22, with `META-INF/FULLTIME.SF`/`.RSA` entries (the
   signature itself wasn't verified - no `jarsigner`). Contains §60's Daily Spinner rules page and §62.2. The release build wasn't
-  installed on a device. **The owner uploads it.**
+  installed on a device. **Uploaded to Play Console by the owner on 18 Nov** (review/rollout status not recorded).
 - Gotcha: a PowerShell 5.1 `Get-Content`/`Set-Content` round trip on the csproj added a BOM and garbled a UTF-8
   comment (`—` → mojibake). Reverted, and the version was changed with the Edit tool instead. Don't edit project
   files that way.
@@ -5863,7 +5863,7 @@ was alone in its league "Weekend" with one old lost bet, so nothing social was v
 1. Wait for Apple. Record their response word for word. If 4.3 holds again, consider a screen recording of
    league → bet → settlement, a phone call through the Resolution Center or "Meet with Apple", and how much the
    app's own identity (name "FullTime Betting League", screenshots) leads with leagues rather than matches.
-2. Owner: upload the Android 1.22/29 AAB to Play Console.
+2. (Done 18 Nov: Android 1.22/29 AAB uploaded to Play Console.) Note what Play review says if it flags anything.
 3. Check the App Store screenshots/listing lead with the league table and friends' bets, not match lists.
 4. Once 1.22+ is widespread: `invite.html` wording → "Leagues tab", redeploy the website.
 5. Carried over: Play Console terms URL / trader status (§59.3), watch for `ObjectDisposedException` from
