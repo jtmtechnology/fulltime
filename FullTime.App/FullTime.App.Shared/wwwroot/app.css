@@ -691,6 +691,12 @@ table.simple-table tr.friend-bets-row td { white-space: normal; background: var(
 }
 .primary-btn[disabled], .cancel-btn[disabled], .leave-league-btn[disabled] { opacity: 0.5; }
 
+.welcome-steps { margin: 0 0 1rem; padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.6rem; line-height: 1.4; }
+.welcome-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1rem; }
+.welcome-actions a { text-decoration: none; }
+.welcome-browse { margin: 1rem 0 0; font-size: 0.9rem; }
+.welcome-browse a { color: var(--accent); }
+
 .confirm-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 60; border: none;
 }

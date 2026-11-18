@@ -1,9 +1,18 @@
 @implements IDisposable
 @inject AuthState AuthState
 @inject BetSlipState Slip
+@inject NavigationManager Nav
 
 <nav class="tab-bar">
-    <NavLink class="tab-item" href="" Match="NavLinkMatch.All">
+    @* Leagues first and as the home route: App Review (4.3, Nov 2026) judged the app a duplicate of
+       the many scores apps because it opened on the fixture list. The friends league is the product;
+       Matches is where you pick bets for it. *@
+    <NavLink class="@(IsLeaguesActive ? "tab-item active" : "tab-item")" href="" Match="NavLinkMatch.All">
+        <svg viewBox="0 0 24 24"><path d="M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3M8 21h8M12 17v4"/></svg>
+        <span>Leagues</span>
+    </NavLink>
+
+    <NavLink class="tab-item" href="matches">
         <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M12 7l4.76 3.45l-1.76 5.55h-6l-1.76 -5.55l4.76 -3.45M12 7v-4m3 13l2.5 3m-.74 -8.55l3.74 -1.45m-11.44 7.05l-2.56 2.95m.74 -8.55l-3.74 -1.45"/></svg>
         <span>Matches</span>
     </NavLink>
@@ -20,11 +29,6 @@
     <NavLink class="tab-item" href="mybets">
         <svg viewBox="0 0 24 24"><path d="M5 3h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm2 5h10M7 12h10M7 16h6"/></svg>
         <span>My Bets</span>
-    </NavLink>
-
-    <NavLink class="tab-item" href="leaderboard">
-        <svg viewBox="0 0 24 24"><path d="M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3M8 21h8M12 17v4"/></svg>
-        <span>Leaderboard</span>
     </NavLink>
 
     @if (AuthState.IsLoggedIn)
@@ -44,15 +48,25 @@
 </nav>
 
 @code {
+    // "/leaderboard" still routes to the leagues page (promos and older links use it), but NavLink
+    // only matches the tab's own href, so the alias is checked by hand.
+    private bool IsLeaguesActive =>
+        Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].Equals("leaderboard", StringComparison.OrdinalIgnoreCase);
+
     protected override void OnInitialized()
     {
         AuthState.Changed += StateHasChanged;
         Slip.Changed += StateHasChanged;
+        Nav.LocationChanged += OnLocationChanged;
     }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        InvokeAsync(StateHasChanged);
 
     public void Dispose()
     {
         AuthState.Changed -= StateHasChanged;
         Slip.Changed -= StateHasChanged;
+        Nav.LocationChanged -= OnLocationChanged;
     }
 }

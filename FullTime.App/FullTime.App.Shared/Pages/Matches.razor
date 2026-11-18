@@ -1,4 +1,4 @@
-@page "/"
+@page "/matches"
 @implements IDisposable
 @inject ApiClient Api
 @inject MatchLeaguePreferences Prefs
@@ -76,7 +76,7 @@ else if (!string.IsNullOrEmpty(_status))
             }
             @foreach (var m in tierGroup)
             {
-                <MatchCard Match="m" ReturnUrl="@($"/?date={_selectedDate:yyyy-MM-dd}")" />
+                <MatchCard Match="m" ReturnUrl="@($"/matches?date={_selectedDate:yyyy-MM-dd}")" />
             }
         }
     }

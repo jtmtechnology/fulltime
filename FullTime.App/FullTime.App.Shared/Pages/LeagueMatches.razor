@@ -251,7 +251,7 @@ else if (!string.IsNullOrEmpty(_status))
         }
     }
 
-    private void GoBack() => Nav.NavigateTo($"/?date={_selectedDate:yyyy-MM-dd}");
+    private void GoBack() => Nav.NavigateTo($"/matches?date={_selectedDate:yyyy-MM-dd}");
 
     public void Dispose()
     {

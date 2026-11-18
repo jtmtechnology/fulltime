@@ -863,5 +863,5 @@ else
     // always resetting to today.
     private string BackToMatchesUrl => !string.IsNullOrEmpty(Return)
         ? Return
-        : $"/?date={DateOnly.FromDateTime(KickoffTime.ToLocalTime()):yyyy-MM-dd}";
+        : $"/matches?date={DateOnly.FromDateTime(KickoffTime.ToLocalTime()):yyyy-MM-dd}";
 }

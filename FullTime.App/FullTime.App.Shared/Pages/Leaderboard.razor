@@ -1,12 +1,35 @@
+@page "/"
 @page "/leaderboard"
 @using System.Net
 @inject ApiClient Api
 @inject AuthState AuthState
 @inject NavigationManager Nav
 
-<PageTitle>FullTime — Leaderboard</PageTitle>
+<PageTitle>FullTime — Leagues</PageTitle>
 
-<h1>Leaderboard</h1>
+@if (!AuthState.IsLoggedIn)
+{
+    @* The home screen for anyone not signed in, so it explains the league idea up front rather than
+       bouncing straight to the login form. *@
+    <h1>Bet against your friends</h1>
+    <div class="page-card welcome-card">
+        <ol class="welcome-steps">
+            <li><strong>Start a private league</strong> and share its invite code with family and friends.</li>
+            <li><strong>Everyone gets the same play-money points</strong>, topped up every week.</li>
+            <li><strong>Back real matches</strong> with singles, accas, Bet Builders and player bets. They settle automatically when the final whistle goes.</li>
+            <li><strong>Climb your league table</strong> and tap a friend's name to see what they're backing.</li>
+        </ol>
+        <p class="muted">No real money. Points can't be bought or cashed out, and there are no prizes.</p>
+        <div class="welcome-actions">
+            <a class="primary-btn" href="register">Create an account</a>
+            <a class="cancel-btn" href="login">Log in</a>
+        </div>
+        <p class="welcome-browse"><a href="matches">Browse this week's matches</a></p>
+    </div>
+    return;
+}
+
+<h1>Your leagues</h1>
 
 <div class="league-chips">
     <button type="button" class="league-chip @(_view == View.MyLeagues ? "selected" : "")" @onclick="() => _view = View.MyLeagues">My Leagues</button>
@@ -206,7 +229,6 @@ else
     {
         if (!AuthState.IsLoggedIn)
         {
-            Nav.NavigateTo("/login");
             return;
         }
 

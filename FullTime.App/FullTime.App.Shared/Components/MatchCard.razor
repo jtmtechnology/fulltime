@@ -130,5 +130,5 @@
         $"bet-builder/{Match.Id}?home={Uri.EscapeDataString(Match.HomeTeam)}&away={Uri.EscapeDataString(Match.AwayTeam)}" +
         $"&kickoff={Uri.EscapeDataString(Match.KickoffTime.ToString("O"))}&league={Uri.EscapeDataString(LeagueCatalog.Name(Match.LeagueId))}" +
         $"&homeLogo={Uri.EscapeDataString(Match.HomeLogoUrl ?? "")}&awayLogo={Uri.EscapeDataString(Match.AwayLogoUrl ?? "")}" +
-        $"&return={Uri.EscapeDataString(ReturnUrl ?? "/")}";
+        $"&return={Uri.EscapeDataString(ReturnUrl ?? "/matches")}";
 }
